@@ -10,3 +10,5 @@
 #   universal: false
 
 -e file:.
+colorama==0.4.6
+    # via comfydv

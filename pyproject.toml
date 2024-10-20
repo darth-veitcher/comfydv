@@ -5,7 +5,9 @@ description = "ComfyUI Custom Nodes by Darth Veitcher"
 authors = [
     { name = "darth-veitcher", email = "1722315+darth-veitcher@users.noreply.github.com" }
 ]
-dependencies = []
+dependencies = [
+    "colorama>=0.4.6",
+]
 readme = "README.md"
 requires-python = ">= 3.9"
 
