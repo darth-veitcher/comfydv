@@ -12,3 +12,5 @@
 -e file:.
 colorama==0.4.6
     # via comfydv
+termcolor==2.5.0
+    # via comfydv
