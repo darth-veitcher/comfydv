@@ -1,0 +1,30 @@
+[project]
+name = "comfydv"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "darth-veitcher", email = "1722315+darth-veitcher@users.noreply.github.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "colorama>=0.4.6",
+    "termcolor>=2.5.0",
+]
+
+[project.scripts]
+comfydv = "comfydv:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+docs = [
+    "mkdocs>=1.6.1",
+    "mkdocs-gen-files>=0.5.0",
+    "mkdocs-literate-nav>=0.6.2",
+    "mkdocs-material>=9.6.9",
+    "mkdocs-section-index>=0.3.9",
+    "mkdocstrings[python]>=0.29.0",
+]

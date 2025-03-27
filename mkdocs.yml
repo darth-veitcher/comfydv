@@ -1,0 +1,35 @@
+site_name: ComfyPPT
+
+theme:
+  name: material
+  palette:
+    primary: deep purple
+
+nav:
+  - Home: index.md
+  # rest of the navigation...
+  # defer to gen-files + literate-nav
+  - Code Reference: reference/
+  # rest of the navigation...
+
+plugins:
+  - search
+  - gen-files:
+      scripts:
+        - scripts/gen_ref_pages.py
+  - literate-nav:
+      nav_file: SUMMARY.md
+  - section-index
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+
+markdown_extensions:
+- admonition
+- pymdownx.details
+- pymdownx.superfences
+- pymdownx.highlight:
+    use_pygments: true
+    pygments_lang_class: true
