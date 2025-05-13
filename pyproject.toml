@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "darth-veitcher", email = "1722315+darth-veitcher@users.noreply.github.com" }
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 dependencies = [
     "colorama>=0.4.6",
     "termcolor>=2.5.0",
