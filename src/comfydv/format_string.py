@@ -371,6 +371,14 @@ class FormatString:
         input_vals = ", ".join(f'{k}={kwargs.get(k, "")}' for k in keys)
         logger.debug(f"Input values: {input_vals}")
 
+        # CRITICAL: Update RETURN_TYPES/RETURN_NAMES before execution to ensure they match our return tuple
+        # This is necessary because update_widget might not have been called yet (e.g., on workflow load)
+        if unique_id:
+            cls.update_widget(unique_id, template_type, template)
+            logger.debug(
+                f"Updated RETURN_TYPES for node {unique_id}: {cls.RETURN_TYPES}"
+            )
+
         if template_type == "Simple":
             try:
                 formatted_string = template.format(**kwargs)
@@ -431,7 +439,14 @@ class FormatString:
 
         # Log the final formatted string to stdout for visibility
         print(f"\n[FormatString Node {unique_id}] Output:")
-        print(f"  {formatted_string}")
+        print(f"  formatted_string: {formatted_string}")
+        print(f"  Variables extracted: {keys}")
+        print(f"  Variable values: {[kwargs.get(key, '') for key in keys]}")
+        print(f"  Class RETURN_TYPES: {cls.RETURN_TYPES}")
+        print(f"  Class RETURN_NAMES: {cls.RETURN_NAMES}")
+        print(
+            f"  Expected outputs: {len(keys)} vars + formatted_string + saved_file_path = {len(keys) + 2} total"
+        )
         print()
 
         # Return all input values first (for chaining), then formatted_string and saved_file_path
@@ -440,7 +455,19 @@ class FormatString:
             formatted_string,
             actual_save_path,
         )
-        logger.debug(f"Returning {len(result)} outputs")
+
+        print(f"[FormatString Node {unique_id}] Actual return tuple:")
+        for i, (name, value) in enumerate(zip(cls.RETURN_NAMES, result)):
+            value_preview = value[:50] if len(value) > 50 else value
+            print(f"  Output {i}: {name} = {value_preview}")
+        print()
+
+        logger.debug(
+            f"Returning {len(result)} outputs: keys={keys}, formatted_string={formatted_string[:50]}..., save_path={actual_save_path}"
+        )
+        logger.debug(
+            f"Full result tuple length: {len(result)}, expected: {len(keys) + 2}"
+        )
         return result
 
     @classmethod
