@@ -449,12 +449,13 @@ class FormatString:
         )
         print()
 
-        # Return all input values first (for chaining), then formatted_string and saved_file_path
+        # Return formatted_string and saved_file_path FIRST (fixed positions 0,1),
+        # then all input values (for chaining)
         # The order must match what was set in update_widget's RETURN_TYPES/RETURN_NAMES
-        result = tuple(str(kwargs.get(key, "")) for key in keys) + (
+        result = (
             formatted_string,
             actual_save_path,
-        )
+        ) + tuple(str(kwargs.get(key, "")) for key in keys)
 
         print(f"[FormatString Node {unique_id}] Actual return tuple:")
         for i, (name, value) in enumerate(zip(cls.RETURN_NAMES, result)):
@@ -547,18 +548,17 @@ class FormatString:
             config["inputs"][key] = ("STRING", {"default": ""})  # type: ignore
             config["outputs"].append({"name": key, "type": "STRING"})  # type: ignore
 
-        # Add formatted_string and saved_file_path at the end of outputs
-        config["outputs"].extend(
-            [  # type: ignore
-                {"name": "formatted_string", "type": "STRING"},
-                {"name": "saved_file_path", "type": "STRING"},
-            ]
-        )
+        # Add formatted_string and saved_file_path at the START of outputs (fixed positions)
+        config["outputs"] = [
+            {"name": "formatted_string", "type": "STRING"},
+            {"name": "saved_file_path", "type": "STRING"},
+        ] + config["outputs"]
 
         # Update RETURN_TYPES and RETURN_NAMES dynamically
+        # formatted_string and saved_file_path are ALWAYS first two outputs (positions 0,1)
         # This allows passing through variable values for chaining
-        cls.RETURN_TYPES = ("STRING",) * len(keys) + ("STRING", "STRING")
-        cls.RETURN_NAMES = tuple(keys) + ("formatted_string", "saved_file_path")
+        cls.RETURN_TYPES = ("STRING", "STRING") + ("STRING",) * len(keys)
+        cls.RETURN_NAMES = ("formatted_string", "saved_file_path") + tuple(keys)
         cls.OUTPUT_IS_LIST = (False,) * (len(keys) + 2)
 
         logger.debug(

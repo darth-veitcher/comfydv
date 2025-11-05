@@ -87,10 +87,10 @@ class TestSimpleFormatting:
             unique_id="test1",
             name=sample_data["name"],
         )
-        assert len(result) == 3  # name, formatted_string, saved_file_path
-        assert result[0] == "Alice"
-        assert result[1] == "Hello Alice"
-        assert result[2] == ""
+        assert len(result) == 3  # formatted_string, saved_file_path, name
+        assert result[0] == "Hello Alice"
+        assert result[1] == ""
+        assert result[2] == "Alice"
 
     def test_simple_multiple_variables(self, format_string_class, sample_data):
         """Test simple formatting with multiple variables."""
@@ -102,11 +102,11 @@ class TestSimpleFormatting:
             name=sample_data["name"],
             age=sample_data["age"],
         )
-        assert len(result) == 4  # name, age, formatted_string, saved_file_path
-        assert result[0] == "Alice"
-        assert result[1] == "30"
-        assert result[2] == "Hello Alice, you are 30"
-        assert result[3] == ""
+        assert len(result) == 4  # formatted_string, saved_file_path, name, age
+        assert result[0] == "Hello Alice, you are 30"
+        assert result[1] == ""
+        assert result[2] == "Alice"
+        assert result[3] == "30"
 
     def test_simple_no_variables(self, format_string_class):
         """Test simple formatting with no variables."""
@@ -143,10 +143,10 @@ class TestJinja2Formatting:
             unique_id="test5",
             name=sample_data["name"],
         )
-        assert len(result) == 3  # name, formatted_string, saved_file_path
-        assert result[0] == "Alice"
-        assert result[1] == "Hello Alice"
-        assert result[2] == ""
+        assert len(result) == 3  # formatted_string, saved_file_path, name
+        assert result[0] == "Hello Alice"
+        assert result[1] == ""
+        assert result[2] == "Alice"
 
     def test_jinja2_with_filter(self, format_string_class, sample_data):
         """Test Jinja2 formatting with filters."""
@@ -158,9 +158,9 @@ class TestJinja2Formatting:
             name=sample_data["name"],
         )
         assert len(result) == 3
-        assert result[0] == "Alice"
-        assert result[1] == "Hello ALICE"
-        assert result[2] == ""
+        assert result[0] == "Hello ALICE"
+        assert result[1] == ""
+        assert result[2] == "Alice"
 
     def test_jinja2_multiple_filters(self, format_string_class, sample_data):
         """Test Jinja2 formatting with multiple filters."""
@@ -172,11 +172,11 @@ class TestJinja2Formatting:
             first=sample_data["first"],
             last=sample_data["last"],
         )
-        assert len(result) == 4  # first, last, formatted_string, saved_file_path
-        assert result[0] == "John"
-        assert result[1] == "Doe"
-        assert result[2] == "JOHN doe"
-        assert result[3] == ""
+        assert len(result) == 4  # formatted_string, saved_file_path, first, last
+        assert result[0] == "JOHN doe"
+        assert result[1] == ""
+        assert result[2] == "John"
+        assert result[3] == "Doe"
 
     def test_jinja2_with_datetime(self, format_string_class):
         """Test Jinja2 formatting with datetime context."""
@@ -213,17 +213,17 @@ class TestDynamicOutputs:
         config = format_string_class.update_widget("node1", "Simple", "Hello {name}")
 
         assert "name" in config["inputs"]
-        assert len(config["outputs"]) == 3  # name, formatted_string, saved_file_path
-        assert config["outputs"][0]["name"] == "name"
-        assert config["outputs"][1]["name"] == "formatted_string"
-        assert config["outputs"][2]["name"] == "saved_file_path"
+        assert len(config["outputs"]) == 3  # formatted_string, saved_file_path, name
+        assert config["outputs"][0]["name"] == "formatted_string"
+        assert config["outputs"][1]["name"] == "saved_file_path"
+        assert config["outputs"][2]["name"] == "name"
 
         # Check RETURN_TYPES and RETURN_NAMES are updated
         assert format_string_class.RETURN_TYPES == ("STRING", "STRING", "STRING")
         assert format_string_class.RETURN_NAMES == (
-            "name",
             "formatted_string",
             "saved_file_path",
+            "name",
         )
 
     def test_update_widget_multiple_variables(self, format_string_class):
@@ -236,7 +236,7 @@ class TestDynamicOutputs:
         assert "age" in config["inputs"]
         assert (
             len(config["outputs"]) == 4
-        )  # name, age, formatted_string, saved_file_path
+        )  # formatted_string, saved_file_path, name, age
 
         # Check RETURN_TYPES and RETURN_NAMES are updated
         assert format_string_class.RETURN_TYPES == (
@@ -246,10 +246,10 @@ class TestDynamicOutputs:
             "STRING",
         )
         assert format_string_class.RETURN_NAMES == (
-            "name",
-            "age",
             "formatted_string",
             "saved_file_path",
+            "name",
+            "age",
         )
 
     def test_update_widget_no_variables(self, format_string_class):
@@ -410,7 +410,7 @@ class TestStatePersistence:
             name=sample_data["name"],
         )
         # Should complete without error
-        assert result[-1] == ""  # saved_file_path should be empty
+        assert result[1] == ""  # saved_file_path should be empty (position 1)
 
     def test_load_node_state_nonexistent(self, format_string_class):
         """Test loading non-existent state file."""
@@ -451,7 +451,7 @@ class TestEdgeCases:
             unique_id="test",
             name="<Alice & Bob>",
         )
-        assert "<Alice & Bob>" in result[1]
+        assert "<Alice & Bob>" in result[0]  # formatted_string is at position 0
 
     def test_unicode_in_template(self, format_string_class):
         """Test template with unicode characters."""
@@ -462,7 +462,7 @@ class TestEdgeCases:
             unique_id="test",
             name="世界",
         )
-        assert "你好 世界 🎉" in result[1]
+        assert "你好 世界 🎉" in result[0]  # formatted_string is at position 0
 
 
 class TestTimeNowFunction:
