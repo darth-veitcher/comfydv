@@ -22,7 +22,6 @@ from typing import Any, Dict, List, Tuple
 from aiohttp import web
 from jinja2 import exceptions, sandbox
 from rich import print
-from rich.pretty import pprint
 
 if "comfy" in sys.modules:
     import folder_paths  # from comfyui - gives access to `get_temp_directory()` and `get_output_directory()`
@@ -151,14 +150,14 @@ class FormatString:
 
         This method is called by ComfyUI to check if the node needs to be re-calculated
         due to changes in its inputs. It forces recalculation when Jinja2 templates
-        contain time-dependent functions.
+        contain time-dependent function calls (e.g., datetime.now(), time_now()).
 
         Args:
             **kwargs: Keyword arguments containing the node's current inputs.
 
         Returns:
-            Any: Either the kwargs if no time-dependent functions are detected, or a random
-                 number to force recalculation.
+            Any: A hash of inputs for caching, or a random number to force recalculation
+                 when time-dependent functions are detected.
 
         Example:
             ```python
@@ -166,33 +165,32 @@ class FormatString:
 
             # This would typically be called by ComfyUI
             result = FormatString.IS_CHANGED(template="Hello {name}", template_type="Simple")
-            # If no time functions detected, returns the kwargs
+            # Returns hash of inputs for proper caching
             ```
 
         <!-- Example Test:
         >>> # Test with Simple template
         >>> result = FormatString.IS_CHANGED(template="Hello {name}", template_type="Simple")
         >>> assert isinstance(result, dict)
-        >>> # Test with Jinja2 template containing datetime
+        >>> # Test with Jinja2 template containing datetime function call
         >>> result = FormatString.IS_CHANGED(template="Time: {{ datetime.now() }}", template_type="Jinja2")
         >>> assert isinstance(result, int)  # Should return a random int to force recalculation
         -->
         """
-        print("\n[bold red]IS_CHANGED:")
-        pprint(kwargs)
         template = kwargs.get("template", "")
         if not template:
             return kwargs
-        keys = cls._extract_keys(template)
-        print("Keys:")
-        pprint(keys)
-        if kwargs.get("template_type", "simple") == "Jinja2":
-            for k in cls.additional_context.keys():
-                if k in template:
-                    # assume that our additional context items are functions returning
-                    # changing data such as datetime.now()
-                    print(f"Detected: {k}")
-                    return random.randrange(sys.maxsize)  # force to always recalc
+
+        # Check for time-dependent function calls in Jinja2 templates
+        if kwargs.get("template_type", "Simple") == "Jinja2":
+            # Look for actual function calls like datetime.now(), now(), or time_now()
+            # These are time-dependent and should force recalculation each time
+            time_function_pattern = r"\b(datetime\.now|now|time_now)\s*\("
+            if re.search(time_function_pattern, template):
+                # Force recalculation for time-dependent templates
+                return random.randrange(sys.maxsize)
+
+        # Return kwargs for proper caching - ComfyUI will hash this
         return kwargs
 
     @staticmethod
@@ -373,12 +371,9 @@ class FormatString:
                 os.makedirs(os.path.dirname(actual_save_path), exist_ok=True)
                 with open(actual_save_path, "w") as f:
                     json.dump(save_data, f, indent=2, sort_keys=True)
-                print(f"Node state saved to: {actual_save_path}")
             except Exception as e:
-                print(f"Error saving node state: {str(e)}")
+                print(f"[FormatString] Error saving node state: {str(e)}")
                 actual_save_path = ""  # Reset save_path if saving failed
-        else:
-            print("No save_path provided, node state not saved.")
 
         # Return all input values first (for chaining), then formatted_string and saved_file_path
         # The order must match what was set in update_widget's RETURN_TYPES/RETURN_NAMES
@@ -470,9 +465,6 @@ class FormatString:
         cls.RETURN_TYPES = ("STRING",) * len(keys) + ("STRING", "STRING")
         cls.RETURN_NAMES = tuple(keys) + ("formatted_string", "saved_file_path")
         cls.OUTPUT_IS_LIST = (False,) * (len(keys) + 2)
-
-        print(f"[FormatString] Updated RETURN_TYPES: {cls.RETURN_TYPES}")
-        print(f"[FormatString] Updated RETURN_NAMES: {cls.RETURN_NAMES}")
 
         # Store the configuration for this specific node
         cls.node_configs[node_id] = config
