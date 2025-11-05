@@ -33,7 +33,7 @@ if "comfy" in sys.modules:
     from server import PromptServer  # noqa: from comfyui
 else:
     print(
-        "ComfyUI not detected, CircuitBreaker node will not function properly outside of ComfyUI."
+        "ComfyUI not detected, FormatString node will not function properly outside of ComfyUI."
     )
 
 
