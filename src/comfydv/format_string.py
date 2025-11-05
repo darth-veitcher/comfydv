@@ -10,20 +10,27 @@ detected in the template, making it highly flexible for various text generation
 and parameter formatting needs in ComfyUI workflows.
 """
 
-import re
-import json
-import os
-from typing import Any, Dict, List, Tuple
-from aiohttp import web
-from server import PromptServer  # from comfyui
-import folder_paths  # from comfyui - gives access to `get_temp_directory()` and `get_output_directory()`
-from jinja2 import Environment, sandbox, exceptions
 import datetime
-import random
+import json
 import math
+import os
+import random
+import re
 import sys
+from typing import Any, Dict, List, Tuple
+
+from aiohttp import web
+from jinja2 import exceptions, sandbox
 from rich import print
 from rich.pretty import pprint
+
+if "comfy" in sys.modules:
+    import folder_paths  # from comfyui - gives access to `get_temp_directory()` and `get_output_directory()`
+    from server import PromptServer  # noqa: from comfyui
+else:
+    print(
+        "ComfyUI not detected, CircuitBreaker node will not function properly outside of ComfyUI."
+    )
 
 
 class FormatString:
@@ -53,14 +60,16 @@ class FormatString:
     FUNCTION = "format_string"
     RETURN_TYPES = ("STRING", "STRING")
     RETURN_NAMES = ("formatted_string", "saved_file_path")
+    OUTPUT_IS_LIST = (False, False)
 
     # Store configurations for each node instance
-    node_configs = {}
+    node_configs: Dict[str, Dict[str, Any]] = {}
 
     # Create a sandboxed Jinja2 environment for security
     jinja_env = sandbox.SandboxedEnvironment()
 
     # Define additional context
+    @staticmethod
     def time_now() -> str:
         """
         Get the current time in a formatted string.
@@ -90,7 +99,7 @@ class FormatString:
 
     additional_context = {
         "datetime": datetime,
-        "now": time_now,
+        "now": time_now,  # we name our custom function `time_now` as `now` so inside jinja it's `{{ now() }}`
         "random": random,
         "math": math,
         # Add more modules or functions as needed
@@ -132,9 +141,7 @@ class FormatString:
                 "template": ("STRING", {"multiline": True}),
                 "save_path": ("STRING", {"default": ""}),
             },
-            "hidden": {
-                "unique_id": "UNIQUE_ID"
-            }
+            "hidden": {"unique_id": "UNIQUE_ID"},
         }
 
     @classmethod
@@ -173,12 +180,15 @@ class FormatString:
         """
         print("\n[bold red]IS_CHANGED:")
         pprint(kwargs)
-        keys = cls._extract_keys(kwargs.get('template'))
+        template = kwargs.get("template", "")
+        if not template:
+            return kwargs
+        keys = cls._extract_keys(template)
         print("Keys:")
         pprint(keys)
-        if kwargs.get('template_type', "simple") == "Jinja2":
+        if kwargs.get("template_type", "simple") == "Jinja2":
             for k in cls.additional_context.keys():
-                if k in kwargs.get('template'):
+                if k in template:
                     # assume that our additional context items are functions returning
                     # changing data such as datetime.now()
                     print(f"Detected: {k}")
@@ -227,29 +237,44 @@ class FormatString:
         seen = set()
 
         def add_var(var):
-            var = var.split('|')[0].split('.')[0].strip()
+            var = var.split("|")[0].split(".")[0].strip()
             if var not in seen and var not in FormatString.additional_context:
                 seen.add(var)
                 variables.append(var)
 
         # Extract variables from Jinja2 expressions {{ }}
-        for match in re.finditer(r'\{\{\s*([\w.]+)(?:\|[\w\s]+)?(?:\.[^\(\)]+\(\))?\s*\}\}', template):
+        for match in re.finditer(
+            r"\{\{\s*([\w.]+)(?:\s*\|[\w\s]+)?(?:\.[^\(\)]+\(\))?\s*\}\}", template
+        ):
             add_var(match.group(1))
 
         # Extract variables from f-string style { }
-        for match in re.finditer(r'\{(\w+)\}', template):
+        for match in re.finditer(r"\{(\w+)\}", template):
             add_var(match.group(1))
 
         # Extract variables from Jinja2 control structures {% %}
-        for structure in re.finditer(r'\{%.*?%\}', template):
-            for var in re.findall(r'\b(\w+)\|\b', structure.group(0)):
-                if not var.startswith('end') and var not in {'if', 'else', 'elif', 'for', 'in'}:
+        for structure in re.finditer(r"\{%.*?%\}", template):
+            for var in re.findall(r"\b(\w+)\|\b", structure.group(0)):
+                if not var.startswith("end") and var not in {
+                    "if",
+                    "else",
+                    "elif",
+                    "for",
+                    "in",
+                }:
                     add_var(var)
 
         return variables
 
     @classmethod
-    def format_string(cls, template_type: str, template: str, save_path: str, **kwargs) -> Tuple[str, ...]:
+    def format_string(
+        cls,
+        template_type: str,
+        template: str,
+        save_path: str,
+        unique_id: str = "",
+        **kwargs,
+    ) -> Tuple[str, ...]:
         """
         Format a string using the specified template type and variables.
 
@@ -260,11 +285,12 @@ class FormatString:
             template_type (str): Either "Simple" or "Jinja2" to specify the template engine.
             template (str): The template string to format.
             save_path (str): Optional path to save the node state. If empty, state is not saved.
+            unique_id (str): The unique identifier for this node instance (passed by ComfyUI).
             **kwargs: Variable keyword arguments that provide values for template variables.
 
         Returns:
-            Tuple[str, ...]: A tuple containing the values of input variables, followed by
-                           the formatted string and the save path (if any).
+            Tuple[str, ...]: A tuple containing the values of input variables (in order),
+                           followed by the formatted string and the save path.
 
         Example:
             ```python
@@ -275,6 +301,7 @@ class FormatString:
                 template_type="Simple",
                 template="Hello {name}, you are {age} years old",
                 save_path="",
+                unique_id="123",
                 name="Alice",
                 age="30"
             )
@@ -285,9 +312,10 @@ class FormatString:
                 template_type="Jinja2",
                 template="Hello {{ name }}, today is {{ datetime.now().strftime('%A') }}",
                 save_path="",
+                unique_id="124",
                 name="Bob"
             )
-            print(result[2])  # Outputs: 'Hello Bob, today is Wednesday' (or current day)
+            print(result)  # Outputs: ('Bob', 'Hello Bob, today is Wednesday', '')
             ```
 
         <!-- Example Test:
@@ -333,27 +361,36 @@ class FormatString:
         save_data = {
             "template_type": template_type,
             "template": template,
-            "inputs": {k: kwargs.get(k, "") for k in keys}
+            "inputs": {k: kwargs.get(k, "") for k in keys},
         }
 
+        actual_save_path = ""
         if save_path:
-            save_path = os.path.join(folder_paths.get_output_directory(), save_path)
+            actual_save_path = os.path.join(
+                folder_paths.get_output_directory(), save_path
+            )
             try:
-                os.makedirs(os.path.dirname(save_path), exist_ok=True)
-                with open(save_path, "w") as f:
+                os.makedirs(os.path.dirname(actual_save_path), exist_ok=True)
+                with open(actual_save_path, "w") as f:
                     json.dump(save_data, f, indent=2, sort_keys=True)
-                print(f"Node state saved to: {save_path}")
+                print(f"Node state saved to: {actual_save_path}")
             except Exception as e:
                 print(f"Error saving node state: {str(e)}")
-                save_path = ""  # Reset save_path if saving failed
+                actual_save_path = ""  # Reset save_path if saving failed
         else:
             print("No save_path provided, node state not saved.")
 
-        # Return all input values first, then formatted_string and saved_file_path
-        return tuple(str(kwargs.get(key, "")) for key in keys) + (formatted_string, save_path)
+        # Return all input values first (for chaining), then formatted_string and saved_file_path
+        # The order must match what was set in update_widget's RETURN_TYPES/RETURN_NAMES
+        return tuple(str(kwargs.get(key, "")) for key in keys) + (
+            formatted_string,
+            actual_save_path,
+        )
 
     @classmethod
-    def update_widget(cls, node_id: str, template_type: str, template: str) -> Dict[str, Any]:
+    def update_widget(
+        cls, node_id: str, template_type: str, template: str
+    ) -> Dict[str, Any]:
         """
         Update a node's widget configuration based on the template.
 
@@ -408,7 +445,7 @@ class FormatString:
         -->
         """
         keys = cls._extract_keys(template)
-        config = {
+        config: Dict[str, Any] = {
             "inputs": {
                 "template_type": (["Simple", "Jinja2"],),
                 "template": ("STRING", {"multiline": True}),
@@ -417,18 +454,25 @@ class FormatString:
             "outputs": [],
         }
         for key in keys:
-            config["inputs"][key] = ("STRING", {"default": ""})
-            config["outputs"].append({"name": key, "type": "STRING"})
+            config["inputs"][key] = ("STRING", {"default": ""})  # type: ignore
+            config["outputs"].append({"name": key, "type": "STRING"})  # type: ignore
 
         # Add formatted_string and saved_file_path at the end of outputs
-        config["outputs"].extend([
-            {"name": "formatted_string", "type": "STRING"},
-            {"name": "saved_file_path", "type": "STRING"},
-        ])
+        config["outputs"].extend(
+            [  # type: ignore
+                {"name": "formatted_string", "type": "STRING"},
+                {"name": "saved_file_path", "type": "STRING"},
+            ]
+        )
 
-        # Update RETURN_TYPES and RETURN_NAMES
+        # Update RETURN_TYPES and RETURN_NAMES dynamically
+        # This allows passing through variable values for chaining
         cls.RETURN_TYPES = ("STRING",) * len(keys) + ("STRING", "STRING")
         cls.RETURN_NAMES = tuple(keys) + ("formatted_string", "saved_file_path")
+        cls.OUTPUT_IS_LIST = (False,) * (len(keys) + 2)
+
+        print(f"[FormatString] Updated RETURN_TYPES: {cls.RETURN_TYPES}")
+        print(f"[FormatString] Updated RETURN_NAMES: {cls.RETURN_NAMES}")
 
         # Store the configuration for this specific node
         cls.node_configs[node_id] = config
@@ -565,9 +609,9 @@ async def update_format_string_node(request):
         ```
     """
     data = await request.json()
-    node_id = data.get('nodeId', '')
-    template_type = data.get('template_type', '')
-    template = data.get('template', '')
+    node_id = data.get("nodeId", "")
+    template_type = data.get("template_type", "")
+    template = data.get("template", "")
     updated_config = FormatString.update_widget(node_id, template_type, template)
     return web.json_response(updated_config)
 
@@ -603,7 +647,7 @@ async def load_format_string_node(request):
         ```
     """
     data = await request.json()
-    file_path = data.get('file_path', '')
+    file_path = data.get("file_path", "")
     state = FormatString.load_node_state(file_path)
     return web.json_response(state)
 
@@ -632,16 +676,12 @@ async def get_format_string_node_config(request):
           .then(data => console.log(data));
         ```
     """
-    node_id = request.match_info['node_id']
+    node_id = request.match_info["node_id"]
     config = FormatString.get_node_config(node_id)
     return web.json_response(config)
 
 
 # Node registration for ComfyUI
-NODE_CLASS_MAPPINGS = {
-    "FormatString": FormatString
-}
+NODE_CLASS_MAPPINGS = {"FormatString": FormatString}
 
-NODE_DISPLAY_NAME_MAPPINGS = {
-    "FormatString": "Format String"
-}
+NODE_DISPLAY_NAME_MAPPINGS = {"FormatString": "Format String"}

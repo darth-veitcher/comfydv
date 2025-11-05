@@ -2,10 +2,14 @@
 This node is designed in a hacky way to allow you to break a render run semi-gracefully.
 """
 
-import torchvision.transforms as T
-from comfy.model_management import InterruptProcessingException
+import sys
 
-from .utils import any_type
+if "comfy" in sys.modules:
+    from comfy.model_management import InterruptProcessingException  # noqa
+else:
+    print(
+        "ComfyUI not detected, CircuitBreaker node will not function properly outside of ComfyUI."
+    )
 
 
 class CircuitBreaker:
@@ -44,7 +48,7 @@ class CircuitBreaker:
 
     def doit(self, trigger, **kwargs):
         if kwargs.get("status"):
-            print(f"Circuit Breaker triggered")
+            print("Circuit Breaker triggered")
             raise InterruptProcessingException()
         else:
             return (trigger,)
