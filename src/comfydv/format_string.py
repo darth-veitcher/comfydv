@@ -12,6 +12,7 @@ and parameter formatting needs in ComfyUI workflows.
 
 import datetime
 import json
+import logging
 import math
 import os
 import random
@@ -22,6 +23,10 @@ from typing import Any, Dict, List, Tuple
 from aiohttp import web
 from jinja2 import exceptions, sandbox
 from rich import print
+
+# Set up logger for this module
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 if "comfy" in sys.modules:
     import folder_paths  # from comfyui - gives access to `get_temp_directory()` and `get_output_directory()`
@@ -178,19 +183,27 @@ class FormatString:
         -->
         """
         template = kwargs.get("template", "")
+        template_type = kwargs.get("template_type", "Simple")
+        
         if not template:
+            logger.debug("Empty template, returning kwargs for caching")
             return kwargs
+        
+        template_preview = template[:50] if len(template) > 50 else template
+        logger.debug(f"IS_CHANGED called - template_type: {template_type}, template: {template_preview}...")
 
         # Check for time-dependent function calls in Jinja2 templates
-        if kwargs.get("template_type", "Simple") == "Jinja2":
+        if template_type == "Jinja2":
             # Look for actual function calls like datetime.now(), now(), or time_now()
             # These are time-dependent and should force recalculation each time
             time_function_pattern = r"\b(datetime\.now|now|time_now)\s*\("
             if re.search(time_function_pattern, template):
                 # Force recalculation for time-dependent templates
+                logger.debug("Time-dependent function detected in Jinja2 template, forcing recalculation")
                 return random.randrange(sys.maxsize)
 
         # Return kwargs for proper caching - ComfyUI will hash this
+        logger.debug("No time-dependent functions, using cached result if inputs unchanged")
         return kwargs
 
     @staticmethod
@@ -342,18 +355,41 @@ class FormatString:
         >>> assert result[2] == ""
         -->
         """
+        logger.info(f"Formatting string - type: {template_type}, unique_id: {unique_id}")
+        logger.debug(f"Template: {template[:100]}...")
+        
         keys = cls._extract_keys(template)
+        logger.debug(f"Extracted variables: {keys}")
+        input_vals = ', '.join(f'{k}={kwargs.get(k, "")}' for k in keys)
+        logger.debug(f"Input values: {input_vals}")
 
         if template_type == "Simple":
-            formatted_string = template.format(**kwargs)
+            try:
+                formatted_string = template.format(**kwargs)
+                logger.info(f"Simple format successful, result length: {len(formatted_string)}")
+            except KeyError as e:
+                error_msg = f"Missing variable in Simple template: {str(e)}"
+                logger.error(error_msg)
+                raise  # Re-raise for proper error handling
+            except Exception as e:
+                error_msg = f"Error in Simple template: {str(e)}"
+                logger.error(error_msg)
+                formatted_string = f"Error: {error_msg}"
         else:  # Jinja2
             try:
                 jinja_template = cls.jinja_env.from_string(template)
                 # Combine user-provided kwargs with additional_context
                 context = {**cls.additional_context, **kwargs}
                 formatted_string = jinja_template.render(**context)
+                logger.info(f"Jinja2 format successful, result length: {len(formatted_string)}")
             except exceptions.TemplateSyntaxError as e:
-                formatted_string = f"Error in Jinja2 template: {str(e)}"
+                error_msg = f"Error in Jinja2 template: {str(e)}"
+                logger.error(error_msg)
+                formatted_string = error_msg
+            except Exception as e:
+                error_msg = f"Error rendering Jinja2 template: {str(e)}"
+                logger.error(error_msg)
+                formatted_string = error_msg
 
         # Save the state
         save_data = {
@@ -371,16 +407,21 @@ class FormatString:
                 os.makedirs(os.path.dirname(actual_save_path), exist_ok=True)
                 with open(actual_save_path, "w") as f:
                     json.dump(save_data, f, indent=2, sort_keys=True)
+                logger.info(f"Node state saved to: {actual_save_path}")
             except Exception as e:
-                print(f"[FormatString] Error saving node state: {str(e)}")
+                logger.error(f"Error saving node state: {str(e)}")
                 actual_save_path = ""  # Reset save_path if saving failed
+        else:
+            logger.debug("No save_path provided, skipping state save")
 
         # Return all input values first (for chaining), then formatted_string and saved_file_path
         # The order must match what was set in update_widget's RETURN_TYPES/RETURN_NAMES
-        return tuple(str(kwargs.get(key, "")) for key in keys) + (
+        result = tuple(str(kwargs.get(key, "")) for key in keys) + (
             formatted_string,
             actual_save_path,
         )
+        logger.debug(f"Returning {len(result)} outputs")
+        return result
 
     @classmethod
     def update_widget(
@@ -439,7 +480,12 @@ class FormatString:
         >>> assert FormatString.node_configs["test_node"] == config
         -->
         """
+        logger.info(f"Updating widget config - node_id: {node_id}, template_type: {template_type}")
+        logger.debug(f"Template: {template[:100]}...")
+        
         keys = cls._extract_keys(template)
+        logger.info(f"Extracted {len(keys)} variables from template: {keys}")
+        
         config: Dict[str, Any] = {
             "inputs": {
                 "template_type": (["Simple", "Jinja2"],),
@@ -465,9 +511,12 @@ class FormatString:
         cls.RETURN_TYPES = ("STRING",) * len(keys) + ("STRING", "STRING")
         cls.RETURN_NAMES = tuple(keys) + ("formatted_string", "saved_file_path")
         cls.OUTPUT_IS_LIST = (False,) * (len(keys) + 2)
+        
+        logger.debug(f"Updated RETURN_TYPES to {len(cls.RETURN_TYPES)} outputs: {cls.RETURN_NAMES}")
 
         # Store the configuration for this specific node
         cls.node_configs[node_id] = config
+        logger.debug(f"Stored config for node {node_id}")
 
         return config
 
@@ -604,8 +653,16 @@ async def update_format_string_node(request):
     node_id = data.get("nodeId", "")
     template_type = data.get("template_type", "")
     template = data.get("template", "")
-    updated_config = FormatString.update_widget(node_id, template_type, template)
-    return web.json_response(updated_config)
+    
+    logger.info(f"Web API: update_format_string_node - node_id: {node_id}, template_type: {template_type}")
+    
+    try:
+        updated_config = FormatString.update_widget(node_id, template_type, template)
+        logger.debug(f"Successfully updated config for node {node_id}")
+        return web.json_response(updated_config)
+    except Exception as e:
+        logger.error(f"Error updating node config: {str(e)}", exc_info=True)
+        return web.json_response({"error": str(e)}, status=500)
 
 
 # Custom route for loading node state
