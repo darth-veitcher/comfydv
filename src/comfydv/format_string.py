@@ -374,9 +374,12 @@ class FormatString:
         if template_type == "Simple":
             try:
                 formatted_string = template.format(**kwargs)
-                logger.info(
-                    f"Simple format successful, result length: {len(formatted_string)}"
-                )
+                if logger.level < logging.DEBUG:
+                    logger.info(
+                        f"Simple format successful, result length: {len(formatted_string)}"
+                    )
+                elif logger.level == logging.DEBUG:
+                    logger.debug(f"Simple format successful: {formatted_string}")
             except KeyError as e:
                 error_msg = f"Missing variable in Simple template: {str(e)}"
                 logger.error(error_msg)
