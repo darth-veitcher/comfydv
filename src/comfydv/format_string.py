@@ -50,11 +50,16 @@ class FormatString:
     Additional context variables like datetime, random, and math functions are available
     in Jinja2 mode.
 
+    Outputs:
+        The node always returns formatted_string and saved_file_path as the first two outputs
+        (positions 0 and 1), followed by any variable values extracted from the template in
+        subsequent positions. This ensures the primary outputs are in fixed, predictable positions.
+
     Attributes:
         CATEGORY (str): The category of the node in ComfyUI's node menu.
         FUNCTION (str): The main function to be called when the node is executed.
-        RETURN_TYPES (tuple): Types of the returned outputs.
-        RETURN_NAMES (tuple): Names of the returned outputs.
+        RETURN_TYPES (tuple): Types of the returned outputs (dynamically updated).
+        RETURN_NAMES (tuple): Names of the returned outputs (dynamically updated).
         node_configs (dict): Storage for configurations of node instances.
         jinja_env (SandboxedEnvironment): Sandboxed Jinja2 environment for secure template rendering.
         additional_context (dict): Extra context variables available in Jinja2 templates.
@@ -306,8 +311,8 @@ class FormatString:
             **kwargs: Variable keyword arguments that provide values for template variables.
 
         Returns:
-            Tuple[str, ...]: A tuple containing the values of input variables (in order),
-                           followed by the formatted string and the save path.
+            Tuple[str, ...]: A tuple containing the formatted string, the save path,
+                           followed by the values of input variables (in order).
 
         Example:
             ```python
@@ -322,7 +327,7 @@ class FormatString:
                 name="Alice",
                 age="30"
             )
-            print(result)  # Outputs: ('Alice', '30', 'Hello Alice, you are 30 years old', '')
+            print(result)  # Outputs: ('Hello Alice, you are 30 years old', '', 'Alice', '30')
 
             # Jinja2 template example
             result = FormatString.format_string(
@@ -332,7 +337,7 @@ class FormatString:
                 unique_id="124",
                 name="Bob"
             )
-            print(result)  # Outputs: ('Bob', 'Hello Bob, today is Wednesday', '')
+            print(result)  # Outputs: ('Hello Bob, today is Wednesday', '', 'Bob')
             ```
 
         <!-- Example Test:
@@ -344,10 +349,10 @@ class FormatString:
         ...     name="Alice",
         ...     age="30"
         ... )
-        >>> assert result[0] == "Alice"
-        >>> assert result[1] == "30"
-        >>> assert result[2] == "Hello Alice, you are 30 years old"
-        >>> assert result[3] == ""
+        >>> assert result[0] == "Hello Alice, you are 30 years old"
+        >>> assert result[1] == ""
+        >>> assert result[2] == "Alice"
+        >>> assert result[3] == "30"
         >>>
         >>> # Test Jinja2 format with datetime (can't test exact output due to time dependency)
         >>> result = FormatString.format_string(
@@ -356,9 +361,9 @@ class FormatString:
         ...     save_path="",
         ...     name="Bob"
         ... )
-        >>> assert result[0] == "Bob"
-        >>> assert result[1] == "Name: Bob"
-        >>> assert result[2] == ""
+        >>> assert result[0] == "Name: Bob"
+        >>> assert result[1] == ""
+        >>> assert result[2] == "Bob"
         -->
         """
         logger.info(
@@ -511,18 +516,18 @@ class FormatString:
         ... )
         >>> assert "name" in config["inputs"]
         >>> assert "age" in config["inputs"]
-        >>> assert len(config["outputs"]) == 4  # name, age, formatted_string, saved_file_path
-        >>> assert config["outputs"][0]["name"] == "name"
-        >>> assert config["outputs"][1]["name"] == "age"
-        >>> assert config["outputs"][2]["name"] == "formatted_string"
-        >>> assert config["outputs"][3]["name"] == "saved_file_path"
+        >>> assert len(config["outputs"]) == 4  # formatted_string, saved_file_path, name, age
+        >>> assert config["outputs"][0]["name"] == "formatted_string"
+        >>> assert config["outputs"][1]["name"] == "saved_file_path"
+        >>> assert config["outputs"][2]["name"] == "name"
+        >>> assert config["outputs"][3]["name"] == "age"
         >>> # Check that RETURN_TYPES and RETURN_NAMES are updated
         >>> assert len(FormatString.RETURN_TYPES) == 4
         >>> assert len(FormatString.RETURN_NAMES) == 4
-        >>> assert FormatString.RETURN_NAMES[0] == "name"
-        >>> assert FormatString.RETURN_NAMES[1] == "age"
-        >>> assert FormatString.RETURN_NAMES[2] == "formatted_string"
-        >>> assert FormatString.RETURN_NAMES[3] == "saved_file_path"
+        >>> assert FormatString.RETURN_NAMES[0] == "formatted_string"
+        >>> assert FormatString.RETURN_NAMES[1] == "saved_file_path"
+        >>> assert FormatString.RETURN_NAMES[2] == "name"
+        >>> assert FormatString.RETURN_NAMES[3] == "age"
         >>> # Check that node config is stored
         >>> assert "test_node" in FormatString.node_configs
         >>> assert FormatString.node_configs["test_node"] == config
