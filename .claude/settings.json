@@ -1,0 +1,75 @@
+{
+  "_comment": "BEACON-managed Claude Code hooks. Re-installed by `beacon upgrade`. Disable specific hooks via doctor.toml's [hooks] disabled = [...].",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "_name": "auto-lint",
+        "_purpose": "auto-lint after Claude edits \u2014 runs the project's lint+format on the touched file (only under src/ or tests/)",
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=$(jq -r .tool_input.file_path); case \"$FILE\" in src/*|tests/*) uv run ruff check --fix && uv run ruff format ;; esac"
+          }
+        ]
+      },
+      {
+        "_name": "auto-doctor",
+        "_purpose": "auto-doctor after `beacon bullet finish` \u2014 surfaces drift the moment a bullet closes",
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CMD=$(jq -r .tool_input.command); case \"$CMD\" in *\"beacon bullet finish\"*) beacon doctor || true ;; esac"
+          }
+        ]
+      },
+      {
+        "_name": "auto-roadmap",
+        "_purpose": "auto-roadmap \u2014 regenerates ROADMAP.md when epic or bullet state changes; disable via doctor.toml [hooks] disabled = [\"auto-roadmap\"]",
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CMD=$(jq -r .tool_input.command); case \"$CMD\" in *\"beacon epic new\"*|*\"beacon epic finish\"*|*\"beacon epic archive\"*|*\"beacon bullet finish\"*) beacon roadmap export || true ;; esac"
+          }
+        ]
+      },
+      {
+        "_name": "auto-audit",
+        "_purpose": "auto-audit (post) \u2014 nudges toward /beacon.audit after an epic is stubbed (design moment) or a spec lands (build moment, opt-in). Tune which moments fire via doctor.toml [audit] moments; disable entirely via [hooks] disabled = [\"auto-audit\"]",
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CMD=$(jq -r .tool_input.command); beacon audit-nudge --phase post \"$CMD\" || true"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "_name": "auto-audit",
+        "_purpose": "auto-audit (pre) \u2014 nudges toward /beacon.audit before `beacon epic finish` seals an epic (ship moment). Tune via doctor.toml [audit] moments; disable via [hooks] disabled = [\"auto-audit\"]",
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CMD=$(jq -r .tool_input.command); beacon audit-nudge --phase pre \"$CMD\" || true"
+          }
+        ]
+      },
+      {
+        "_name": "manifest-write-protect",
+        "_purpose": "manifest write-protect \u2014 `project-management/.beacon/init-options.json` is BEACON-owned; route changes through `beacon init/upgrade` so versioning + drift checks stay accurate",
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=$(jq -r .tool_input.file_path); case \"$FILE\" in *project-management/.beacon/init-options.json) echo 'beacon: refusing to edit the BEACON manifest directly. Use `beacon init` / `beacon upgrade` instead.' >&2; exit 2 ;; esac"
+          }
+        ]
+      }
+    ]
+  }
+}

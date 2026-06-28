@@ -1,0 +1,7 @@
+# BEACON active bullets — committed source of truth (issue #77).
+#
+# Maps a non-spec branch to its bullet: branch → {title, owner, started, epic?}.
+# Maintained by `beacon bullet {start,finish,sweep}`. Committed deliberately so
+# the bullet survives a fresh clone (`beacon doctor`'s active-bullet check then
+# works in CI) and no per-branch file is left behind on the trunk after a merge.
+# `git log -p` on this file is the audit trail of who started which bullet when.

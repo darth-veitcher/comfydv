@@ -6,6 +6,10 @@ readme = "README.md"
 authors = [
     { name = "darth-veitcher", email = "1722315+darth-veitcher@users.noreply.github.com" }
 ]
+[project.urls]
+Repository = "https://github.com/darth-veitcher/comfydv"
+Documentation = "https://darth-veitcher.github.io/comfydv/stable/"
+
 dependencies = [
     "colorama>=0.4.6",
     "jinja2>=3.1.6",
