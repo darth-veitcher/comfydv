@@ -1,131 +1,113 @@
-# Feature Specification: [FEATURE NAME]
+# Feature Specification: Manager-Compatible Install
 
-**Feature Branch**: `[###-feature-name]`
+**Feature Branch**: `002-manager-install`
 
-**Created**: [DATE]
+**Created**: 2026-06-28
 
 **Status**: Draft
 
-**Input**: User description: "$ARGUMENTS"
+**Input**: User description: "Manager-compatible install: fix requirements.txt, move aiohttp to runtime deps, register in ComfyUI Manager custom-node-list"
 
 ## User Scenarios & Testing *(mandatory)*
 
-<!--
-  IMPORTANT: User stories should be PRIORITIZED as user journeys ordered by importance.
-  Each user story/journey must be INDEPENDENTLY TESTABLE - meaning if you implement just ONE of them,
-  you should still have a viable MVP (Minimum Viable Product) that delivers value.
+### User Story 1 — Clean dependency install from a fresh clone (Priority: P1)
 
-  Assign priorities (P1, P2, P3, etc.) to each story, where P1 is the most critical.
-  Think of each story as a standalone slice of functionality that can be:
-  - Developed independently
-  - Tested independently
-  - Deployed independently
-  - Demonstrated to users independently
--->
+A developer or power user clones comfydv and runs `pip install -r requirements.txt`
+to satisfy its dependencies. Currently this installs `colorama` and `termcolor` (removed
+packages), silently omits `jinja2`, and the leading `.` triggers a local editable install
+that fails in some environments. The FormatString node crashes on first use.
 
-### User Story 1 - [Brief Title] (Priority: P1)
+**Why this priority**: This is the most direct install path and it is broken at step one.
+No other fix matters if the dependency file is wrong.
 
-[Describe this user journey in plain language]
-
-**Why this priority**: [Explain the value and why it has this priority level]
-
-**Independent Test**: [Describe how this can be tested independently - e.g., "Can be fully tested by [specific action] and delivers [specific value]"]
+**Independent Test**: Clone into a clean virtualenv, run `pip install -r requirements.txt`,
+then `python -c "import jinja2"`. Must exit 0 with jinja2 importable.
 
 **Acceptance Scenarios**:
 
-1. **Given** [initial state], **When** [action], **Then** [expected outcome]
-2. **Given** [initial state], **When** [action], **Then** [expected outcome]
+1. **Given** a fresh clone with no pre-installed packages, **when** `pip install -r requirements.txt` is executed, **then** it exits 0 and `jinja2` is importable.
+2. **Given** the installed environment, **when** FormatString is exercised with a Jinja2 template, **then** no `ImportError` or `ModuleNotFoundError` is raised.
+3. **Given** the installed environment, **when** the aiohttp web routes in FormatString are registered, **then** no `ImportError` is raised.
 
 ---
 
-### User Story 2 - [Brief Title] (Priority: P2)
+### User Story 2 — One-click install via ComfyUI Manager UI (Priority: P1)
 
-[Describe this user journey in plain language]
+A ComfyUI user opens Manager, searches for "comfydv" or "DV Nodes", and installs with
+one click. Currently the package does not appear in Manager's search UI at all — it has
+never been submitted to `ltdrdata/ComfyUI-Manager`'s `custom-node-list.json`.
 
-**Why this priority**: [Explain the value and why it has this priority level]
+**Why this priority**: The Manager UI is the standard install path for the vast majority of
+ComfyUI users. Without a registry entry, comfydv is invisible to this audience.
 
-**Independent Test**: [Describe how this can be tested independently]
+**Independent Test**: Open ComfyUI Manager, search "comfydv", confirm a result appears with
+the correct title and description. Click Install, restart ComfyUI, confirm all three nodes
+appear in the node menu.
 
 **Acceptance Scenarios**:
 
-1. **Given** [initial state], **When** [action], **Then** [expected outcome]
+1. **Given** a ComfyUI + Manager installation, **when** the user searches "comfydv" in Manager, **then** a result appears with title "Comfy DV Nodes" and an accurate description.
+2. **Given** the Manager search result, **when** the user clicks Install, **then** Manager clones the repo and runs `pip install -r requirements.txt` without errors.
+3. **Given** a Manager-installed comfydv, **when** ComfyUI restarts, **then** all three nodes (Format String, Random Choice, Circuit Breaker) appear in the `dv/` node menu.
 
 ---
 
-### User Story 3 - [Brief Title] (Priority: P3)
+### User Story 3 — Package metadata accurately describes the current node set (Priority: P2)
 
-[Describe this user journey in plain language]
+The `@description` in the root `__init__.py` currently mentions "model memory management"
+— a reference to the never-shipped Model Unloader node. A user reading this in Manager will
+expect functionality that does not exist.
 
-**Why this priority**: [Explain the value and why it has this priority level]
+**Why this priority**: Accurate metadata is required before the Manager PR can be submitted.
+A misleading description is a blocker, not a polish item.
 
-**Independent Test**: [Describe how this can be tested independently]
+**Independent Test**: Read the `@description` field in `__init__.py`. It must mention only
+FormatString, RandomChoice, and CircuitBreaker with no reference to removed or non-existent
+nodes.
 
 **Acceptance Scenarios**:
 
-1. **Given** [initial state], **When** [action], **Then** [expected outcome]
+1. **Given** the root `__init__.py`, **when** its `@description` is read, **then** it references only the three nodes that exist and makes no mention of non-existent functionality.
+2. **Given** the submitted Manager registry entry, **when** a user reads the description, **then** it accurately reflects the package's current capabilities.
 
 ---
-
-[Add more user stories as needed, each with an assigned priority]
 
 ### Edge Cases
 
-<!--
-  ACTION REQUIRED: The content in this section represents placeholders.
-  Fill them out with the right edge cases.
--->
-
-- What happens when [boundary condition]?
-- How does system handle [error scenario]?
+- What if `jinja2` is already installed? `pip install -r requirements.txt` is idempotent — it satisfies the constraint without downgrading or reinstalling.
+- Does `aiohttp` need to be in `requirements.txt`? No — ComfyUI's own server depends on `aiohttp`, so it is always present in any ComfyUI environment. It belongs in `pyproject.toml [project.dependencies]` for pip-install correctness, but not in `requirements.txt` for the git-clone path.
+- What if the Manager PR review takes time? The `requirements.txt` and metadata fixes can merge to `main` first. The Manager PR references the live repo and only needs the correct files to be on `main` when approved.
 
 ## Requirements *(mandatory)*
 
-<!--
-  ACTION REQUIRED: The content in this section represents placeholders.
-  Fill them out with the right functional requirements.
--->
-
 ### Functional Requirements
 
-- **FR-001**: System MUST [specific capability, e.g., "allow users to create accounts"]
-- **FR-002**: System MUST [specific capability, e.g., "validate email addresses"]
-- **FR-003**: Users MUST be able to [key interaction, e.g., "reset their password"]
-- **FR-004**: System MUST [data requirement, e.g., "persist user preferences"]
-- **FR-005**: System MUST [behavior, e.g., "log all security events"]
+- **FR-001**: `requirements.txt` at the repository root MUST list only `jinja2>=3.1.6` — the runtime dependency not already provided by ComfyUI. It MUST NOT contain autogenerated content, a bare `.`, or packages removed from the codebase (`colorama`, `termcolor`, `rich`).
+- **FR-002**: `requirements.txt` MUST be a hand-authored, human-readable file; it MUST NOT be regenerated by `uv export` or any automated tool as part of the normal development workflow.
+- **FR-003**: `aiohttp` MUST be declared as a production (not dev-only) dependency in `pyproject.toml [project.dependencies]`, because it is imported unconditionally at module level and would be absent in any pip-based install that does not bundle ComfyUI.
+- **FR-004**: The package MUST be submitted to `ltdrdata/ComfyUI-Manager` via a pull request adding an entry to `custom-node-list.json` with the correct repository URL, title, description, and node names.
+- **FR-005**: The `@description` field in the root `__init__.py` module docstring MUST describe only the nodes that currently exist in `NODE_CLASS_MAPPINGS` and MUST NOT reference nodes that do not exist.
+- **FR-006**: After a Manager-managed install, `pip install -r requirements.txt` MUST complete with exit code 0.
 
-*Example of marking unclear requirements:*
+### Key Entities
 
-- **FR-006**: System MUST authenticate users via [NEEDS CLARIFICATION: auth method not specified - email/password, SSO, OAuth?]
-- **FR-007**: System MUST retain user data for [NEEDS CLARIFICATION: retention period not specified]
-
-### Key Entities *(include if feature involves data)*
-
-- **[Entity 1]**: [What it represents, key attributes without implementation]
-- **[Entity 2]**: [What it represents, relationships to other entities]
+- **`requirements.txt`**: Hand-authored runtime dependency file read by ComfyUI Manager's post-clone install step. Kept in sync with `pyproject.toml [project.dependencies]` minus deps already provided by the ComfyUI environment.
+- **`custom-node-list.json` entry**: The JSON record in `ltdrdata/ComfyUI-Manager` that makes comfydv discoverable. Fields: `author`, `title`, `reference` (repo URL), `pip`, `files`, `description`, `nodename` list.
+- **`pyproject.toml [project.dependencies]`**: Canonical runtime dep list for pip-based installs; source of truth.
 
 ## Success Criteria *(mandatory)*
 
-<!--
-  ACTION REQUIRED: Define measurable success criteria.
-  These must be technology-agnostic and measurable.
--->
-
 ### Measurable Outcomes
 
-- **SC-001**: [Measurable metric, e.g., "Users can complete account creation in under 2 minutes"]
-- **SC-002**: [Measurable metric, e.g., "System handles 1000 concurrent users without degradation"]
-- **SC-003**: [User satisfaction metric, e.g., "90% of users successfully complete primary task on first attempt"]
-- **SC-004**: [Business metric, e.g., "Reduce support tickets related to [X] by 50%"]
+- **SC-001**: `pip install -r requirements.txt` from a clean clone exits 0 and makes `import jinja2` succeed — verifiable in a fresh virtualenv.
+- **SC-002**: comfydv appears as a searchable result in ComfyUI Manager after the `custom-node-list.json` PR is merged — verifiable by opening Manager and searching "comfydv".
+- **SC-003**: After a Manager-managed install and ComfyUI restart, all three nodes appear in the node menu under `dv/` — verifiable by manual inspection.
+- **SC-004**: The `@description` in `__init__.py` contains no references to non-existent nodes — verifiable by reading the file and cross-referencing `NODE_CLASS_MAPPINGS`.
+- **SC-005**: `beacon doctor --strict` passes on `main` after the PR merges — 0 fails.
 
 ## Assumptions
 
-<!--
-  ACTION REQUIRED: The content in this section represents placeholders.
-  Fill them out with the right assumptions based on reasonable defaults
-  chosen when the feature description did not specify certain details.
--->
-
-- [Assumption about target users, e.g., "Users have stable internet connectivity"]
-- [Assumption about scope boundaries, e.g., "Mobile support is out of scope for v1"]
-- [Assumption about data/environment, e.g., "Existing authentication system will be reused"]
-- [Dependency on existing system/service, e.g., "Requires access to the existing user profile API"]
+- ComfyUI Manager's standard install flow clones the repo then runs `pip install -r requirements.txt`; this behaviour is assumed stable.
+- `aiohttp` is always present in any environment where ComfyUI is installed; therefore it does not need to be in `requirements.txt` for git-clone users.
+- The Manager PR process requires only a public repo with correct metadata on `main`; no separate release tag is required for the initial listing.
+- The `requirements.txt` fix must land on `main` before or alongside the Manager PR, since the PR references the live repo.
