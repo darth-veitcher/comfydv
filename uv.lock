@@ -244,14 +244,15 @@ name = "comfydv"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "aiohttp" },
     { name = "jinja2" },
 ]
 
 [package.dev-dependencies]
 dev = [
-    { name = "aiohttp" },
     { name = "pytest" },
     { name = "pytest-cov" },
+    { name = "pyyaml" },
     { name = "torch" },
     { name = "torchvision" },
 ]
@@ -267,13 +268,16 @@ docs = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "jinja2", specifier = ">=3.1.6" }]
+requires-dist = [
+    { name = "aiohttp", specifier = ">=3.9.0" },
+    { name = "jinja2", specifier = ">=3.1.6" },
+]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "aiohttp", specifier = ">=3.13.2" },
     { name = "pytest", specifier = ">=8.4.2" },
     { name = "pytest-cov", specifier = ">=6.0.0" },
+    { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "torch", specifier = ">=2.9.0" },
     { name = "torchvision", specifier = ">=0.24.0" },
 ]

@@ -1,0 +1,13 @@
+{
+  "author": "Darth Veitcher",
+  "title": "Comfy DV Nodes",
+  "reference": "https://github.com/darth-veitcher/comfydv",
+  "files": ["https://github.com/darth-veitcher/comfydv"],
+  "install_type": "git-clone",
+  "description": "Quality of life ComfyUI nodes: dynamic string formatting with Python f-strings or Jinja2 templates, seed-controlled random input selection, and workflow circuit-breaker for conditional queue interruption.",
+  "nodename": [
+    "Format String (Python f-strings)",
+    "Random Choice",
+    "Circuit Breaker"
+  ]
+}

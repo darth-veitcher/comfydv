@@ -2,6 +2,7 @@
 
 See: https://mkdocstrings.github.io/recipes/
 """
+
 from pathlib import Path
 
 import mkdocs_gen_files

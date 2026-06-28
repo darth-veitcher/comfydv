@@ -12,7 +12,6 @@ import logging.handlers
 import os
 import sys
 
-import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
@@ -21,13 +20,16 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _load_format_string():
     """Load FormatString from source, bypassing __init__.py."""
     import importlib.util
 
     spec = importlib.util.spec_from_file_location(
         "comfydv.format_string",
-        os.path.join(os.path.dirname(__file__), "..", "src", "comfydv", "format_string.py"),
+        os.path.join(
+            os.path.dirname(__file__), "..", "src", "comfydv", "format_string.py"
+        ),
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -79,7 +81,9 @@ def _load_circuit_breaker():
 
     spec = importlib.util.spec_from_file_location(
         "comfydv.circuit_breaker",
-        os.path.join(os.path.dirname(__file__), "..", "src", "comfydv", "circuit_breaker.py"),
+        os.path.join(
+            os.path.dirname(__file__), "..", "src", "comfydv", "circuit_breaker.py"
+        ),
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -89,6 +93,7 @@ def _load_circuit_breaker():
 # ---------------------------------------------------------------------------
 # US1: Silent Normal Operation
 # ---------------------------------------------------------------------------
+
 
 class TestUS1SilentNormalOperation:
     """US1: no stdout/stderr from comfydv during successful node execution."""
@@ -145,6 +150,7 @@ class TestUS1SilentNormalOperation:
 # US2: Errors Still Surface
 # ---------------------------------------------------------------------------
 
+
 class TestUS2ErrorsStillSurface:
     """US2: error conditions must emit records at ERROR level."""
 
@@ -159,7 +165,9 @@ class TestUS2ErrorsStillSurface:
                 unique_id="t020a",
             )
         error_records = [r for r in caplog.records if r.levelno >= logging.ERROR]
-        assert error_records, "Expected at least one ERROR record for invalid Jinja2 template"
+        assert error_records, (
+            "Expected at least one ERROR record for invalid Jinja2 template"
+        )
 
     def test_simple_missing_variable_emits_error_record(self, caplog):
         """T020-T (red): missing Simple template variable must produce an ERROR log record."""
@@ -175,7 +183,9 @@ class TestUS2ErrorsStillSurface:
             except KeyError:
                 pass
         error_records = [r for r in caplog.records if r.levelno >= logging.ERROR]
-        assert error_records, "Expected at least one ERROR record for missing template variable"
+        assert error_records, (
+            "Expected at least one ERROR record for missing template variable"
+        )
 
     def test_load_node_state_error_emits_error_record(self, caplog):
         """T020-T (red): failed load_node_state must produce an ERROR log record (not a print)."""
@@ -183,7 +193,10 @@ class TestUS2ErrorsStillSurface:
         with caplog.at_level(logging.DEBUG, logger="comfydv.format_string"):
             # Trigger the except branch with a path that can be opened but is invalid JSON
             import tempfile
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".json", delete=False
+            ) as f:
                 f.write("not valid json {{{{")
                 bad_path = f.name
             try:
@@ -191,13 +204,13 @@ class TestUS2ErrorsStillSurface:
             finally:
                 os.unlink(bad_path)
         error_records = [r for r in caplog.records if r.levelno >= logging.ERROR]
-        assert error_records, "Expected at least one ERROR record for failed node state load"
+        assert error_records, (
+            "Expected at least one ERROR record for failed node state load"
+        )
 
     def test_circuit_breaker_emits_log_record(self, caplog):
         """T021-T (red): CircuitBreaker.doit with status=False must emit a log record."""
         CircuitBreaker = _load_circuit_breaker()
-        import sys
-        MockInterruptProcessingException = sys.modules["comfy.model_management"].InterruptProcessingException
         cb = CircuitBreaker()
         with caplog.at_level(logging.DEBUG, logger="comfydv.circuit_breaker"):
             try:
@@ -210,6 +223,7 @@ class TestUS2ErrorsStillSurface:
 # ---------------------------------------------------------------------------
 # US3: Developer Debug Mode
 # ---------------------------------------------------------------------------
+
 
 class TestUS3DeveloperDebugMode:
     """US3: DEBUG records appear when host opts in; zero records with default config."""
@@ -226,7 +240,9 @@ class TestUS3DeveloperDebugMode:
                 name="Alice",
             )
         debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
-        assert debug_records, "Expected at least one DEBUG record when DEBUG level is enabled"
+        assert debug_records, (
+            "Expected at least one DEBUG record when DEBUG level is enabled"
+        )
 
     def test_null_handler_is_default(self):
         """T030-T: comfydv/__init__.py must register a NullHandler on the package logger."""
@@ -244,7 +260,9 @@ class TestUS3DeveloperDebugMode:
         # Verify the runtime effect: registering the handler means no records escape
         # by default (the NullHandler absorbs them).
         FormatString = _load_format_string()
-        test_handler = logging.handlers.MemoryHandler(capacity=100, flushLevel=logging.CRITICAL)
+        test_handler = logging.handlers.MemoryHandler(
+            capacity=100, flushLevel=logging.CRITICAL
+        )
         fmt_logger = logging.getLogger("comfydv.format_string")
         fmt_logger.addHandler(test_handler)
         # Without propagation to root (which has no handler), NullHandler absorbs at comfydv level
