@@ -1,0 +1,131 @@
+# BEACON doctor configuration — example file.
+#
+# To activate: rename to `doctor.toml` and edit as needed. While this
+# file is named `*.toml.example` it has no effect; doctor only reads
+# `doctor.toml`.
+#
+# Every key is optional. Missing keys keep the defaults shown below.
+
+# ─────────────────────────────────────────────────────────────────────
+# disabled_checks — silence specific checks by name.
+#
+# Use the kebab-case name printed by `beacon doctor` (e.g. "ghost-epic").
+# Full list:
+#   manifest, problem-statement, active-bullet, orphan-branch-files,
+#   spec-task-alignment, spec-bdd-coverage, tdd-commit-discipline,
+#   spec-backlink-integrity, epic-spec-listed, epic-coverage, ghost-epic,
+#   epic-spec-lifecycle, epic-adr-coverage, roadmap-staleness,
+#   publishing-mode, release-config-alignment, speckit-integration,
+#   sessions, adr-coverage, readme-completeness, changelog-maintenance,
+#   changelog-vs-commits, public-api-docs, project-urls, docs-freshness,
+#   diataxis-coverage, drift
+#
+# Run `beacon doctor --explain <name>` for what each check looks at.
+# ─────────────────────────────────────────────────────────────────────
+
+# Example: this project doesn't pretend to have epics — silence the
+# epic-coverage and ghost-epic warnings without removing the discipline
+# from the framework.
+# disabled_checks = ["epic-coverage", "ghost-epic"]
+disabled_checks = []
+
+# ─────────────────────────────────────────────────────────────────────
+# thresholds — tune the numeric defaults.
+# ─────────────────────────────────────────────────────────────────────
+
+[thresholds]
+# Sessions older than this trigger the "promote to ADR or delete" WARN.
+# Default: 30
+stale_session_age_days = 30
+
+# Active epic with no in-flight spec and no commit on owned specs in this
+# window is flagged "ghost". Default: 30
+ghost_epic_age_days = 30
+
+# Roadmap/README.md `Last reviewed:` date must be newer than this. Default: 90
+roadmap_review_age_days = 90
+
+# At this many commits with zero non-template ADRs, the adr-coverage check
+# WARNs. Default: 20
+adr_heuristic_commits = 20
+
+# An Active epic with zero ADRs is flagged when commit count >= this.
+# Default: 5
+epic_adr_min_commits = 5
+
+# A docs/reference/ page may lag the source it documents by this many
+# commits before docs-freshness WARNs. Default: 10
+docs_staleness_commits = 10
+
+# Fraction of a spec.md `Then` sentence's salient tokens that must appear in
+# the witness (.feature / test tree) for spec-bdd-coverage to count the
+# scenario covered. Token-overlap, not literal text — lower this if your
+# specs are very prose-heavy. Default: 0.5
+bdd_match_ratio = 0.5
+
+# ─────────────────────────────────────────────────────────────────────
+# quick_fix — branch-name prefixes that mark a bullet as a quick-fix
+# outside any initiative.
+#
+# epic-coverage still WARNs that such a branch has no epic (it genuinely
+# doesn't), but *holds* the WARN under `--strict` instead of promoting it
+# to a FAIL — the documented "accept the WARN" escape hatch, made
+# reachable in CI (issue #94). The other way to declare a quick-fix is per
+# bullet: `beacon bullet start "<title>" --no-epic`.
+#
+# Default prefixes are the conventional non-initiative ones below.
+# `feat/`/`feature/` are deliberately absent (initiative work should carry
+# an epic), as is the generic agent prefix `claude/` (it tags *all* agent
+# branches, so holding on it would gut the gate). Setting this key replaces
+# the defaults wholesale.
+# ─────────────────────────────────────────────────────────────────────
+
+# [quick_fix]
+# branch_prefixes = ["fix/", "chore/", "docs/", "hotfix/", "bugfix/"]
+
+# ─────────────────────────────────────────────────────────────────────
+# docs — user-facing documentation discipline (Diátaxis).
+# ─────────────────────────────────────────────────────────────────────
+
+# [docs]
+# diataxis-coverage is opt-in. Set true to require docs/{tutorials,how-to,
+# reference,explanation}/ each carry a real (non-template) page. Scaffold the
+# tree with `beacon init --user-facing-docs`. Default: false.
+# enforce_diataxis = true
+
+# ─────────────────────────────────────────────────────────────────────
+# audit — lifecycle moments at which the `auto-audit` hook nudges toward
+# `/beacon.audit` (the adversarial epic-completeness auditor).
+#
+#   design  after `beacon epic stub` decomposes an epic — before building
+#   ship    before `beacon epic finish` seals it
+#   build   after each `beacon spec finish` lands — re-check epic coverage
+#
+# `design` + `ship` are on by default. Add `build` to re-audit as specs
+# land (noisier on fast-moving epics). Setting this key replaces the
+# default set wholesale. To silence the nudge entirely, disable the
+# `auto-audit` hook under [hooks] below.
+# ─────────────────────────────────────────────────────────────────────
+
+# [audit]
+# moments = ["design", "ship", "build"]
+
+# ─────────────────────────────────────────────────────────────────────
+# hooks — per-hook disable for `.claude/settings.json`.
+#
+# Disabled hooks are skipped when BEACON renders the settings.json on
+# install/upgrade. The drift check honours this list — disabling
+# auto-lint here won't trip the framework-drift WARN.
+#
+# Valid names match the `_name` field in the shipped settings template:
+#   auto-lint              PostToolUse Edit|Write under src/ + tests/
+#   auto-doctor            PostToolUse Bash matching `beacon bullet finish`
+#   auto-roadmap           PostToolUse Bash matching epic/bullet state changes
+#   auto-audit             Pre+PostToolUse Bash — /beacon.audit nudges (see [audit])
+#   manifest-write-protect PreToolUse Edit|Write on the BEACON manifest
+#
+# For an all-or-nothing toggle, use `beacon init --no-hooks` instead.
+# ─────────────────────────────────────────────────────────────────────
+
+# [hooks]
+# disabled = ["auto-lint"]
