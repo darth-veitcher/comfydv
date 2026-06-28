@@ -51,7 +51,10 @@ class TestRequirementsTxt:
 
     def test_requirements_txt_packages_in_pyproject_dependencies(self):
         req_lines = _requirements_lines()
-        runtime_deps = [d.split(">=")[0].split("==")[0].split("!=")[0].lower() for d in _pyproject_runtime_deps()]
+        runtime_deps = [
+            d.split(">=")[0].split("==")[0].split("!=")[0].lower()
+            for d in _pyproject_runtime_deps()
+        ]
         for line in req_lines:
             pkg = line.split("=")[0].split(">")[0].split("<")[0].split("[")[0].lower()
             assert pkg in runtime_deps, (
@@ -59,16 +62,30 @@ class TestRequirementsTxt:
             )
 
     def test_aiohttp_in_project_dependencies(self):
-        runtime_deps = [d.split(">=")[0].split("==")[0].lower() for d in _pyproject_runtime_deps()]
+        runtime_deps = [
+            d.split(">=")[0].split("==")[0].lower() for d in _pyproject_runtime_deps()
+        ]
         assert "aiohttp" in runtime_deps, (
             "aiohttp must be in pyproject.toml [project.dependencies], not only in [dependency-groups]"
         )
 
 
 MANAGER_ENTRY = REPO_ROOT / "comfy-manager-entry.json"
-MANAGER_REQUIRED_FIELDS = {"author", "title", "reference", "files", "install_type", "description", "nodename"}
+MANAGER_REQUIRED_FIELDS = {
+    "author",
+    "title",
+    "reference",
+    "files",
+    "install_type",
+    "description",
+    "nodename",
+}
 EXPECTED_INSTALL_TYPE = "git-clone"
-EXPECTED_NODENAMES = {"Format String (Python f-strings)", "Random Choice", "Circuit Breaker"}
+EXPECTED_NODENAMES = {
+    "Format String (Python f-strings)",
+    "Random Choice",
+    "Circuit Breaker",
+}
 
 
 class TestManagerEntry:
@@ -81,11 +98,13 @@ class TestManagerEntry:
 
     def test_manager_entry_json_is_valid(self):
         import json
+
         data = json.loads(MANAGER_ENTRY.read_text())
         assert isinstance(data, dict), "comfy-manager-entry.json must be a JSON object"
 
     def test_manager_entry_has_required_fields(self):
         import json
+
         data = json.loads(MANAGER_ENTRY.read_text())
         missing = MANAGER_REQUIRED_FIELDS - set(data.keys())
         assert not missing, f"Manager entry is missing required fields: {missing}"
@@ -95,6 +114,7 @@ class TestManagerEntry:
 
     def test_manager_entry_nodenames_match_node_class_mappings(self):
         import json
+
         data = json.loads(MANAGER_ENTRY.read_text())
         nodenames = set(data.get("nodename", []))
         assert nodenames == EXPECTED_NODENAMES, (
@@ -152,6 +172,7 @@ class TestDockerCompose:
 
     def test_docker_compose_has_comfyui_service(self):
         import yaml
+
         data = yaml.safe_load(COMPOSE_FILE.read_text())
         services = data.get("services", {})
         assert "comfyui" in services, (
@@ -160,6 +181,7 @@ class TestDockerCompose:
 
     def test_docker_compose_exposes_port_8188(self):
         import yaml
+
         data = yaml.safe_load(COMPOSE_FILE.read_text())
         ports = data.get("services", {}).get("comfyui", {}).get("ports", [])
         port_strings = [str(p) for p in ports]
