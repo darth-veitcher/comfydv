@@ -91,7 +91,9 @@ class TestUS2ModelSelection:
         """Scenario: OllamaModelSelector shows a dropdown (not a text box)."""
         input_types = OllamaModelSelector.INPUT_TYPES()
         model_input = input_types["required"]["model"]
-        assert isinstance(model_input[0], list), "model input must be a COMBO (list), not STRING"
+        assert isinstance(model_input[0], list), (
+            "model input must be a COMBO (list), not STRING"
+        )
 
     def test_fetch_models_unreachable_returns_empty(self):
         """Scenario: Unreachable host returns empty list (no crash)."""
@@ -160,7 +162,9 @@ class TestUS4ChatCompletion:
         )
 
     @pytest.mark.integration
-    def test_single_turn_returns_non_empty_response(self, ollama_host, skip_if_no_ollama):
+    def test_single_turn_returns_non_empty_response(
+        self, ollama_host, skip_if_no_ollama
+    ):
         """Scenario: Single-turn completion returns non-empty response."""
         response, updated_history = OllamaChatCompletion().chat(
             client=ollama_host,
@@ -259,7 +263,9 @@ class TestUS5ComposableOptions:
 
     def test_options_none_returns_single_key(self):
         """Scenario: Missing options input uses Ollama server defaults."""
-        (opts,) = OllamaOptionTemperature().set_temperature(temperature=0.8, options=None)
+        (opts,) = OllamaOptionTemperature().set_temperature(
+            temperature=0.8, options=None
+        )
         assert opts == {"temperature": 0.8}
 
     @pytest.mark.integration
@@ -346,9 +352,13 @@ class TestNodeContracts:
 
     @pytest.mark.parametrize("node_cls", NODE_CLASSES, ids=lambda c: c.__name__)
     def test_has_required_attributes(self, node_cls):
-        assert hasattr(node_cls, "INPUT_TYPES"), f"{node_cls.__name__} missing INPUT_TYPES"
+        assert hasattr(node_cls, "INPUT_TYPES"), (
+            f"{node_cls.__name__} missing INPUT_TYPES"
+        )
         assert callable(node_cls.INPUT_TYPES)
-        assert hasattr(node_cls, "RETURN_TYPES"), f"{node_cls.__name__} missing RETURN_TYPES"
+        assert hasattr(node_cls, "RETURN_TYPES"), (
+            f"{node_cls.__name__} missing RETURN_TYPES"
+        )
         assert hasattr(node_cls, "FUNCTION"), f"{node_cls.__name__} missing FUNCTION"
         assert hasattr(node_cls, "CATEGORY"), f"{node_cls.__name__} missing CATEGORY"
         assert hasattr(node_cls, node_cls.FUNCTION), (
