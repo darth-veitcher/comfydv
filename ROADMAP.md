@@ -12,8 +12,11 @@ gantt
     dateFormat  YYYY-MM-DD
     excludes    weekends
 
+    section Active
+    Logging Modernisation :active, logging-modernisation, 2026-06-28, 7d
+
     section Planned
-    Logging Modernisation :logging-modernisation, 2026-06-28, 7d
+    ComfyUI UX Polish & Manager Compatibility :ux-and-install, 2026-06-28, 7d
 
     section Done
     BEACON Bootstrap :done, beacon-bootstrap, 2026-06-28, 7d
@@ -24,7 +27,8 @@ gantt
 
 | Epic | Title | Status | Specs | Fidelity |
 |---|---|---|---|---|
-| [logging-modernisation](project-management/Roadmap/epics/logging-modernisation.md) | Logging Modernisation | Planning | — | S? A? T:- |
+| [logging-modernisation](project-management/Roadmap/epics/logging-modernisation.md) | Logging Modernisation | Active | 1/1 shipped | S+ A+ T:100% |
+| [ux-and-install](project-management/Roadmap/epics/ux-and-install.md) | ComfyUI UX Polish & Manager Compatibility | Planning | — | S? A? T:- |
 | [beacon-bootstrap](project-management/Roadmap/epics/archive/beacon-bootstrap.md) | BEACON Bootstrap | Done | — | S? A? T:- |
 
 _Fidelity: `S+/S?` = has specs / none · `A+/A?` = has ADRs / none · `T:N%` = task completion_
@@ -32,3 +36,10 @@ _Fidelity: `S+/S?` = has specs / none · `A+/A?` = has ADRs / none · `T:N%` = t
 ## Active Work
 
 _No active bullets._
+
+## Architectural Decisions
+
+| ADR | Title | Status |
+|---|---|---|
+| [ADR-001](../../ADRs/ADR-001-stdlib-logging-over-console-libraries.md) | Use stdlib logging instead of colored console output libraries | Accepted |
+| [ADR-002](../../ADRs/ADR-002-nullhandler-pattern-for-library-loggers.md) | NullHandler pattern for the comfydv package root logger | Accepted |
