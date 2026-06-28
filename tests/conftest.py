@@ -5,6 +5,7 @@ This file sets up mocks for ComfyUI dependencies before any test imports.
 """
 
 import os
+import socket
 import sys
 
 import pytest
@@ -58,6 +59,37 @@ def pytest_configure(config):
             return "/tmp/comfydv_test"
 
     sys.modules["folder_paths"] = MockFolderPaths
+
+
+# ---------------------------------------------------------------------------
+# Ollama fixtures (used by @pytest.mark.integration tests)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def ollama_host():
+    return "http://localhost:11434"
+
+
+@pytest.fixture(scope="session")
+def ollama_available():
+    try:
+        sock = socket.create_connection(("localhost", 11434), timeout=2.0)
+        sock.close()
+        return True
+    except OSError:
+        return False
+
+
+@pytest.fixture
+def skip_if_no_ollama(ollama_available):
+    if not ollama_available:
+        pytest.skip("Ollama not reachable at localhost:11434 — start Ollama to run integration tests")
+
+
+# ---------------------------------------------------------------------------
+# Existing ComfyUI node fixtures
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture

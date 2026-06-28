@@ -5,6 +5,22 @@ ci  := "docker compose"
 default:
     @just --list
 
+# Run the full test suite
+test:
+    uv run pytest
+
+# Run only unit tests (no live services required)
+test-unit:
+    uv run pytest -m "not integration and not system"
+
+# Run integration tests (requires live Ollama at localhost:11434)
+test-integration:
+    uv run pytest -m integration
+
+# Run system tests (requires full docker-compose harness)
+test-system:
+    uv run pytest -m system
+
 # Build the base image (run once, or after Dockerfile / ComfyUI version bumps)
 build:
     {{dev}} build
