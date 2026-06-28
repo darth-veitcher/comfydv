@@ -84,7 +84,9 @@ def ollama_available():
 @pytest.fixture
 def skip_if_no_ollama(ollama_available):
     if not ollama_available:
-        pytest.skip("Ollama not reachable at localhost:11434 — start Ollama to run integration tests")
+        pytest.skip(
+            "Ollama not reachable at localhost:11434 — start Ollama to run integration tests"
+        )
 
 
 # ---------------------------------------------------------------------------
