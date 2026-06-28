@@ -15,6 +15,9 @@ gantt
     section Active
     ComfyUI UX Polish & Manager Compatibility :active, ux-and-install, 2026-06-28, 21d
 
+    section Planned
+    Ollama Model Integration :ollama-integration, 2026-06-28, 7d
+
     section Done
     BEACON Bootstrap :done, beacon-bootstrap, 2026-06-28, 7d
     Logging Modernisation :done, logging-modernisation, 2026-06-28, 7d
@@ -25,6 +28,7 @@ gantt
 
 | Epic | Title | Status | Specs | Fidelity |
 |---|---|---|---|---|
+| [ollama-integration](project-management/Roadmap/epics/ollama-integration.md) | Ollama Model Integration | Planning | — | S? A? T:- |
 | [ux-and-install](project-management/Roadmap/epics/ux-and-install.md) | ComfyUI UX Polish & Manager Compatibility | Active | 1/4 shipped | S+ A+ T:100% |
 | [beacon-bootstrap](project-management/Roadmap/epics/archive/beacon-bootstrap.md) | BEACON Bootstrap | Done | — | S? A? T:- |
 | [logging-modernisation](project-management/Roadmap/epics/archive/logging-modernisation.md) | Logging Modernisation | Done | 1/1 shipped | S+ A+ T:100% |

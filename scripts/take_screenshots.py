@@ -55,8 +55,6 @@ async def _frame_node(
     node_pos: list[float],
     node_size: list[float],
     scale: float = _VIEW_SCALE,
-    h_pad: float = 80,
-    v_pad: float = 60,
 ) -> None:
     """Pan/zoom so the node is nicely centred in the viewport."""
     vw = VIEWPORT["width"]

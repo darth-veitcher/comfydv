@@ -1,7 +1,8 @@
 [project]
 name = "comfydv"
 version = "0.1.0"
-description = "Add your description here"
+requires-python = ">=3.11"
+description = "Quality of life ComfyUI nodes: dynamic string formatting, seed-controlled random selection, and conditional queue interruption."
 readme = "README.md"
 authors = [
     { name = "darth-veitcher", email = "1722315+darth-veitcher@users.noreply.github.com" }
@@ -14,9 +15,6 @@ dependencies = [
 [project.urls]
 Repository = "https://github.com/darth-veitcher/comfydv"
 Documentation = "https://darth-veitcher.github.io/comfydv/stable/"
-
-[project.scripts]
-comfydv = "comfydv:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -60,6 +58,7 @@ addopts = [
 ]
 markers = [
     "unit: Unit tests",
-    "integration: Integration tests",
+    "integration: Integration tests requiring live Ollama at localhost:11434",
+    "system: System tests requiring the full docker-compose harness",
     "slow: Slow tests",
 ]
