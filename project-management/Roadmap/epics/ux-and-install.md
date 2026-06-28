@@ -27,9 +27,7 @@ _None — this epic is self-contained and can start immediately._
 - specs/005-metadata-cleanup-pyproject-description-scripts-dead-code-removal-tooltips-category-consistency/
 ## ADRs
 
-_To be recorded as cross-cutting decisions are made during DESIGN._
-
-<!-- - project-management/ADRs/ADR-NNN-decision-title.md -->
+- [ADR-003](../../ADRs/ADR-003-requirements-txt-authoring-policy.md) — hand-authored requirements.txt as curated subset of pyproject.toml
 
 ## Success criteria
 

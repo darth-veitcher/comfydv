@@ -72,6 +72,30 @@ nodes.
 
 ---
 
+### User Story 4 — Local test harness for install verification (Priority: P2)
+
+A developer working on packaging or node registration can spin up a CPU-only ComfyUI
+environment locally in one command to verify that dependencies install cleanly and nodes
+appear in the menu — without needing a GPU or a full ComfyUI installation on their
+machine.
+
+**Why this priority**: Without a local harness, SC-001 and SC-003 can only be verified
+by manually installing ComfyUI on a development machine, which is slow and environment-
+dependent. A Compose harness makes these criteria continuously verifiable and sets the
+foundation for future CI smoke tests.
+
+**Independent Test**: `docker compose up --build` from the repo root starts a ComfyUI
+server, installs comfydv via `requirements.txt`, and the server health endpoint returns
+200 with no import errors in the logs.
+
+**Acceptance Scenarios**:
+
+1. **Given** a machine with Docker and no GPU, **when** `docker compose up --build` is run from the repo root, **then** the ComfyUI server starts and `curl http://localhost:8188/` returns 200.
+2. **Given** the running container, **when** the ComfyUI startup logs are inspected, **then** all three comfydv nodes (FormatString, RandomChoice, CircuitBreaker) appear as loaded with no import errors.
+3. **Given** the running container, **when** `docker compose down` is run, **then** it exits cleanly with no lingering processes.
+
+---
+
 ### Edge Cases
 
 - What if `jinja2` is already installed? `pip install -r requirements.txt` is idempotent — it satisfies the constraint without downgrading or reinstalling.
