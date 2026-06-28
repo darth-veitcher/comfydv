@@ -103,11 +103,23 @@ Typical use: skip an expensive upscale step when a quality-check node says the d
 
 14 nodes for integrating a local Ollama LLM into your ComfyUI workflow. The host URL is configured once in **Ollama Client** and threaded through the graph — all downstream nodes receive it via the `OLLAMA_CLIENT` socket.
 
+### Ollama Client node
+
+Configure the server address once; all downstream Ollama nodes inherit it automatically.
+
+![Ollama Client](docs/assets/ollama_client.png)
+
 ### Minimal chat workflow
 
 1. **Ollama Client** → set host (default `http://localhost:11434`)
 2. **Ollama Model Selector** → pick a model from the live dropdown
 3. **Ollama Chat Completion** → wire client + model + prompt → response string
+
+![Ollama Chat Completion](docs/assets/ollama_chat.png)
+
+Wire multiple nodes together for a complete end-to-end workflow:
+
+![Ollama Full Workflow](docs/assets/ollama_workflow.png)
 
 ### Option nodes
 
@@ -122,6 +134,8 @@ Chain any combination of **Ollama Option —** nodes before Chat Completion to o
 | Top K | `top_k` |
 | Repeat Penalty | `repeat_penalty` |
 | Extra Body | arbitrary JSON merged into options |
+
+![Ollama Option Nodes](docs/assets/ollama_options.png)
 
 ### Multi-turn conversations
 
