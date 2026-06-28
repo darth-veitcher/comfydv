@@ -102,17 +102,40 @@ class TestManagerEntry:
         )
 
 
+ROOT_INIT = REPO_ROOT / "__init__.py"
+STALE_PHRASES = ["model memory", "model unloader", "Model Unloader", "Model Memory"]
+EXPECTED_NODE_MENTIONS = ["format", "random", "circuit"]
+
+
+def _root_description() -> str:
+    text = ROOT_INIT.read_text()
+    for line in text.splitlines():
+        if "@description" in line:
+            return line
+    return ""
+
+
 class TestMetadata:
     """US3 — Accurate package metadata."""
 
     def test_description_does_not_mention_model_unloader(self):
-        pass
+        desc = _root_description().lower()
+        assert "model unloader" not in desc, (
+            "root __init__.py @description references non-existent 'Model Unloader' node"
+        )
 
     def test_description_does_not_mention_model_memory_management(self):
-        pass
+        desc = _root_description().lower()
+        assert "model memory" not in desc, (
+            "root __init__.py @description references non-existent 'model memory management'"
+        )
 
     def test_description_mentions_existing_nodes(self):
-        pass
+        desc = _root_description().lower()
+        for keyword in EXPECTED_NODE_MENTIONS:
+            assert keyword in desc, (
+                f"@description should mention the {keyword!r} node but doesn't: {desc!r}"
+            )
 
 
 class TestDockerCompose:
