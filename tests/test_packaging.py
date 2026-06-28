@@ -1,30 +1,68 @@
 """Packaging correctness tests for specs/002-manager-compatible-install."""
 
+import tomllib
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
+REQUIREMENTS = REPO_ROOT / "requirements.txt"
+PYPROJECT = REPO_ROOT / "pyproject.toml"
+
+BANNED_PACKAGES = {"colorama", "termcolor", "rich"}
+
+
+def _requirements_lines() -> list[str]:
+    return [
+        line.strip()
+        for line in REQUIREMENTS.read_text().splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+
+
+def _pyproject_runtime_deps() -> list[str]:
+    data = tomllib.loads(PYPROJECT.read_text())
+    return data.get("project", {}).get("dependencies", [])
 
 
 class TestRequirementsTxt:
     """US1 — Clean dependency install from a fresh clone."""
 
     def test_requirements_txt_exists(self):
-        pass
+        assert REQUIREMENTS.exists(), "requirements.txt not found at repo root"
 
     def test_requirements_txt_contains_jinja2(self):
-        pass
+        lines = _requirements_lines()
+        assert any("jinja2" in line.lower() for line in lines), (
+            f"jinja2 not found in requirements.txt; got: {lines}"
+        )
 
     def test_requirements_txt_has_no_removed_packages(self):
-        pass
+        lines = _requirements_lines()
+        for line in lines:
+            pkg = line.split("=")[0].split(">")[0].split("<")[0].split("[")[0].lower()
+            assert pkg not in BANNED_PACKAGES, (
+                f"Removed package {pkg!r} still in requirements.txt"
+            )
 
     def test_requirements_txt_has_no_bare_dot(self):
-        pass
+        lines = _requirements_lines()
+        assert "." not in lines, (
+            "requirements.txt contains bare '.' (editable install marker) — remove it"
+        )
 
     def test_requirements_txt_packages_in_pyproject_dependencies(self):
-        pass
+        req_lines = _requirements_lines()
+        runtime_deps = [d.split(">=")[0].split("==")[0].split("!=")[0].lower() for d in _pyproject_runtime_deps()]
+        for line in req_lines:
+            pkg = line.split("=")[0].split(">")[0].split("<")[0].split("[")[0].lower()
+            assert pkg in runtime_deps, (
+                f"Package {pkg!r} is in requirements.txt but not in pyproject.toml [project.dependencies]"
+            )
 
     def test_aiohttp_in_project_dependencies(self):
-        pass
+        runtime_deps = [d.split(">=")[0].split("==")[0].lower() for d in _pyproject_runtime_deps()]
+        assert "aiohttp" in runtime_deps, (
+            "aiohttp must be in pyproject.toml [project.dependencies], not only in [dependency-groups]"
+        )
 
 
 class TestManagerEntry:
