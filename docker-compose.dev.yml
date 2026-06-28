@@ -1,0 +1,12 @@
+services:
+  comfyui:
+    # Mount local repo live — no rebuild needed after code changes.
+    # Re-installs comfydv deps on each start (fast: jinja2 is likely cached).
+    volumes:
+      - .:/app/ComfyUI/custom_nodes/comfydv
+    command:
+      - sh
+      - -c
+      - |
+        pip install -q -r /app/ComfyUI/custom_nodes/comfydv/requirements.txt
+        exec python main.py --cpu --listen 0.0.0.0 --port 8188
