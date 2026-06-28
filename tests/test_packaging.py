@@ -65,20 +65,41 @@ class TestRequirementsTxt:
         )
 
 
+MANAGER_ENTRY = REPO_ROOT / "comfy-manager-entry.json"
+MANAGER_REQUIRED_FIELDS = {"author", "title", "reference", "files", "install_type", "description", "nodename"}
+EXPECTED_INSTALL_TYPE = "git-clone"
+EXPECTED_NODENAMES = {"Format String (Python f-strings)", "Random Choice", "Circuit Breaker"}
+
+
 class TestManagerEntry:
     """US2 — ComfyUI Manager registration."""
 
     def test_manager_entry_json_exists(self):
-        pass
+        assert MANAGER_ENTRY.exists(), (
+            "comfy-manager-entry.json not found at repo root — run T020-I to create it"
+        )
 
     def test_manager_entry_json_is_valid(self):
-        pass
+        import json
+        data = json.loads(MANAGER_ENTRY.read_text())
+        assert isinstance(data, dict), "comfy-manager-entry.json must be a JSON object"
 
     def test_manager_entry_has_required_fields(self):
-        pass
+        import json
+        data = json.loads(MANAGER_ENTRY.read_text())
+        missing = MANAGER_REQUIRED_FIELDS - set(data.keys())
+        assert not missing, f"Manager entry is missing required fields: {missing}"
+        assert data.get("install_type") == EXPECTED_INSTALL_TYPE, (
+            f"install_type must be {EXPECTED_INSTALL_TYPE!r}, got {data.get('install_type')!r}"
+        )
 
     def test_manager_entry_nodenames_match_node_class_mappings(self):
-        pass
+        import json
+        data = json.loads(MANAGER_ENTRY.read_text())
+        nodenames = set(data.get("nodename", []))
+        assert nodenames == EXPECTED_NODENAMES, (
+            f"nodename list mismatch.\nExpected: {EXPECTED_NODENAMES}\nGot: {nodenames}"
+        )
 
 
 class TestMetadata:
