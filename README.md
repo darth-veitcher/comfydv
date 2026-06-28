@@ -35,6 +35,12 @@ Restart ComfyUI. The nodes appear under the **dv/** and **dv/ollama** categories
 
 For Ollama nodes: [install Ollama](https://ollama.com/download) and pull at least one model (`ollama pull qwen2.5:latest`) before using the Ollama nodes.
 
+## Quickstart
+
+1. Install via ComfyUI Manager (search `comfydv`) or clone manually into `custom_nodes/`.
+2. Right-click the canvas → Add Node → **dv/** to find Format String, Random Choice, and Circuit Breaker.
+3. For Ollama nodes: start Ollama (`ollama serve`), pull a model (`ollama pull qwen2.5:latest`), then add nodes from **dv/ollama/**.
+
 ## Documentation
 
 Full documentation: [darth-veitcher.github.io/comfydv](https://darth-veitcher.github.io/comfydv/stable/)
