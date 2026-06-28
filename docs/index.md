@@ -1,45 +1,72 @@
 # comfydv
 
-A collection of workflow efficiency and quality of life nodes that I've created for personal use out of necessity.
+A collection of workflow efficiency and quality-of-life nodes built out of necessity for personal ComfyUI use.
 
-* **String Formatting**: Use either plain python f-strings or more advanced Jinja2 templating to format outputs.
-* **Random Choice**: Add an abitrary number of inputs and then, with seed control, randomly select one for an output.
+| Node | What it does |
+|------|-------------|
+| **Format String** | Formats a string from a Python f-string or Jinja2 template. Detects variables in the template and automatically adds/removes input sockets. |
+| **Random Choice** | Accepts any number of typed inputs and outputs one at random, with a configurable seed for reproducibility. |
+| **Circuit Breaker** | Halts the current ComfyUI queue run gracefully without crashing the server. Wire the `status` toggle to a boolean condition to skip the rest of the queue when a condition isn't met. |
 
-## String Formatting
+## Install
 
-The FormatString node provides flexible string formatting with dynamic input/output configuration.
+**Via ComfyUI Manager** (recommended): search for `comfydv` and click Install.
 
-### Python F-String
+**Manual:**
 
-A simple python f-string dynamically creates the necessary inputs/outputs for the detected keys.
+```bash
+cd /path/to/ComfyUI/custom_nodes
+git clone https://github.com/darth-veitcher/comfydv.git
+```
 
-![f-string](assets/fstring.png)
+Restart ComfyUI. The nodes appear under the **dv/** category in the node menu. The only runtime dependency is `jinja2`, installed automatically via `requirements.txt`.
 
-### Jinja 2
+---
 
-Switching to Jinja2 allows you to use more advanced control blocks and other filters/features of that templating language. See [Jinja documentation](https://jinja.palletsprojects.com/en/latest/) for further details.
+## Format String
 
-![jinja2](assets/jinja2.png)
+Formats text from a Python f-string or Jinja2 template. As you type the template, input sockets appear and disappear automatically — one per variable detected.
 
-### Output Structure
+### Python f-strings
 
-The node's outputs are organized for maximum reliability and flexibility:
+Type `{variable_name}` and a socket appears. Wire it to any string output in your workflow.
 
-1. **`formatted_string`** (Output 0): The formatted result string - always in position 0
-2. **`saved_file_path`** (Output 1): Path to saved state file (if save_path provided) - always in position 1
-3. **Variable outputs** (Output 2+): Pass-through values for any variables detected in the template, enabling easy chaining
+![Format String — f-string mode](assets/fstring.png)
 
-For example, with template `"Hello {name}, you are {age}"`:
+| Output | Content |
+|--------|---------|
+| `formatted_string` | The rendered result |
+| `saved_file_path` | Path written to disk (if `save_path` is set) |
+| `<var>` … | Pass-through of each input value, for easy chaining |
 
-* Output 0: The formatted string (e.g., "Hello Alice, you are 30")
-* Output 1: The save file path (or empty string)
-* Output 2: The value of `name` (e.g., "Alice")
-* Output 3: The value of `age` (e.g., "30")
+### Jinja2 templates
 
-This structure ensures the primary outputs (`formatted_string` and `saved_file_path`) are always in predictable, fixed positions for reliable workflow connections.
+Switch `template_type` to **Jinja2** to unlock filters (`| upper`, `| int`, …), conditionals (`{% if %}…{% endif %}`), and loops.
+
+![Format String — Jinja2 mode](assets/jinja2.png)
+
+Variables detected in `{{ }}` expressions become input sockets exactly as in Simple mode. See the [Jinja2 documentation](https://jinja.palletsprojects.com/en/latest/) for the full filter/test reference.
+
+---
 
 ## Random Choice
 
-Ability to take arbitrary length and type of inputs to then output a **choice** with a controllable seed.
+Connect any number of inputs of the same type. Each run picks one at random. Set `seed` for reproducibility.
 
-![random](assets/random.png)
+![Random Choice](assets/random.png)
+
+- Accepts any ComfyUI type (STRING, IMAGE, CONDITIONING, …)
+- Add as many inputs as you like; unused slots are removed automatically when disconnected
+- `seed = 0` randomises on every run; any other value locks the selection
+
+---
+
+## Circuit Breaker
+
+Stops the queue gracefully when a condition isn't met — no crash, no error, just a clean halt.
+
+![Circuit Breaker](assets/circuit_breaker.png)
+
+Wire an image (or any trigger) into `trigger` and a boolean into `status`. When `status` is **false** the node raises `InterruptProcessingException`, which tells ComfyUI to stop the current run cleanly. When `status` is **true** the image passes through unchanged.
+
+Typical use: skip an expensive upscale step when a quality-check node says the draft is already good enough.
