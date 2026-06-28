@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 if "comfy" in sys.modules:
     import folder_paths  # from comfyui - gives access to `get_temp_directory()` and `get_output_directory()`
-    from server import PromptServer  # noqa: from comfyui
+    from server import PromptServer  # noqa: F401
 else:
     print(
         "ComfyUI not detected, FormatString node will not function properly outside of ComfyUI."
