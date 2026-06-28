@@ -1,0 +1,17 @@
+services:
+  comfyui:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8188:8188"
+    environment:
+      - PYTHONUNBUFFERED=1
+    # No GPU device reservations — CPU-only harness.
+    # Purpose: verify comfydv node registration and dep install, not inference.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8188/')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
