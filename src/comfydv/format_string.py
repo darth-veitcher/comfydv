@@ -28,9 +28,9 @@ logger = logging.getLogger(__name__)
 
 if "comfy" in sys.modules:
     import folder_paths  # from comfyui - gives access to `get_temp_directory()` and `get_output_directory()`
-    from server import PromptServer  # noqa: F401
+    from server import PromptServer
 else:
-    print(
+    logger.warning(
         "ComfyUI not detected, FormatString node will not function properly outside of ComfyUI."
     )
 
@@ -530,8 +530,8 @@ class FormatString:
             "outputs": [],
         }
         for key in keys:
-            config["inputs"][key] = ("STRING", {"default": ""})  # type: ignore
-            config["outputs"].append({"name": key, "type": "STRING"})  # type: ignore
+            config["inputs"][key] = ("STRING", {"default": ""})
+            config["outputs"].append({"name": key, "type": "STRING"})
 
         # Add formatted_string and saved_file_path at the START of outputs (fixed positions)
         config["outputs"] = [

@@ -4,6 +4,11 @@ services:
     # Re-installs comfydv deps on each start (fast: jinja2 is likely cached).
     volumes:
       - .:/app/ComfyUI/custom_nodes/comfydv
+    # Allow the container to reach Ollama running on the host machine.
+    # On Linux: host-gateway resolves to the Docker bridge IP.
+    # On macOS/Windows Docker Desktop: host.docker.internal is built-in.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command:
       - sh
       - -c

@@ -82,9 +82,25 @@ MANAGER_REQUIRED_FIELDS = {
 }
 EXPECTED_INSTALL_TYPE = "git-clone"
 EXPECTED_NODENAMES = {
+    # Original nodes
     "Format String (Python f-strings)",
     "Random Choice",
     "Circuit Breaker",
+    # Ollama integration nodes (spec 006)
+    "Ollama Client",
+    "Ollama Model Selector",
+    "Ollama Load Model",
+    "Ollama Unload Model",
+    "Ollama Chat Completion",
+    "Ollama Option — Temperature",
+    "Ollama Option — Seed",
+    "Ollama Option — Max Tokens",
+    "Ollama Option — Top P",
+    "Ollama Option — Top K",
+    "Ollama Option — Repeat Penalty",
+    "Ollama Option — Extra Body",
+    "Ollama Debug History",
+    "Ollama History Length",
 }
 
 

@@ -1,0 +1,435 @@
+"""
+Ollama model integration nodes for ComfyUI.
+
+14 nodes: client configuration, model discovery, load/unload, chat completion,
+composable inference options, and history utilities.
+
+ADR-004: aiohttp (already in ComfyUI dep tree) for all Ollama HTTP calls.
+ADR-005: OllamaClient node is the single source of the host URL.
+"""
+
+import asyncio
+import json
+import logging
+import sys
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Custom socket type
+# ---------------------------------------------------------------------------
+
+
+class OllamaClientType(str):
+    """Typed string carrying the Ollama host URL through the node graph."""
+
+
+# ---------------------------------------------------------------------------
+# Async infrastructure
+# ---------------------------------------------------------------------------
+
+
+def _run_async(coro):
+    """Run an async coroutine synchronously using a fresh event loop."""
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
+
+
+async def _fetch_models(host: str) -> list[str]:
+    """GET {host}/api/tags — return list of model name strings."""
+    import aiohttp
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{host}/api/tags",
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as resp:
+                data = await resp.json()
+                return [m["name"] for m in data.get("models", [])]
+    except Exception as exc:
+        logger.warning("Could not fetch Ollama models from %s: %s", host, exc)
+        return []
+
+
+async def _post_json(url: str, payload: dict) -> dict:
+    """POST JSON to url, return parsed response dict."""
+    import aiohttp
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                url,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=120),
+            ) as resp:
+                return await resp.json()
+    except aiohttp.ClientConnectionError as exc:
+        raise RuntimeError(f"Cannot reach Ollama at {url}: {exc}") from exc
+
+
+# Populated at import time; empty list if Ollama is unreachable.
+_DEFAULT_MODELS: list[str] = _run_async(_fetch_models("http://localhost:11434")) or [
+    "(start Ollama to see models)"
+]
+
+
+# ---------------------------------------------------------------------------
+# ComfyUI server route (load-guarded)
+# ---------------------------------------------------------------------------
+
+if "comfy" in sys.modules:
+    from server import PromptServer
+
+    @PromptServer.instance.routes.get("/dv/ollama/models")
+    async def _models_endpoint(request):
+        from aiohttp import web
+
+        host = request.rel_url.query.get("host", "http://localhost:11434")
+        models = await _fetch_models(host)
+        if models:
+            return web.json_response({"models": models})
+        return web.json_response({"error": f"No models found at {host}"}, status=503)
+
+else:
+    logger.warning(
+        "ComfyUI not detected — /dv/ollama/models route will not be registered."
+    )
+
+
+# ---------------------------------------------------------------------------
+# US1 — OllamaClient
+# ---------------------------------------------------------------------------
+
+
+class OllamaClient:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "host": ("STRING", {"default": "http://localhost:11434"}),
+            }
+        }
+
+    RETURN_TYPES = ("OLLAMA_CLIENT",)
+    RETURN_NAMES = ("client",)
+    FUNCTION = "create_client"
+    CATEGORY = "dv/ollama"
+
+    def create_client(self, host: str):
+        return (OllamaClientType(host),)
+
+
+# ---------------------------------------------------------------------------
+# US2 — OllamaModelSelector
+# ---------------------------------------------------------------------------
+
+
+class OllamaModelSelector:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "client": ("OLLAMA_CLIENT",),
+                "model": (_DEFAULT_MODELS, {}),
+            }
+        }
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("model_name",)
+    FUNCTION = "select_model"
+    CATEGORY = "dv/ollama"
+
+    def select_model(self, client, model: str):
+        return (model,)
+
+
+# ---------------------------------------------------------------------------
+# US3 — OllamaLoadModel / OllamaUnloadModel
+# ---------------------------------------------------------------------------
+
+
+class OllamaLoadModel:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "client": ("OLLAMA_CLIENT",),
+                "model": (_DEFAULT_MODELS, {}),
+            }
+        }
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("model_name",)
+    FUNCTION = "load_model"
+    CATEGORY = "dv/ollama"
+
+    def load_model(self, client, model: str):
+        if not model.strip():
+            raise ValueError("model name cannot be empty")
+        _run_async(
+            _post_json(f"{client}/api/show", {"model": model, "keep_alive": "-1"})
+        )
+        return (model,)
+
+
+class OllamaUnloadModel:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "client": ("OLLAMA_CLIENT",),
+                "model": ("STRING", {}),
+            }
+        }
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("model_name",)
+    FUNCTION = "unload_model"
+    CATEGORY = "dv/ollama"
+
+    def unload_model(self, client, model: str):
+        if not model.strip():
+            raise ValueError("model name cannot be empty")
+        _run_async(_post_json(f"{client}/api/show", {"model": model, "keep_alive": 0}))
+        return (model,)
+
+
+# ---------------------------------------------------------------------------
+# US4 — OllamaChatCompletion
+# ---------------------------------------------------------------------------
+
+
+class OllamaChatCompletion:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "client": ("OLLAMA_CLIENT",),
+                "model": (_DEFAULT_MODELS, {}),
+                "prompt": ("STRING", {"multiline": True, "default": ""}),
+            },
+            "optional": {
+                "system": ("STRING", {"multiline": True, "default": ""}),
+                "history": ("OLLAMA_HISTORY",),
+                "options": ("OLLAMA_OPTIONS",),
+            },
+        }
+
+    RETURN_TYPES = ("STRING", "OLLAMA_HISTORY")
+    RETURN_NAMES = ("response", "updated_history")
+    FUNCTION = "chat"
+    CATEGORY = "dv/ollama"
+
+    def chat(self, client, model, prompt, system="", history=None, options=None):
+        if history is None:
+            history = []
+        messages = list(history)
+        if system:
+            messages = [{"role": "system", "content": system}] + messages
+        messages.append({"role": "user", "content": prompt})
+        payload: dict = {"model": model, "messages": messages, "stream": False}
+        if options:
+            payload["options"] = options
+        result = _run_async(_post_json(f"{client}/api/chat", payload))
+        response_text = result.get("message", {}).get("content", "")
+        updated = list(history)
+        updated.append({"role": "user", "content": prompt})
+        updated.append({"role": "assistant", "content": response_text})
+        return (response_text, updated)
+
+
+# ---------------------------------------------------------------------------
+# US5 — Composable option nodes
+# ---------------------------------------------------------------------------
+
+
+def _merge_option(options, key, value):
+    result = dict(options) if options else {}
+    result[key] = value
+    return result
+
+
+class OllamaOptionTemperature:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "temperature": (
+                    "FLOAT",
+                    {"default": 0.8, "min": 0.0, "max": 2.0, "step": 0.01},
+                ),
+            },
+            "optional": {"options": ("OLLAMA_OPTIONS",)},
+        }
+
+    RETURN_TYPES = ("OLLAMA_OPTIONS",)
+    RETURN_NAMES = ("options",)
+    FUNCTION = "set_temperature"
+    CATEGORY = "dv/ollama/options"
+
+    def set_temperature(self, temperature, options=None):
+        return (_merge_option(options, "temperature", temperature),)
+
+
+class OllamaOptionSeed:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "seed": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFF}),
+            },
+            "optional": {"options": ("OLLAMA_OPTIONS",)},
+        }
+
+    RETURN_TYPES = ("OLLAMA_OPTIONS",)
+    RETURN_NAMES = ("options",)
+    FUNCTION = "set_seed"
+    CATEGORY = "dv/ollama/options"
+
+    def set_seed(self, seed, options=None):
+        return (_merge_option(options, "seed", seed),)
+
+
+class OllamaOptionMaxTokens:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "max_tokens": ("INT", {"default": 512, "min": 1, "max": 131072}),
+            },
+            "optional": {"options": ("OLLAMA_OPTIONS",)},
+        }
+
+    RETURN_TYPES = ("OLLAMA_OPTIONS",)
+    RETURN_NAMES = ("options",)
+    FUNCTION = "set_max_tokens"
+    CATEGORY = "dv/ollama/options"
+
+    def set_max_tokens(self, max_tokens, options=None):
+        return (_merge_option(options, "num_predict", max_tokens),)
+
+
+class OllamaOptionTopP:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "top_p": (
+                    "FLOAT",
+                    {"default": 0.9, "min": 0.0, "max": 1.0, "step": 0.01},
+                ),
+            },
+            "optional": {"options": ("OLLAMA_OPTIONS",)},
+        }
+
+    RETURN_TYPES = ("OLLAMA_OPTIONS",)
+    RETURN_NAMES = ("options",)
+    FUNCTION = "set_top_p"
+    CATEGORY = "dv/ollama/options"
+
+    def set_top_p(self, top_p, options=None):
+        return (_merge_option(options, "top_p", top_p),)
+
+
+class OllamaOptionTopK:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "top_k": ("INT", {"default": 40, "min": 0, "max": 100}),
+            },
+            "optional": {"options": ("OLLAMA_OPTIONS",)},
+        }
+
+    RETURN_TYPES = ("OLLAMA_OPTIONS",)
+    RETURN_NAMES = ("options",)
+    FUNCTION = "set_top_k"
+    CATEGORY = "dv/ollama/options"
+
+    def set_top_k(self, top_k, options=None):
+        return (_merge_option(options, "top_k", top_k),)
+
+
+class OllamaOptionRepeatPenalty:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "repeat_penalty": (
+                    "FLOAT",
+                    {"default": 1.1, "min": 0.0, "max": 2.0, "step": 0.01},
+                ),
+            },
+            "optional": {"options": ("OLLAMA_OPTIONS",)},
+        }
+
+    RETURN_TYPES = ("OLLAMA_OPTIONS",)
+    RETURN_NAMES = ("options",)
+    FUNCTION = "set_repeat_penalty"
+    CATEGORY = "dv/ollama/options"
+
+    def set_repeat_penalty(self, repeat_penalty, options=None):
+        return (_merge_option(options, "repeat_penalty", repeat_penalty),)
+
+
+class OllamaOptionExtraBody:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "extra_body_json": ("STRING", {"multiline": True, "default": "{}"}),
+            },
+            "optional": {"options": ("OLLAMA_OPTIONS",)},
+        }
+
+    RETURN_TYPES = ("OLLAMA_OPTIONS",)
+    RETURN_NAMES = ("options",)
+    FUNCTION = "set_extra_body"
+    CATEGORY = "dv/ollama/options"
+
+    def set_extra_body(self, extra_body_json, options=None):
+        try:
+            extra = json.loads(extra_body_json)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"extra_body_json is not valid JSON: {exc}") from exc
+        result = dict(options) if options else {}
+        result.update(extra)
+        return (result,)
+
+
+# ---------------------------------------------------------------------------
+# US6 — History utilities
+# ---------------------------------------------------------------------------
+
+
+class OllamaDebugHistory:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"history": ("OLLAMA_HISTORY",)}}
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("debug_string",)
+    FUNCTION = "debug"
+    CATEGORY = "dv/ollama"
+
+    def debug(self, history):
+        return (json.dumps(history, indent=2),)
+
+
+class OllamaHistoryLength:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"history": ("OLLAMA_HISTORY",)}}
+
+    RETURN_TYPES = ("INT",)
+    RETURN_NAMES = ("length",)
+    FUNCTION = "length"
+    CATEGORY = "dv/ollama"
+
+    def length(self, history):
+        return (len(history),)

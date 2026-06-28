@@ -55,8 +55,6 @@ async def _frame_node(
     node_pos: list[float],
     node_size: list[float],
     scale: float = _VIEW_SCALE,
-    h_pad: float = 80,
-    v_pad: float = 60,
 ) -> None:
     """Pan/zoom so the node is nicely centred in the viewport."""
     vw = VIEWPORT["width"]
@@ -253,6 +251,221 @@ async def scene_circuit_breaker(page: Page, out: Path) -> None:
     await _capture(page, out, info["pos"], info["size"])
 
 
+async def scene_ollama_client(page: Page, out: Path) -> None:
+    """OllamaClient — single node showing the host URL widget."""
+    await _clear(page)
+
+    info = await page.evaluate(
+        """
+        () => {
+            const node = LiteGraph.createNode("OllamaClient");
+            node.pos = [60, 60];
+            window.app.graph.add(node);
+            // Use host.docker.internal so the server-side fetch can reach host Ollama
+            const hostWidget = node.widgets && node.widgets.find(w => w.name === "host");
+            if (hostWidget) hostWidget.value = "http://host.docker.internal:11434";
+            window.app.canvas.setDirty(true, true);
+            window.app.canvas.draw(true, true);
+            return { pos: [node.pos[0], node.pos[1]], size: [node.size[0], node.size[1]] };
+        }
+        """
+    )
+
+    await _frame_node(page, info["pos"], info["size"])
+    await _capture(page, out, info["pos"], info["size"])
+
+
+async def scene_ollama_chat(page: Page, out: Path) -> None:
+    """OllamaChatCompletion — showing the live model dropdown and prompt widget."""
+    await _clear(page)
+
+    info = await page.evaluate(
+        """
+        async () => {
+            const node = LiteGraph.createNode("OllamaChatCompletion");
+            node.pos = [60, 60];
+            window.app.graph.add(node);
+
+            // Set a demo prompt
+            const promptWidget = node.widgets && node.widgets.find(w => w.name === "prompt");
+            if (promptWidget) promptWidget.value = "Describe this image in one sentence.";
+
+            // Trigger live model refresh via host.docker.internal
+            if (typeof window.__comfydv_refreshModels === "function") {
+                await window.__comfydv_refreshModels(node, "http://host.docker.internal:11434");
+            } else {
+                // Manually fetch and populate the COMBO
+                try {
+                    const resp = await fetch("/dv/ollama/models?host=http://host.docker.internal:11434");
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        const models = data.models || [];
+                        if (models.length) {
+                            const modelWidget = node.widgets && node.widgets.find(w => w.name === "model");
+                            if (modelWidget) {
+                                modelWidget.options = modelWidget.options || {};
+                                modelWidget.options.values = models;
+                                modelWidget.value = models[0];
+                            }
+                        }
+                    }
+                } catch(e) {}
+            }
+
+            await new Promise(r => setTimeout(r, 800));
+            window.app.canvas.setDirty(true, true);
+            window.app.canvas.draw(true, true);
+            return { pos: [node.pos[0], node.pos[1]], size: [node.size[0], node.size[1]] };
+        }
+        """
+    )
+
+    await asyncio.sleep(1.0)
+    await _redraw(page)
+    await _frame_node(page, info["pos"], info["size"])
+    await _capture(page, out, info["pos"], info["size"])
+
+
+async def scene_ollama_workflow(page: Page, out: Path) -> None:
+    """Full mini-workflow: OllamaClient → OllamaChatCompletion + Temperature + Seed options."""
+    await _clear(page)
+
+    info = await page.evaluate(
+        """
+        async () => {
+            const graph = window.app.graph;
+
+            // 1. OllamaClient — top-left
+            const client = LiteGraph.createNode("OllamaClient");
+            client.pos = [40, 40];
+            graph.add(client);
+
+            // 2. Temperature option — middle-left
+            const temp = LiteGraph.createNode("OllamaOptionTemperature");
+            temp.pos = [40, 200];
+            graph.add(temp);
+            const twTemp = temp.widgets && temp.widgets.find(w => w.name === "temperature");
+            if (twTemp) twTemp.value = 0.7;
+
+            // 3. Seed option — below temp
+            const seed = LiteGraph.createNode("OllamaOptionSeed");
+            seed.pos = [40, 340];
+            graph.add(seed);
+            const twSeed = seed.widgets && seed.widgets.find(w => w.name === "seed");
+            if (twSeed) twSeed.value = 42;
+
+            // 4. ChatCompletion — right
+            const chat = LiteGraph.createNode("OllamaChatCompletion");
+            chat.pos = [380, 100];
+            graph.add(chat);
+            const twPrompt = chat.widgets && chat.widgets.find(w => w.name === "prompt");
+            if (twPrompt) twPrompt.value = "Write a haiku about ComfyUI.";
+
+            // Set client host to reach host Ollama through Docker
+            const hostWidget = client.widgets && client.widgets.find(w => w.name === "host");
+            if (hostWidget) hostWidget.value = "http://host.docker.internal:11434";
+
+            // Wire: client.OLLAMA_CLIENT (output 0) → chat.client (input 0)
+            client.connect(0, chat, 0);
+
+            // Wire: temp.OLLAMA_OPTIONS (output 0) → seed.options (input 0)
+            temp.connect(0, seed, 0);
+
+            // Wire: seed.OLLAMA_OPTIONS (output 0) → chat.options input
+            // Find the 'options' input slot index on chat node
+            const optSlot = chat.inputs ? chat.inputs.findIndex(inp => inp.name === "options") : 3;
+            seed.connect(0, chat, optSlot >= 0 ? optSlot : 3);
+
+            // Refresh model dropdowns for chat node
+            try {
+                const resp = await fetch("/dv/ollama/models?host=http://host.docker.internal:11434");
+                if (resp.ok) {
+                    const data = await resp.json();
+                    const models = data.models || [];
+                    if (models.length) {
+                        const modelWidget = chat.widgets && chat.widgets.find(w => w.name === "model");
+                        if (modelWidget) {
+                            modelWidget.options = modelWidget.options || {};
+                            modelWidget.options.values = models;
+                            modelWidget.value = models[0];
+                        }
+                    }
+                }
+            } catch(e) {}
+
+            await new Promise(r => setTimeout(r, 1200));
+            window.app.canvas.setDirty(true, true);
+            window.app.canvas.draw(true, true);
+
+            // Bounding box across all 4 nodes
+            const nodes = [client, temp, seed, chat];
+            const minX = Math.min(...nodes.map(n => n.pos[0])) - 20;
+            const minY = Math.min(...nodes.map(n => n.pos[1])) - 20;
+            const maxX = Math.max(...nodes.map(n => n.pos[0] + n.size[0])) + 20;
+            const maxY = Math.max(...nodes.map(n => n.pos[1] + n.size[1])) + 20;
+            return {
+                pos: [minX, minY],
+                size: [maxX - minX, maxY - minY],
+            };
+        }
+        """
+    )
+
+    # Wait for model dropdowns to refresh via /dv/ollama/models
+    await asyncio.sleep(2.5)
+    await _redraw(page)
+    await _frame_node(page, info["pos"], info["size"], scale=1.0)
+    await _capture(page, out, info["pos"], info["size"], scale=1.0)
+
+
+async def scene_ollama_options(page: Page, out: Path) -> None:
+    """OllamaOption nodes — Temperature, Seed, MaxTokens in a vertical chain."""
+    await _clear(page)
+
+    info = await page.evaluate(
+        """
+        () => {
+            const graph = window.app.graph;
+
+            const temp = LiteGraph.createNode("OllamaOptionTemperature");
+            temp.pos = [60, 40];
+            graph.add(temp);
+            const twTemp = temp.widgets && temp.widgets.find(w => w.name === "temperature");
+            if (twTemp) twTemp.value = 0.8;
+
+            const seed = LiteGraph.createNode("OllamaOptionSeed");
+            seed.pos = [60, 180];
+            graph.add(seed);
+            const twSeed = seed.widgets && seed.widgets.find(w => w.name === "seed");
+            if (twSeed) twSeed.value = 1337;
+
+            const maxTok = LiteGraph.createNode("OllamaOptionMaxTokens");
+            maxTok.pos = [60, 320];
+            graph.add(maxTok);
+            const twMax = maxTok.widgets && maxTok.widgets.find(w => w.name === "max_tokens");
+            if (twMax) twMax.value = 256;
+
+            // Chain: temp → seed → maxTok (node.connect(outputSlot, targetNode, inputSlot))
+            temp.connect(0, seed, 0);
+            seed.connect(0, maxTok, 0);
+
+            window.app.canvas.setDirty(true, true);
+            window.app.canvas.draw(true, true);
+
+            const nodes = [temp, seed, maxTok];
+            const minX = Math.min(...nodes.map(n => n.pos[0])) - 20;
+            const minY = Math.min(...nodes.map(n => n.pos[1])) - 20;
+            const maxX = Math.max(...nodes.map(n => n.pos[0] + n.size[0])) + 20;
+            const maxY = Math.max(...nodes.map(n => n.pos[1] + n.size[1])) + 20;
+            return { pos: [minX, minY], size: [maxX - minX, maxY - minY] };
+        }
+        """
+    )
+
+    await _frame_node(page, info["pos"], info["size"], scale=1.2)
+    await _capture(page, out, info["pos"], info["size"], scale=1.2)
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -262,6 +475,11 @@ SCENES = [
     ("jinja2.png", scene_format_string_jinja2),
     ("random.png", scene_random_choice),
     ("circuit_breaker.png", scene_circuit_breaker),
+    # Ollama nodes (spec 006)
+    ("ollama_client.png", scene_ollama_client),
+    ("ollama_chat.png", scene_ollama_chat),
+    ("ollama_workflow.png", scene_ollama_workflow),
+    ("ollama_options.png", scene_ollama_options),
 ]
 
 
