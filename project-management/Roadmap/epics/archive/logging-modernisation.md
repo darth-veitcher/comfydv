@@ -15,8 +15,8 @@ _None._
 - specs/001-standardise-logging/
 ## ADRs
 
-- [ADR-001](../../ADRs/ADR-001-stdlib-logging-over-console-libraries.md) — stdlib logging over colored console libraries
-- [ADR-002](../../ADRs/ADR-002-nullhandler-pattern-for-library-loggers.md) — NullHandler pattern for library loggers
+- [ADR-001](../../../ADRs/ADR-001-stdlib-logging-over-console-libraries.md) — stdlib logging over colored console libraries
+- [ADR-002](../../../ADRs/ADR-002-nullhandler-pattern-for-library-loggers.md) — NullHandler pattern for library loggers
 
 ## Success criteria
 - [x] `logger.setLevel(logging.DEBUG)` removed from all modules; log level controlled entirely by the host (ComfyUI or the user's logging config)
