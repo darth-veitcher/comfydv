@@ -40,3 +40,12 @@ rebuild:
 # CI smoke test — builds from COPY, starts with --quick-test-for-ci, exits
 ci-smoke:
     {{ci}} up --build --exit-code-from comfyui
+
+# Regenerate docs/assets/ screenshots from the live ComfyUI dev harness.
+# Starts the harness if not already running; leaves it running afterwards.
+screenshots:
+    @echo "Starting dev harness (no-op if already up)…"
+    {{dev}} up -d
+    @echo "Waiting for ComfyUI to be healthy…"
+    @until docker compose -f docker-compose.yml -f docker-compose.dev.yml ps --format json | python3 -c "import sys,json; s=[c for c in json.load(sys.stdin) if c.get('Name','').endswith('comfyui')]; exit(0 if s and s[0].get('Health')=='healthy' else 1)" 2>/dev/null; do sleep 3; done
+    uv run scripts/take_screenshots.py
