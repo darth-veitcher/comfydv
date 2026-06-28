@@ -26,7 +26,6 @@ from rich import print
 
 # Set up logger for this module
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
 if "comfy" in sys.modules:
     import folder_paths  # from comfyui - gives access to `get_temp_directory()` and `get_output_directory()`

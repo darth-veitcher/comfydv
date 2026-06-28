@@ -1,6 +1,10 @@
+import logging
+
 from .circuit_breaker import CircuitBreaker
 from .format_string import FormatString
 from .random_choice import RandomChoice
+
+logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 # A dictionary that contains all nodes you want to export with their names
 # NOTE: names should be globally unique
