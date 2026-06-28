@@ -21,6 +21,10 @@ _None — this epic is self-contained and can start immediately._
 
 <!-- populated by beacon link-spec -->
 
+- specs/002-manager-compatible-install-requirements-txt-and-custom-node-list-registration/
+- specs/003-formatstring-frontend-ux-debounce-connection-migration-node-id-parity-toast-feedback/
+- specs/004-node-logic-correctness-per-instance-formatstring-schema-randomchoice-determinism-circuitbreaker-any-type/
+- specs/005-metadata-cleanup-pyproject-description-scripts-dead-code-removal-tooltips-category-consistency/
 ## ADRs
 
 _To be recorded as cross-cutting decisions are made during DESIGN._
