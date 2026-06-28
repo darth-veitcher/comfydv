@@ -23,9 +23,9 @@
 
 ## This quarter (Q3 2026)
 
-- **BEACON bootstrap** — `epics/beacon-bootstrap.md` — BEACON framework wired up; problem statement, constitution, roadmap, and ADR template populated; quality gates clean
-- **Test hardening** — `epics/test-hardening.md` — full unit coverage for `FormatString._extract_keys`, `format_string`, `update_widget`; circuit breaker and random choice covered; CI green without ComfyUI
-- **Documentation** — `epics/documentation.md` — mkdocs site rebuilt to reflect current node API, including output-order guarantee and Jinja2 sandbox constraints
+- **BEACON bootstrap** — `epics/archive/beacon-bootstrap.md` — ✅ DONE — BEACON framework wired up; problem statement, constitution, roadmap, and ADR template populated; quality gates clean
+- **Logging modernisation** — `epics/logging-modernisation.md` — ✅ DONE — stdlib logging, NullHandler, silent-by-default; colorama/rich/termcolor removed; 11 tests
+- **ComfyUI UX Polish & Manager Compatibility** — `epics/ux-and-install.md` — 🔄 ACTIVE — Fix installation, core UX bugs (debounce, connection drops, alert dialogs), correctness bugs (class-level mutation, IS_CHANGED, seed=0), and metadata drift
 
 For the live rollup (specs per epic, % tasks complete, last-commit age):
 
