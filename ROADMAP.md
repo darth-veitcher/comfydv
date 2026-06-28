@@ -13,7 +13,7 @@ gantt
     excludes    weekends
 
     section Active
-    ComfyUI UX Polish & Manager Compatibility :active, ux-and-install, 2026-06-28, 7d
+    ComfyUI UX Polish & Manager Compatibility :active, ux-and-install, 2026-06-28, 21d
 
     section Done
     BEACON Bootstrap :done, beacon-bootstrap, 2026-06-28, 7d
@@ -25,7 +25,7 @@ gantt
 
 | Epic | Title | Status | Specs | Fidelity |
 |---|---|---|---|---|
-| [ux-and-install](project-management/Roadmap/epics/ux-and-install.md) | ComfyUI UX Polish & Manager Compatibility | Active | — | S? A? T:- |
+| [ux-and-install](project-management/Roadmap/epics/ux-and-install.md) | ComfyUI UX Polish & Manager Compatibility | Active | 1/4 shipped | S+ A+ T:100% |
 | [beacon-bootstrap](project-management/Roadmap/epics/archive/beacon-bootstrap.md) | BEACON Bootstrap | Done | — | S? A? T:- |
 | [logging-modernisation](project-management/Roadmap/epics/archive/logging-modernisation.md) | Logging Modernisation | Done | 1/1 shipped | S+ A+ T:100% |
 
@@ -39,6 +39,6 @@ _No active bullets._
 
 | ADR | Title | Status |
 |---|---|---|
-| [ADR-001](project-management/ADRs/ADR-001-stdlib-logging-over-console-libraries.md) | Use stdlib logging instead of colored console output libraries | Accepted |
-| [ADR-002](project-management/ADRs/ADR-002-nullhandler-pattern-for-library-loggers.md) | NullHandler pattern for the comfydv package root logger | Accepted |
-| [ADR-003](project-management/ADRs/ADR-003-requirements-txt-authoring-policy.md) | Hand-author requirements.txt for git-clone installs | Accepted |
+| [ADR-001](../../../ADRs/ADR-001-stdlib-logging-over-console-libraries.md) | Use stdlib logging instead of colored console output libraries | Accepted |
+| [ADR-002](../../../ADRs/ADR-002-nullhandler-pattern-for-library-loggers.md) | NullHandler pattern for the comfydv package root logger | Accepted |
+| [ADR-003](../../ADRs/ADR-003-requirements-txt-authoring-policy.md) | Hand-authored requirements.txt as a curated subset of pyproject.toml | Accepted |
