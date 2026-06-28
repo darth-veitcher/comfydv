@@ -138,20 +138,42 @@ class TestMetadata:
             )
 
 
+COMPOSE_FILE = REPO_ROOT / "docker-compose.yml"
+DOCKERFILE = REPO_ROOT / "docker" / "Dockerfile"
+
+
 class TestDockerCompose:
     """US4 — Docker Compose local test harness."""
 
     def test_docker_compose_yml_exists(self):
-        pass
+        assert COMPOSE_FILE.exists(), (
+            "docker-compose.yml not found at repo root — run T040-I to create it"
+        )
 
     def test_docker_compose_has_comfyui_service(self):
-        pass
+        import yaml
+        data = yaml.safe_load(COMPOSE_FILE.read_text())
+        services = data.get("services", {})
+        assert "comfyui" in services, (
+            f"docker-compose.yml must define a 'comfyui' service; found: {list(services.keys())}"
+        )
 
     def test_docker_compose_exposes_port_8188(self):
-        pass
+        import yaml
+        data = yaml.safe_load(COMPOSE_FILE.read_text())
+        ports = data.get("services", {}).get("comfyui", {}).get("ports", [])
+        port_strings = [str(p) for p in ports]
+        assert any("8188" in p for p in port_strings), (
+            f"comfyui service must expose port 8188; found ports: {port_strings}"
+        )
 
     def test_dockerfile_exists(self):
-        pass
+        assert DOCKERFILE.exists(), (
+            "docker/Dockerfile not found — run T041-I to create it"
+        )
 
     def test_dockerfile_uses_python_311_base(self):
-        pass
+        text = DOCKERFILE.read_text()
+        assert "FROM python:3.11" in text, (
+            "Dockerfile must use python:3.11 base image (CPU-only, no CUDA)"
+        )
