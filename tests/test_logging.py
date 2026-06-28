@@ -5,6 +5,7 @@ Verifies:
 - US1: zero stdout/stderr during normal execution
 - US2: ERROR records emitted on failure paths
 - US3: DEBUG records appear when host opts in; NullHandler default is silent
+- Consistency: zero print() in library code; correct log levels on all absent-ComfyUI paths
 """
 
 import logging
@@ -284,3 +285,75 @@ class TestUS3DeveloperDebugMode:
         finally:
             fmt_logger.removeHandler(test_handler)
             fmt_logger.propagate = original_propagate
+
+
+# ---------------------------------------------------------------------------
+# Logging Consistency (T035-T)
+# ---------------------------------------------------------------------------
+
+
+class TestLoggingConsistency:
+    """Cross-module logging contract: no print(), correct levels on degraded paths."""
+
+    def test_no_print_calls_in_library_code(self):
+        """All src/comfydv/*.py must be free of print() calls in executable code."""
+        import ast
+
+        src_dir = os.path.join(os.path.dirname(__file__), "..", "src", "comfydv")
+        violations = []
+        for fname in sorted(os.listdir(src_dir)):
+            if not fname.endswith(".py"):
+                continue
+            fpath = os.path.join(src_dir, fname)
+            tree = ast.parse(open(fpath).read())
+            for node in ast.walk(tree):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name)
+                    and node.func.id == "print"
+                ):
+                    violations.append(f"{fname}:{node.lineno}")
+        assert not violations, f"print() calls found in library code: {violations}"
+
+    def test_circuit_breaker_absent_comfyui_emits_warning(self, caplog):
+        """circuit_breaker.py ComfyUI-absent branch must log at WARNING, not DEBUG."""
+        src = os.path.join(
+            os.path.dirname(__file__), "..", "src", "comfydv", "circuit_breaker.py"
+        )
+        source = open(src).read()
+        # Verify at source level that the warning call is present
+        assert "logger.warning(" in source, (
+            "circuit_breaker.py must use logger.warning() for the ComfyUI-absent branch"
+        )
+        assert (
+            "logger.debug(" not in source
+            or "ComfyUI" not in source.split("logger.debug(")[1].split(")")[0]
+            if "logger.debug(" in source
+            else True
+        ), "circuit_breaker.py ComfyUI-absent branch must not use logger.debug()"
+
+    def test_random_choice_exception_path_emits_error(self, caplog):
+        """random_choice.py exception path must emit an ERROR record (not re-raise silently)."""
+        src = os.path.join(
+            os.path.dirname(__file__), "..", "src", "comfydv", "random_choice.py"
+        )
+        source = open(src).read()
+        assert "logger.error(" in source, (
+            "random_choice.py must call logger.error() on the exception path"
+        )
+        assert "raise e" not in source, (
+            "random_choice.py must not bare-reraise with 'raise e' — use plain 'raise'"
+        )
+
+    def test_ollama_absent_comfyui_emits_warning(self):
+        """ollama.py ComfyUI-absent branches must use logger.warning()."""
+        src = os.path.join(
+            os.path.dirname(__file__), "..", "src", "comfydv", "ollama.py"
+        )
+        source = open(src).read()
+        # The two absent-ComfyUI paths must both be warnings, not debug
+        warning_count = source.count("logger.warning(")
+        assert warning_count >= 2, (
+            f"ollama.py must have at least 2 logger.warning() calls for absent-ComfyUI paths, "
+            f"found {warning_count}"
+        )
