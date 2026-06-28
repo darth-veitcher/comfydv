@@ -2,12 +2,15 @@
 This node is designed in a hacky way to allow you to break a render run semi-gracefully.
 """
 
+import logging
 import sys
+
+logger = logging.getLogger(__name__)
 
 if "comfy" in sys.modules:
     from comfy.model_management import InterruptProcessingException  # noqa
 else:
-    print(
+    logger.debug(
         "ComfyUI not detected, CircuitBreaker node will not function properly outside of ComfyUI."
     )
 
@@ -47,8 +50,7 @@ class CircuitBreaker:
     CATEGORY = "dv/utils"
 
     def doit(self, trigger, **kwargs):
-        if kwargs.get("status"):
-            print("Circuit Breaker triggered")
+        if not kwargs.get("status", True):
+            logger.debug("CircuitBreaker: interrupt triggered")
             raise InterruptProcessingException()
-        else:
-            return (trigger,)
+        return (trigger,)

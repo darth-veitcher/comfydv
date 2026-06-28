@@ -22,7 +22,6 @@ from typing import Any, Dict, List, Tuple
 
 from aiohttp import web
 from jinja2 import exceptions, sandbox
-from rich import print
 
 # Set up logger for this module
 logger = logging.getLogger(__name__)
@@ -365,33 +364,28 @@ class FormatString:
         >>> assert result[2] == "Bob"
         -->
         """
-        logger.info(
-            f"Formatting string - type: {template_type}, unique_id: {unique_id}"
+        logger.debug(
+            "Formatting string - type: %s, unique_id: %s", template_type, unique_id
         )
-        logger.debug(f"Template: {template[:100]}...")
+        logger.debug("Template: %.100s...", template)
 
         keys = cls._extract_keys(template)
-        logger.debug(f"Extracted variables: {keys}")
-        input_vals = ", ".join(f'{k}={kwargs.get(k, "")}' for k in keys)
-        logger.debug(f"Input values: {input_vals}")
+        logger.debug("Extracted variables: %s", keys)
+        input_vals = ", ".join(f"{k}={kwargs.get(k, '')}" for k in keys)
+        logger.debug("Input values: %s", input_vals)
 
         # CRITICAL: Update RETURN_TYPES/RETURN_NAMES before execution to ensure they match our return tuple
         # This is necessary because update_widget might not have been called yet (e.g., on workflow load)
         if unique_id:
             cls.update_widget(unique_id, template_type, template)
             logger.debug(
-                f"Updated RETURN_TYPES for node {unique_id}: {cls.RETURN_TYPES}"
+                "Updated RETURN_TYPES for node %s: %s", unique_id, cls.RETURN_TYPES
             )
 
         if template_type == "Simple":
             try:
                 formatted_string = template.format(**kwargs)
-                if logger.level < logging.DEBUG:
-                    logger.info(
-                        f"Simple format successful, result length: {len(formatted_string)}"
-                    )
-                elif logger.level == logging.DEBUG:
-                    logger.debug(f"Simple format successful: {formatted_string}")
+                logger.debug("Simple format successful: %.50s", formatted_string)
             except KeyError as e:
                 error_msg = f"Missing variable in Simple template: {str(e)}"
                 logger.error(error_msg)
@@ -406,8 +400,8 @@ class FormatString:
                 # Combine user-provided kwargs with additional_context
                 context = {**cls.additional_context, **kwargs}
                 formatted_string = jinja_template.render(**context)
-                logger.info(
-                    f"Jinja2 format successful, result length: {len(formatted_string)}"
+                logger.debug(
+                    "Jinja2 format successful, result length: %d", len(formatted_string)
                 )
             except exceptions.TemplateSyntaxError as e:
                 error_msg = f"Error in Jinja2 template: {str(e)}"
@@ -441,18 +435,6 @@ class FormatString:
         else:
             logger.debug("No save_path provided, skipping state save")
 
-        # Log the final formatted string to stdout for visibility
-        print(f"\n[FormatString Node {unique_id}] Output:")
-        print(f"  formatted_string: {formatted_string}")
-        print(f"  Variables extracted: {keys}")
-        print(f"  Variable values: {[kwargs.get(key, '') for key in keys]}")
-        print(f"  Class RETURN_TYPES: {cls.RETURN_TYPES}")
-        print(f"  Class RETURN_NAMES: {cls.RETURN_NAMES}")
-        print(
-            f"  Expected outputs: {len(keys)} vars + formatted_string + saved_file_path = {len(keys) + 2} total"
-        )
-        print()
-
         # Return formatted_string and saved_file_path FIRST (fixed positions 0,1),
         # then all input values (for chaining)
         # The order must match what was set in update_widget's RETURN_TYPES/RETURN_NAMES
@@ -461,17 +443,14 @@ class FormatString:
             actual_save_path,
         ) + tuple(str(kwargs.get(key, "")) for key in keys)
 
-        print(f"[FormatString Node {unique_id}] Actual return tuple:")
-        for i, (name, value) in enumerate(zip(cls.RETURN_NAMES, result)):
-            value_preview = value[:50] if len(value) > 50 else value
-            print(f"  Output {i}: {name} = {value_preview}")
-        print()
-
         logger.debug(
-            f"Returning {len(result)} outputs: keys={keys}, formatted_string={formatted_string[:50]}..., save_path={actual_save_path}"
+            "Returning %d outputs: keys=%s, save_path=%s",
+            len(result),
+            keys,
+            actual_save_path,
         )
         logger.debug(
-            f"Full result tuple length: {len(result)}, expected: {len(keys) + 2}"
+            "Full result tuple length: %d, expected: %d", len(result), len(keys) + 2
         )
         return result
 
@@ -532,13 +511,15 @@ class FormatString:
         >>> assert FormatString.node_configs["test_node"] == config
         -->
         """
-        logger.info(
-            f"Updating widget config - node_id: {node_id}, template_type: {template_type}"
+        logger.debug(
+            "Updating widget config - node_id: %s, template_type: %s",
+            node_id,
+            template_type,
         )
-        logger.debug(f"Template: {template[:100]}...")
+        logger.debug("Template: %.100s...", template)
 
         keys = cls._extract_keys(template)
-        logger.info(f"Extracted {len(keys)} variables from template: {keys}")
+        logger.debug("Extracted %d variables from template: %s", len(keys), keys)
 
         config: Dict[str, Any] = {
             "inputs": {
@@ -566,12 +547,14 @@ class FormatString:
         cls.OUTPUT_IS_LIST = (False,) * (len(keys) + 2)
 
         logger.debug(
-            f"Updated RETURN_TYPES to {len(cls.RETURN_TYPES)} outputs: {cls.RETURN_NAMES}"
+            "Updated RETURN_TYPES to %d outputs: %s",
+            len(cls.RETURN_TYPES),
+            cls.RETURN_NAMES,
         )
 
         # Store the configuration for this specific node
         cls.node_configs[node_id] = config
-        logger.debug(f"Stored config for node {node_id}")
+        logger.debug("Stored config for node %s", node_id)
 
         return config
 
@@ -668,7 +651,7 @@ class FormatString:
         except FileNotFoundError:
             return {}
         except Exception as e:
-            print(f"Error loading node state: {e}")
+            logger.error("Failed to load node state from %s: %s", file_path, e)
             return {}
 
 
@@ -709,16 +692,18 @@ async def update_format_string_node(request):
     template_type = data.get("template_type", "")
     template = data.get("template", "")
 
-    logger.info(
-        f"Web API: update_format_string_node - node_id: {node_id}, template_type: {template_type}"
+    logger.debug(
+        "Web API: update_format_string_node - node_id: %s, template_type: %s",
+        node_id,
+        template_type,
     )
 
     try:
         updated_config = FormatString.update_widget(node_id, template_type, template)
-        logger.debug(f"Successfully updated config for node {node_id}")
+        logger.debug("Successfully updated config for node %s", node_id)
         return web.json_response(updated_config)
     except Exception as e:
-        logger.error(f"Error updating node config: {str(e)}", exc_info=True)
+        logger.error("Error updating node config: %s", str(e), exc_info=True)
         return web.json_response({"error": str(e)}, status=500)
 
 

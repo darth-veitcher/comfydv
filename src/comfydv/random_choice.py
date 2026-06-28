@@ -1,14 +1,10 @@
+import logging
 import random
 import sys
 
-from colorama import just_fix_windows_console
-from rich import print
-from rich.pretty import pprint
-
 from .utils import any_type
 
-just_fix_windows_console()
-from termcolor import colored
+logger = logging.getLogger(__name__)
 
 
 class RandomChoice:
@@ -66,13 +62,11 @@ class RandomChoice:
             if kwargs.get("seed")
             else random.seed(random.randrange(sys.maxsize))
         )
-        print(colored("\nRandom Choice", "white", "on_red"))
         input = [i for i in kwargs.items() if i[0] != "seed"]
-        print(colored("Got these inputs:", "green"))
-        pprint(input)
+        logger.debug("RandomChoice inputs: %s", input)
         try:
             choice = random.choice(input)[1]
-            print(colored(f"Chose: {choice}\n", "green"))
+            logger.debug("RandomChoice chose: %s", choice)
             return (choice,)
         except Exception as e:
             raise e
