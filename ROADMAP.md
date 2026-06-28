@@ -12,6 +12,9 @@ gantt
     dateFormat  YYYY-MM-DD
     excludes    weekends
 
+    section Planned
+    Logging Modernisation :logging-modernisation, 2026-06-28, 7d
+
     section Done
     BEACON Bootstrap :done, beacon-bootstrap, 2026-06-28, 7d
 
@@ -21,6 +24,7 @@ gantt
 
 | Epic | Title | Status | Specs | Fidelity |
 |---|---|---|---|---|
+| [logging-modernisation](project-management/Roadmap/epics/logging-modernisation.md) | Logging Modernisation | Planning | — | S? A? T:- |
 | [beacon-bootstrap](project-management/Roadmap/epics/archive/beacon-bootstrap.md) | BEACON Bootstrap | Done | — | S? A? T:- |
 
 _Fidelity: `S+/S?` = has specs / none · `A+/A?` = has ADRs / none · `T:N%` = task completion_
