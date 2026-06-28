@@ -19,13 +19,13 @@ _None._
 - [ADR-002](../../ADRs/ADR-002-nullhandler-pattern-for-library-loggers.md) — NullHandler pattern for library loggers
 
 ## Success criteria
-- [ ] `logger.setLevel(logging.DEBUG)` removed from all modules; log level controlled entirely by the host (ComfyUI or the user's logging config)
-- [ ] `logging.NullHandler()` added to the package root logger in `__init__.py`
-- [ ] All diagnostic `print()` calls converted to `logger.debug()` / `logger.info()` / `logger.error()` as appropriate
-- [ ] `colorama`, `termcolor`, and `rich` removed from runtime dependencies in `pyproject.toml` (they are only used for the now-deleted console-print logging)
-- [ ] A normal ComfyUI run produces zero output from this package unless the host enables DEBUG
-- [ ] Errors (template render failures, file-save failures, interrupt triggers) still surface at `ERROR` / `INFO` level
-- [ ] All existing tests pass; no new test failures introduced
+- [x] `logger.setLevel(logging.DEBUG)` removed from all modules; log level controlled entirely by the host (ComfyUI or the user's logging config)
+- [x] `logging.NullHandler()` added to the package root logger in `__init__.py`
+- [x] All diagnostic `print()` calls converted to `logger.debug()` / `logger.info()` / `logger.error()` as appropriate
+- [x] `colorama`, `termcolor`, and `rich` removed from runtime dependencies in `pyproject.toml` (they are only used for the now-deleted console-print logging)
+- [x] A normal ComfyUI run produces zero output from this package unless the host enables DEBUG
+- [x] Errors (template render failures, file-save failures, interrupt triggers) still surface at `ERROR` / `INFO` level
+- [x] All existing tests pass; no new test failures introduced
 
 ## Non-goals
 - Not adding a user-facing log-level toggle inside ComfyUI's UI
