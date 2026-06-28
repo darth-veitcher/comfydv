@@ -2,7 +2,7 @@
 @author: Darth Veitcher
 @title: Comfy DV Nodes
 @nickname: DV Nodes
-@description: This collection of nodes provides string formatting, random choices, model memory management, and other quality of life improvements.
+@description: Quality of life ComfyUI nodes: dynamic string formatting with Python f-strings or Jinja2 templates, seed-controlled random input selection, and workflow circuit-breaker for conditional queue interruption.
 """
 
 import sys
