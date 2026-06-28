@@ -17,10 +17,13 @@ RUN git clone --depth 1 --branch ${COMFYUI_VERSION} \
 WORKDIR /app/ComfyUI
 
 # Install ComfyUI deps with CPU-only torch (no CUDA download)
+# requests is imported by app/frontend_management.py but not listed in
+# ComfyUI's requirements.txt at this tag — pin it explicitly.
 RUN pip install --no-cache-dir \
     torch torchvision torchaudio \
     --index-url https://download.pytorch.org/whl/cpu && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir requests
 
 # Copy comfydv source into custom_nodes
 COPY . /app/ComfyUI/custom_nodes/comfydv
