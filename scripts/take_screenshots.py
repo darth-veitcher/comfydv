@@ -29,16 +29,18 @@ _STORAGE_STATE = {
             "localStorage": [
                 {
                     "name": "workflow",
-                    "value": json.dumps({
-                        "last_node_id": 0,
-                        "last_link_id": 0,
-                        "nodes": [],
-                        "links": [],
-                        "groups": [],
-                        "config": {},
-                        "extra": {},
-                        "version": 0.4,
-                    }),
+                    "value": json.dumps(
+                        {
+                            "last_node_id": 0,
+                            "last_link_id": 0,
+                            "nodes": [],
+                            "links": [],
+                            "groups": [],
+                            "config": {},
+                            "extra": {},
+                            "version": 0.4,
+                        }
+                    ),
                 },
                 {"name": "Comfy.OpenWorkflowsPaths", "value": "[]"},
                 {"name": "Comfy.ActiveWorkflowIndex", "value": "0"},
@@ -456,28 +458,28 @@ async def scene_ollama_lifecycle(page: Page, out: Path) -> None:
         async () => {
             const graph = window.app.graph;
 
-            // OllamaClient — far left
+            // OllamaClient — far left, vertically centred relative to the chain
             const client = LiteGraph.createNode("OllamaClient");
-            client.pos = [40, 140];
+            client.pos = [60, 300];
             graph.add(client);
             const hostWidget = client.widgets && client.widgets.find(w => w.name === "host");
             if (hostWidget) hostWidget.value = "http://localhost:11434";
 
-            // OllamaLoadModel — centre-left
+            // OllamaLoadModel — generous gap right of client
             const load = LiteGraph.createNode("OllamaLoadModel");
-            load.pos = [300, 40];
+            load.pos = [380, 80];
             graph.add(load);
 
-            // OllamaChatCompletion — centre-right
+            // OllamaChatCompletion — wide node, plenty of space to the right of load
             const chat = LiteGraph.createNode("OllamaChatCompletion");
-            chat.pos = [580, 40];
+            chat.pos = [720, 40];
             graph.add(chat);
             const twPrompt = chat.widgets && chat.widgets.find(w => w.name === "prompt");
             if (twPrompt) twPrompt.value = "Describe this image in one sentence.";
 
-            // OllamaUnloadModel — far right
+            // OllamaUnloadModel — far right, vertically offset to match chat's outputs
             const unload = LiteGraph.createNode("OllamaUnloadModel");
-            unload.pos = [900, 120];
+            unload.pos = [1200, 280];
             graph.add(unload);
 
             // Populate model dropdowns from live Ollama
@@ -487,28 +489,27 @@ async def scene_ollama_lifecycle(page: Page, out: Path) -> None:
                     const data = await resp.json();
                     const models = data.models || [];
                     if (models.length) {
-                        for (const node of [load, chat]) {
-                            const w = node.widgets && node.widgets.find(w => w.name === "model");
+                        for (const n of [load, chat]) {
+                            const w = n.widgets && n.widgets.find(w => w.name === "model");
                             if (w) { w.options = w.options || {}; w.options.values = models; w.value = models[0]; }
                         }
                     }
                 }
             } catch(e) {}
 
-            // Wire: client → load.client, client → chat.client, client → unload.client
+            // Wire: client → load, chat, unload
             client.connect(0, load, 0);
             client.connect(0, chat, 0);
             client.connect(0, unload, 0);
 
-            // Wire: load.model_name (output 0) → chat.model_name input (optional)
-            // This forces Load to run before Chat.
+            // Wire: load.model_name → chat.model_name (forces Load before Chat)
             const chatModelNameSlot = chat.inputs
                 ? chat.inputs.findIndex(i => i.name === "model_name")
                 : -1;
             if (chatModelNameSlot >= 0) load.connect(0, chat, chatModelNameSlot);
 
-            // Wire: chat.model_name (output 2) → unload.model (input 1)
-            // Wire: chat.response (output 0) → unload.passthrough (optional input)
+            // Wire: chat.model_name (output 2) → unload.model
+            // Wire: chat.response (output 0) → unload.passthrough
             const unloadModelSlot = unload.inputs
                 ? unload.inputs.findIndex(i => i.name === "model")
                 : 1;
@@ -518,24 +519,26 @@ async def scene_ollama_lifecycle(page: Page, out: Path) -> None:
             chat.connect(2, unload, unloadModelSlot >= 0 ? unloadModelSlot : 1);
             if (unloadPassSlot >= 0) chat.connect(0, unload, unloadPassSlot);
 
-            await new Promise(r => setTimeout(r, 1200));
+            // Let nodes render and auto-size before reading bounding box
+            await new Promise(r => setTimeout(r, 1500));
             window.app.canvas.setDirty(true, true);
             window.app.canvas.draw(true, true);
+            await new Promise(r => setTimeout(r, 300));
 
             const nodes = [client, load, chat, unload];
-            const minX = Math.min(...nodes.map(n => n.pos[0])) - 20;
-            const minY = Math.min(...nodes.map(n => n.pos[1])) - 20;
-            const maxX = Math.max(...nodes.map(n => n.pos[0] + n.size[0])) + 20;
-            const maxY = Math.max(...nodes.map(n => n.pos[1] + n.size[1])) + 20;
+            const minX = Math.min(...nodes.map(n => n.pos[0])) - 30;
+            const minY = Math.min(...nodes.map(n => n.pos[1])) - 30;
+            const maxX = Math.max(...nodes.map(n => n.pos[0] + n.size[0])) + 30;
+            const maxY = Math.max(...nodes.map(n => n.pos[1] + n.size[1])) + 30;
             return { pos: [minX, minY], size: [maxX - minX, maxY - minY] };
         }
         """
     )
 
-    await asyncio.sleep(2.0)
+    await asyncio.sleep(1.5)
     await _redraw(page)
-    await _frame_node(page, info["pos"], info["size"], scale=0.85)
-    await _capture(page, out, info["pos"], info["size"], scale=0.85)
+    await _frame_node(page, info["pos"], info["size"], scale=0.72)
+    await _capture(page, out, info["pos"], info["size"], scale=0.72)
 
 
 async def scene_ollama_options(page: Page, out: Path) -> None:
@@ -609,7 +612,9 @@ async def main() -> int:
 
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(headless=True)
-        context = await browser.new_context(viewport=VIEWPORT, storage_state=_STORAGE_STATE)
+        context = await browser.new_context(
+            viewport=VIEWPORT, storage_state=_STORAGE_STATE
+        )
         page = await context.new_page()
 
         print(f"Opening {COMFYUI_URL} …")

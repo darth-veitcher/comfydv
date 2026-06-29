@@ -31,12 +31,17 @@ class OllamaClientType(str):
 
 
 def _run_async(coro):
-    """Run an async coroutine synchronously using a fresh event loop."""
-    loop = asyncio.new_event_loop()
+    """Run an async coroutine synchronously, safe inside a running event loop."""
     try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
+        asyncio.get_running_loop()
+        # Called from within a running loop (e.g. ComfyUI's async executor).
+        # Spin up a worker thread with its own loop to avoid "loop already running".
+        import concurrent.futures
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(asyncio.run, coro).result()
+    except RuntimeError:
+        return asyncio.run(coro)
 
 
 async def _fetch_models(host: str) -> list[str]:
@@ -56,7 +61,7 @@ async def _fetch_models(host: str) -> list[str]:
         return []
 
 
-async def _post_json(url: str, payload: dict) -> dict:
+async def _post_json(url: str, payload: dict, *, timeout: float = 120.0) -> dict:
     """POST JSON to url, return parsed response dict."""
     import aiohttp
 
@@ -65,17 +70,22 @@ async def _post_json(url: str, payload: dict) -> dict:
             async with session.post(
                 url,
                 json=payload,
-                timeout=aiohttp.ClientTimeout(total=120),
+                timeout=aiohttp.ClientTimeout(total=timeout),
             ) as resp:
+                if resp.status >= 400:
+                    body = await resp.text()
+                    raise RuntimeError(
+                        f"Ollama returned HTTP {resp.status} for {url}: {body[:300]}"
+                    )
                 return await resp.json()
     except aiohttp.ClientConnectionError as exc:
         raise RuntimeError(f"Cannot reach Ollama at {url}: {exc}") from exc
 
 
-# Populated at import time; empty list if Ollama is unreachable.
-_DEFAULT_MODELS: list[str] = _run_async(_fetch_models("http://localhost:11434")) or [
-    "(start Ollama to see models)"
-]
+# Static placeholder — avoids a network call at import time (which always fails
+# in CI and slows cold-start). The JS refresh button calls /dv/ollama/models
+# at runtime to populate the live list.
+_DEFAULT_MODELS: list[str] = ["(⟳ click Refresh models)"]
 
 
 # ---------------------------------------------------------------------------
@@ -172,7 +182,11 @@ class OllamaLoadModel:
         if not model.strip():
             raise ValueError("model name cannot be empty")
         _run_async(
-            _post_json(f"{client}/api/show", {"model": model, "keep_alive": "-1"})
+            _post_json(
+                f"{client}/api/generate",
+                {"model": model, "keep_alive": -1, "stream": False},
+                timeout=300.0,
+            )
         )
         return (model,)
 
@@ -206,7 +220,13 @@ class OllamaUnloadModel:
     def unload_model(self, client, model: str, passthrough: str = ""):
         if not model.strip():
             raise ValueError("model name cannot be empty")
-        _run_async(_post_json(f"{client}/api/show", {"model": model, "keep_alive": 0}))
+        _run_async(
+            _post_json(
+                f"{client}/api/generate",
+                {"model": model, "keep_alive": 0, "stream": False},
+                timeout=30.0,
+            )
+        )
         return (model, passthrough)
 
 
@@ -231,6 +251,7 @@ class OllamaChatCompletion:
                 # Wire OllamaLoadModel.model_name here to guarantee load runs
                 # before chat and to override the dropdown with the wired value.
                 "model_name": ("STRING", {"forceInput": True}),
+                "timeout_secs": ("INT", {"default": 300, "min": 30, "max": 3600}),
             },
         }
 
@@ -248,6 +269,7 @@ class OllamaChatCompletion:
         history=None,
         options=None,
         model_name=None,
+        timeout_secs=300,
     ):
         effective_model = (
             model_name.strip() if model_name and model_name.strip() else model
@@ -265,7 +287,9 @@ class OllamaChatCompletion:
         }
         if options:
             payload["options"] = options
-        result = _run_async(_post_json(f"{client}/api/chat", payload))
+        result = _run_async(
+            _post_json(f"{client}/api/chat", payload, timeout=float(timeout_secs))
+        )
         response_text = result.get("message", {}).get("content", "")
         updated = list(history)
         updated.append({"role": "user", "content": prompt})
