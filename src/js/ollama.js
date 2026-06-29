@@ -39,12 +39,28 @@ async function refreshModelDropdown(node, host) {
 }
 
 /**
- * Locate the host string for a node — either from a connected OllamaClient
- * widget value or from the default.
+ * Locate the host string for a node.
+ *
+ * First checks the node's own widgets (OllamaClient has a "host" widget).
+ * Otherwise traverses graph links to find a connected OllamaClient node and
+ * reads its "host" widget — this is the common case for downstream nodes
+ * (ModelSelector, LoadModel, ChatCompletion) that receive the client socket.
  */
 function getHostFromNode(node) {
-    const clientWidget = node.widgets?.find(w => w.name === "host");
-    if (clientWidget) return clientWidget.value;
+    const ownHostWidget = node.widgets?.find(w => w.name === "host");
+    if (ownHostWidget) return ownHostWidget.value;
+
+    for (const input of node.inputs ?? []) {
+        if (!input.link) continue;
+        const link = node.graph?.links[input.link];
+        if (!link) continue;
+        const sourceNode = node.graph?.getNodeById(link.origin_id);
+        if (sourceNode?.type === "OllamaClient") {
+            const hostWidget = sourceNode.widgets?.find(w => w.name === "host");
+            if (hostWidget?.value) return hostWidget.value;
+        }
+    }
+
     return "http://localhost:11434";
 }
 

@@ -13,8 +13,8 @@ A collection of workflow efficiency and quality-of-life nodes built out of neces
 | **Circuit Breaker** | Halts the current ComfyUI queue run gracefully without crashing the server. Wire the `status` toggle to a boolean condition to skip the rest of the queue when a condition isn't met. |
 | **Ollama Client** | Configures a connection to an Ollama server (default: `http://localhost:11434`). Threads the host URL through the graph as an `OLLAMA_CLIENT` socket. |
 | **Ollama Model Selector** | Fetches the live model list from Ollama and presents it as a dropdown. Outputs the selected model name. |
-| **Ollama Load Model** | Loads a model into Ollama's memory using `/api/show` with `keep_alive=-1`. |
-| **Ollama Unload Model** | Evicts a model from Ollama's memory using `/api/show` with `keep_alive=0`. |
+| **Ollama Load Model** | Loads a model into Ollama's memory using `/api/generate` with `keep_alive=-1`. |
+| **Ollama Unload Model** | Evicts a model from Ollama's memory using `/api/generate` with `keep_alive=0`. |
 | **Ollama Chat Completion** | Sends a prompt (and optional conversation history) to Ollama `/api/chat` and returns the response text plus the updated history. |
 | **Ollama Option — \*** | Seven composable option nodes (Temperature, Seed, Max Tokens, Top P, Top K, Repeat Penalty, Extra Body) that merge into an `OLLAMA_OPTIONS` dict wired into Chat Completion. |
 | **Ollama Debug History** | Serialises an `OLLAMA_HISTORY` list to a pretty-printed JSON string for inspection. |
