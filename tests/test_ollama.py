@@ -374,12 +374,14 @@ class TestUS3ModelLifecycle:
         )
 
     @pytest.mark.integration
-    def test_load_model_returns_name(self, ollama_host, skip_if_no_ollama):
+    def test_load_model_returns_name(
+        self, ollama_host, skip_if_no_ollama, first_generative_model
+    ):
         """Scenario: Load Model loads model into Ollama memory."""
         (result,) = OllamaLoadModel().load_model(
-            client=ollama_host, model="embeddinggemma:latest"
+            client=ollama_host, model=first_generative_model
         )
-        assert result == "embeddinggemma:latest"
+        assert result == first_generative_model
 
     def test_unload_returns_two_values(self):
         """OllamaUnloadModel returns (model_name, passthrough) tuple."""
@@ -396,15 +398,15 @@ class TestUS3ModelLifecycle:
 
     @pytest.mark.integration
     def test_unload_model_returns_name_and_passthrough(
-        self, ollama_host, skip_if_no_ollama
+        self, ollama_host, skip_if_no_ollama, first_generative_model
     ):
         """Scenario: Unload evicts model; passthrough flows through unchanged."""
         model_name, passthrough = OllamaUnloadModel().unload_model(
             client=ollama_host,
-            model="embeddinggemma:latest",
+            model=first_generative_model,
             passthrough="sentinel",
         )
-        assert model_name == "embeddinggemma:latest"
+        assert model_name == first_generative_model
         assert passthrough == "sentinel"
 
 
@@ -416,21 +418,47 @@ _CHAT_MODEL = "lukey03/qwen3.5-9b-abliterated-vision:latest"
 
 
 class TestUS4ChatCompletion:
-    def test_chat_completion_input_types_uses_combo(self):
-        """Scenario: Chat Completion shows live dropdown (fixes Issue #1)."""
+    def test_chat_completion_model_is_plain_string(self):
+        """model input must be STRING (not COMBO) so it can receive wired values.
+
+        COMBO inputs cannot accept wired connections. Using STRING lets users
+        wire OllamaLoadModel.model_name → OllamaChatCompletion.model directly,
+        removing the need for a separate model_name socket.
+        """
         input_types = OllamaChatCompletion.INPUT_TYPES()
         model_input = input_types["required"]["model"]
-        assert isinstance(model_input[0], list), (
-            "OllamaChatCompletion model input must be a COMBO (list) — Issue #1 fix"
+        assert model_input[0] == "STRING", (
+            f"OllamaChatCompletion model input must be STRING so it can be wired, "
+            f"got {model_input[0]!r}"
         )
 
-    def test_chat_completion_accepts_wired_model_name(self):
-        """model_name optional input lets OllamaLoadModel.model_name wire in for ordering."""
+    def test_chat_has_no_model_name_input(self):
+        """model_name optional input must be removed — model STRING accepts wired values."""
         inputs = OllamaChatCompletion.INPUT_TYPES()
-        assert "model_name" in inputs.get("optional", {}), (
-            "model_name must be optional so LoadModel can wire its output here "
-            "to guarantee Load → Chat execution order"
+        assert "model_name" not in inputs.get("optional", {}), (
+            "model_name optional input is redundant now that model is a plain STRING "
+            "that accepts wired connections"
         )
+
+    def test_chat_model_receives_wired_string(self, monkeypatch):
+        """Wiring OllamaLoadModel.model_name → OllamaChatCompletion.model works."""
+        captured = {}
+
+        async def fake_post(url, payload, *, timeout=120.0):
+            captured["model"] = payload.get("model")
+            return {"message": {"content": "ok"}}
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        _, _, used_model = OllamaChatCompletion().chat(
+            client="http://localhost:11434",
+            model="llama3:latest",
+            prompt="hi",
+        )["result"]
+        assert used_model == "llama3:latest"
+        assert captured.get("model") == "llama3:latest"
 
     def test_chat_completion_returns_model_name(self):
         """Third return value carries the effective model name for downstream unload."""
@@ -445,26 +473,55 @@ class TestUS4ChatCompletion:
             "model_name",
         )
 
-    def test_wired_model_name_overrides_combo(self, monkeypatch):
-        """model_name kwarg takes precedence over the COMBO widget value."""
-        captured = {}
+    def test_chat_is_output_node(self):
+        """OllamaChatCompletion must have OUTPUT_NODE=True for inline display."""
+        assert getattr(OllamaChatCompletion, "OUTPUT_NODE", False) is True
+
+    def test_chat_returns_ui_result_dict(self, monkeypatch):
+        """chat() must return {'ui': ..., 'result': ...} not a bare tuple."""
 
         async def fake_post(url, payload, *, timeout=120.0):
-            captured["model"] = payload.get("model")
-            return {"message": {"content": "ok"}}
+            return {"message": {"content": "hello"}}
 
         import comfydv.ollama as ollama_mod
 
         monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
 
-        response, _, effective = OllamaChatCompletion().chat(
-            client="http://localhost:11434",
-            model="dropdown-value",
-            prompt="hi",
-            model_name="wired-value",
-        )
-        assert effective == "wired-value"
-        assert captured.get("model") == "wired-value"
+        ret = OllamaChatCompletion().chat(client="http://x", model="m", prompt="hi")
+        assert isinstance(ret, dict), f"Expected dict, got {type(ret)}"
+        assert "ui" in ret, "Missing 'ui' key"
+        assert "result" in ret, "Missing 'result' key"
+
+    def test_chat_ui_contains_response_text(self, monkeypatch):
+        """Response text must appear in ui['text'] for the inline display."""
+
+        async def fake_post(url, payload, *, timeout=120.0):
+            return {"message": {"content": "hello world"}}
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        ret = OllamaChatCompletion().chat(client="http://x", model="m", prompt="hi")
+        assert "hello world" in ret["ui"]["text"][0]
+
+    def test_chat_result_is_3_tuple(self, monkeypatch):
+        """result key must be the 3-tuple (response, history, model_name)."""
+
+        async def fake_post(url, payload, *, timeout=120.0):
+            return {"message": {"content": "hello"}}
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        ret = OllamaChatCompletion().chat(client="http://x", model="m", prompt="hi")
+        assert isinstance(ret["result"], tuple)
+        assert len(ret["result"]) == 3
+        response, history, model_name = ret["result"]
+        assert response == "hello"
+        assert isinstance(history, list)
+        assert model_name == "m"
 
     # ---- Issue 6: Chat timeout widget -----------------------------------------
 
@@ -520,7 +577,7 @@ class TestUS4ChatCompletion:
             model=_CHAT_MODEL,
             prompt="Say exactly the word: pong",
             history=[],
-        )
+        )["result"]
         assert isinstance(response, str)
         assert len(response) > 0
         assert len(updated_history) == 2
@@ -530,19 +587,26 @@ class TestUS4ChatCompletion:
 
     @pytest.mark.integration
     def test_multi_turn_receives_context(self, ollama_host, skip_if_no_ollama):
-        """Scenario: Multi-turn completion receives full conversation context."""
+        """Scenario: Multi-turn completion receives full conversation context.
+
+        Passes think=False to prevent Qwen3-family models from returning all
+        output as thinking tokens with an empty content field.
+        """
+        no_think = {"think": False}
         _, history, _ = OllamaChatCompletion().chat(
             client=ollama_host,
             model=_CHAT_MODEL,
             prompt="My name is Alice. Remember it.",
             history=[],
-        )
+            options=no_think,
+        )["result"]
         response, updated, _ = OllamaChatCompletion().chat(
             client=ollama_host,
             model=_CHAT_MODEL,
             prompt="What is my name?",
             history=history,
-        )
+            options=no_think,
+        )["result"]
         assert "Alice" in response
         assert len(updated) == 4
 
@@ -551,11 +615,11 @@ class TestUS4ChatCompletion:
         """History list grows by 2 entries per turn."""
         _, h1, _ = OllamaChatCompletion().chat(
             client=ollama_host, model=_CHAT_MODEL, prompt="Turn 1", history=[]
-        )
+        )["result"]
         assert len(h1) == 2
         _, h2, _ = OllamaChatCompletion().chat(
             client=ollama_host, model=_CHAT_MODEL, prompt="Turn 2", history=h1
-        )
+        )["result"]
         assert len(h2) == 4
 
 
@@ -630,8 +694,8 @@ class TestUS5ComposableOptions:
             history=[],
             options=opts2,
         )
-        r1, _, _model = OllamaChatCompletion().chat(**kwargs)
-        r2, _, _model = OllamaChatCompletion().chat(**kwargs)
+        r1, _, _model = OllamaChatCompletion().chat(**kwargs)["result"]
+        r2, _, _model = OllamaChatCompletion().chat(**kwargs)["result"]
         assert r1 == r2
 
 

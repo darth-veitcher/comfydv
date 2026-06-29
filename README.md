@@ -15,7 +15,7 @@ A collection of workflow efficiency and quality-of-life nodes built out of neces
 | **Ollama Model Selector** | Fetches the live model list from Ollama and presents it as a dropdown. Outputs the selected model name. |
 | **Ollama Load Model** | Loads a model into Ollama's memory using `/api/generate` with `keep_alive=-1`. |
 | **Ollama Unload Model** | Evicts a model from Ollama's memory using `/api/generate` with `keep_alive=0`. |
-| **Ollama Chat Completion** | Sends a prompt (and optional conversation history) to Ollama `/api/chat` and returns the response text plus the updated history. |
+| **Ollama Chat Completion** | Sends a prompt (and optional conversation history) to Ollama `/api/chat`. Response and history are shown inline in the node body and available as output sockets. |
 | **Ollama Option — \*** | Seven composable option nodes (Temperature, Seed, Max Tokens, Top P, Top K, Repeat Penalty, Extra Body) that merge into an `OLLAMA_OPTIONS` dict wired into Chat Completion. |
 | **Ollama Debug History** | Serialises an `OLLAMA_HISTORY` list to a pretty-printed JSON string for inspection. |
 | **Ollama History Length** | Returns the number of messages in an `OLLAMA_HISTORY` list as an integer. |
@@ -117,15 +117,15 @@ On memory-constrained machines and single-GPU setups, explicitly loading and unl
 
 The correct chain is **Load → Chat → Unload**, enforced through data dependencies:
 
-1. Wire `OllamaLoadModel.model_name` → `OllamaChatCompletion.model_name` (optional input). This guarantees Load runs before Chat and overrides the Chat dropdown with the same model.
-2. Wire `OllamaChatCompletion.model_name` → `OllamaUnloadModel.model`. This guarantees Unload runs after Chat.
+1. Wire `OllamaLoadModel.model_name` → `OllamaChatCompletion.model`. This creates the data dependency that guarantees Load runs before Chat and passes the model name into the Chat node's plain-string `model` input.
+2. Wire `OllamaChatCompletion.model_name` → `OllamaUnloadModel.model`. This guarantees Unload runs after Chat completes.
 3. Optionally wire `OllamaChatCompletion.response` → `OllamaUnloadModel.passthrough` — Unload returns the response unchanged so the rest of your workflow can still consume it.
 
 ### Minimal chat workflow
 
 1. **Ollama Client** → set host (default `http://localhost:11434`)
-2. **Ollama Model Selector** → pick a model from the live dropdown
-3. **Ollama Chat Completion** → wire client + model + prompt → response string
+2. **Ollama Model Selector** → pick a model from the live dropdown (or type/wire a model name directly into Chat Completion's `model` input)
+3. **Ollama Chat Completion** → wire client + model + prompt; the response appears inline in the node body and is also available as an output socket
 
 ![Ollama Chat Completion](docs/assets/ollama_chat.png)
 

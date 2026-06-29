@@ -11,6 +11,7 @@ ADR-005: OllamaClient node is the single source of the host URL.
 import asyncio
 import json
 import logging
+import os
 import sys
 
 logger = logging.getLogger(__name__)
@@ -82,10 +83,36 @@ async def _post_json(url: str, payload: dict, *, timeout: float = 120.0) -> dict
         raise RuntimeError(f"Cannot reach Ollama at {url}: {exc}") from exc
 
 
-# Static placeholder — avoids a network call at import time (which always fails
-# in CI and slows cold-start). The JS refresh button calls /dv/ollama/models
-# at runtime to populate the live list.
-_DEFAULT_MODELS: list[str] = ["(⟳ click Refresh models)"]
+def _load_default_models() -> list[str]:
+    """Fetch the installed model list at server start-up.
+
+    Tries OLLAMA_HOST env var first (set in docker-compose for host.docker.internal),
+    then falls back to localhost.  Returns a one-element placeholder list only when
+    Ollama is genuinely unreachable so that COMBO validation doesn't reject saved
+    workflow values.
+    """
+    candidates = []
+    env_host = os.environ.get("OLLAMA_HOST", "").strip()
+    if env_host:
+        candidates.append(env_host)
+    candidates.append("http://host.docker.internal:11434")
+    candidates.append("http://localhost:11434")
+
+    for host in candidates:
+        models = _run_async(_fetch_models(host))
+        if models:
+            logger.info("Ollama models loaded from %s: %s", host, models)
+            return models
+
+    logger.warning(
+        "Could not reach Ollama at any candidate host %s — "
+        "model dropdowns will be empty until a Refresh is clicked.",
+        candidates,
+    )
+    return ["(start Ollama — click ⟳ Refresh)"]
+
+
+_DEFAULT_MODELS: list[str] = _load_default_models()
 
 
 # ---------------------------------------------------------------------------
@@ -235,22 +262,35 @@ class OllamaUnloadModel:
 # ---------------------------------------------------------------------------
 
 
+def _history_preview(messages: list[dict]) -> str:
+    """Compact multi-turn summary shown below the response in the node body."""
+    lines = []
+    for m in messages[-6:]:
+        prefix = "▶" if m["role"] == "user" else "·"
+        snippet = m["content"][:100]
+        if len(m["content"]) > 100:
+            snippet += "…"
+        lines.append(f"{prefix} {snippet}")
+    return "\n".join(lines)
+
+
 class OllamaChatCompletion:
+    OUTPUT_NODE = True
+
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
                 "client": ("OLLAMA_CLIENT",),
-                "model": (_DEFAULT_MODELS, {}),
+                # Plain STRING so it can receive a wired value from OllamaLoadModel
+                # (or OllamaModelSelector) without needing a separate model_name socket.
+                "model": ("STRING", {"default": ""}),
                 "prompt": ("STRING", {"multiline": True, "default": ""}),
             },
             "optional": {
                 "system": ("STRING", {"multiline": True, "default": ""}),
                 "history": ("OLLAMA_HISTORY",),
                 "options": ("OLLAMA_OPTIONS",),
-                # Wire OllamaLoadModel.model_name here to guarantee load runs
-                # before chat and to override the dropdown with the wired value.
-                "model_name": ("STRING", {"forceInput": True}),
                 "timeout_secs": ("INT", {"default": 300, "min": 30, "max": 3600}),
             },
         }
@@ -268,12 +308,11 @@ class OllamaChatCompletion:
         system="",
         history=None,
         options=None,
-        model_name=None,
         timeout_secs=300,
     ):
-        effective_model = (
-            model_name.strip() if model_name and model_name.strip() else model
-        )
+        effective_model = model.strip()
+        if not effective_model:
+            raise ValueError("model cannot be empty — type a model name or wire one in")
         if history is None:
             history = []
         messages = list(history)
@@ -294,7 +333,16 @@ class OllamaChatCompletion:
         updated = list(history)
         updated.append({"role": "user", "content": prompt})
         updated.append({"role": "assistant", "content": response_text})
-        return (response_text, updated, effective_model)
+        n = len(updated)
+        ui_text = (
+            f"{response_text}\n\n── History: {n} message(s) ──\n{_history_preview(updated)}"
+            if n > 2
+            else response_text
+        )
+        return {
+            "ui": {"text": [ui_text]},
+            "result": (response_text, updated, effective_model),
+        }
 
 
 # ---------------------------------------------------------------------------

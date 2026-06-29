@@ -1,24 +1,33 @@
 /**
  * ollama.js — ComfyUI frontend extension for comfydv Ollama nodes.
  *
- * Populates model COMBO widgets on OllamaModelSelector, OllamaLoadModel, and
- * OllamaChatCompletion from a live call to GET /dv/ollama/models?host=<url>.
+ * Populates the model widget on Ollama nodes from a live call to
+ * GET /dv/ollama/models?host=<url>.
+ *
+ * OllamaModelSelector and OllamaLoadModel use a COMBO widget (dropdown).
+ * OllamaChatCompletion uses a plain STRING widget (accepts wired values).
+ * The Refresh button works the same way for both: it fetches the live list
+ * and sets the widget value / updates COMBO options as appropriate.
  */
 
 import { app } from "../../scripts/app.js";
 
-const OLLAMA_COMBO_NODES = new Set([
-    "OllamaModelSelector",
-    "OllamaLoadModel",
-    "OllamaChatCompletion",
-]);
+/** Nodes whose model widget is a COMBO dropdown. */
+const OLLAMA_COMBO_NODES = new Set(["OllamaModelSelector", "OllamaLoadModel"]);
+
+/** Nodes whose model widget is a plain STRING (accepts wired input). */
+const OLLAMA_STRING_MODEL_NODES = new Set(["OllamaChatCompletion"]);
+
+const OLLAMA_ALL_NODES = new Set([...OLLAMA_COMBO_NODES, ...OLLAMA_STRING_MODEL_NODES]);
 
 /**
- * Fetch model list from the backend and repopulate the COMBO widget.
- * @param {LGraphNode} node
- * @param {string} host - Ollama host URL, e.g. "http://localhost:11434"
+ * Fetch model list and update the node's model widget.
+ * Works for both COMBO and STRING widgets:
+ *   - COMBO: updates options.values + preserves selection if model still exists.
+ *   - STRING: sets the value to the first model; keeps existing value if it
+ *             still appears in the live list (user may have typed a valid name).
  */
-async function refreshModelDropdown(node, host) {
+async function refreshModelWidget(node, host) {
     try {
         const resp = await fetch(`/dv/ollama/models?host=${encodeURIComponent(host)}`);
         if (!resp.ok) return;
@@ -29,12 +38,22 @@ async function refreshModelDropdown(node, host) {
         const modelWidget = node.widgets?.find(w => w.name === "model");
         if (!modelWidget) return;
 
-        const current = modelWidget.value;
-        modelWidget.options.values = models;
-        modelWidget.value = models.includes(current) ? current : models[0];
+        const current = (modelWidget.value ?? "").trim();
+
+        if (Array.isArray(modelWidget.options?.values)) {
+            // COMBO widget
+            modelWidget.options.values = models;
+            modelWidget.value = models.includes(current) ? current : models[0];
+        } else {
+            // STRING widget — keep current value if it is a known model
+            if (!current || !models.includes(current)) {
+                modelWidget.value = models[0];
+            }
+        }
+
         node.setDirtyCanvas(true, false);
     } catch (_) {
-        // Ollama unreachable — leave COMBO with server-side defaults
+        // Ollama unreachable — leave widget unchanged
     }
 }
 
@@ -43,8 +62,7 @@ async function refreshModelDropdown(node, host) {
  *
  * First checks the node's own widgets (OllamaClient has a "host" widget).
  * Otherwise traverses graph links to find a connected OllamaClient node and
- * reads its "host" widget — this is the common case for downstream nodes
- * (ModelSelector, LoadModel, ChatCompletion) that receive the client socket.
+ * reads its "host" widget — this is the common case for downstream nodes.
  */
 function getHostFromNode(node) {
     const ownHostWidget = node.widgets?.find(w => w.name === "host");
@@ -68,21 +86,21 @@ app.registerExtension({
     name: "comfydv.ollama",
 
     async beforeRegisterNodeDef(nodeType, nodeData) {
-        if (!OLLAMA_COMBO_NODES.has(nodeData.name)) return;
+        if (!OLLAMA_ALL_NODES.has(nodeData.name)) return;
 
         const onNodeCreated = nodeType.prototype.onNodeCreated;
         nodeType.prototype.onNodeCreated = function () {
             const result = onNodeCreated?.apply(this, arguments);
 
-            // Add a refresh button below the model widget
+            // Add a Refresh button below the model widget
             this.addWidget("button", "⟳ Refresh models", null, () => {
                 const host = getHostFromNode(this);
-                refreshModelDropdown(this, host);
+                refreshModelWidget(this, host);
             });
 
-            // Initial population
+            // Initial population on node creation
             const host = getHostFromNode(this);
-            refreshModelDropdown(this, host);
+            refreshModelWidget(this, host);
 
             return result;
         };
