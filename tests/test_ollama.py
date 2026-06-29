@@ -295,7 +295,9 @@ class TestUS3ModelLifecycle:
 
         monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
 
-        OllamaLoadModel().load_model(client="http://localhost:11434", model="test-model")
+        OllamaLoadModel().load_model(
+            client="http://localhost:11434", model="test-model"
+        )
 
         assert captured.get("url", "").endswith("/api/generate"), (
             f"Expected URL ending in /api/generate but got: {captured.get('url')}"
@@ -335,7 +337,9 @@ class TestUS3ModelLifecycle:
 
         monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
 
-        OllamaLoadModel().load_model(client="http://localhost:11434", model="test-model")
+        OllamaLoadModel().load_model(
+            client="http://localhost:11434", model="test-model"
+        )
 
         payload = captured.get("payload", {})
         assert payload.get("keep_alive") == -1, (

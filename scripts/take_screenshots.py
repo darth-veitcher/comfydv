@@ -29,16 +29,18 @@ _STORAGE_STATE = {
             "localStorage": [
                 {
                     "name": "workflow",
-                    "value": json.dumps({
-                        "last_node_id": 0,
-                        "last_link_id": 0,
-                        "nodes": [],
-                        "links": [],
-                        "groups": [],
-                        "config": {},
-                        "extra": {},
-                        "version": 0.4,
-                    }),
+                    "value": json.dumps(
+                        {
+                            "last_node_id": 0,
+                            "last_link_id": 0,
+                            "nodes": [],
+                            "links": [],
+                            "groups": [],
+                            "config": {},
+                            "extra": {},
+                            "version": 0.4,
+                        }
+                    ),
                 },
                 {"name": "Comfy.OpenWorkflowsPaths", "value": "[]"},
                 {"name": "Comfy.ActiveWorkflowIndex", "value": "0"},
@@ -609,7 +611,9 @@ async def main() -> int:
 
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(headless=True)
-        context = await browser.new_context(viewport=VIEWPORT, storage_state=_STORAGE_STATE)
+        context = await browser.new_context(
+            viewport=VIEWPORT, storage_state=_STORAGE_STATE
+        )
         page = await context.new_page()
 
         print(f"Opening {COMFYUI_URL} …")
