@@ -451,10 +451,12 @@ class TestUS4ChatCompletion:
 
     def test_chat_returns_ui_result_dict(self, monkeypatch):
         """chat() must return {'ui': ..., 'result': ...} not a bare tuple."""
+
         async def fake_post(url, payload, *, timeout=120.0):
             return {"message": {"content": "hello"}}
 
         import comfydv.ollama as ollama_mod
+
         monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
 
         ret = OllamaChatCompletion().chat(client="http://x", model="m", prompt="hi")
@@ -464,10 +466,12 @@ class TestUS4ChatCompletion:
 
     def test_chat_ui_contains_response_text(self, monkeypatch):
         """Response text must appear in ui['text'] for the inline display."""
+
         async def fake_post(url, payload, *, timeout=120.0):
             return {"message": {"content": "hello world"}}
 
         import comfydv.ollama as ollama_mod
+
         monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
 
         ret = OllamaChatCompletion().chat(client="http://x", model="m", prompt="hi")
@@ -475,10 +479,12 @@ class TestUS4ChatCompletion:
 
     def test_chat_result_is_3_tuple(self, monkeypatch):
         """result key must be the 3-tuple (response, history, model_name)."""
+
         async def fake_post(url, payload, *, timeout=120.0):
             return {"message": {"content": "hello"}}
 
         import comfydv.ollama as ollama_mod
+
         monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
 
         ret = OllamaChatCompletion().chat(client="http://x", model="m", prompt="hi")

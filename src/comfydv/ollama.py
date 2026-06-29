@@ -235,7 +235,21 @@ class OllamaUnloadModel:
 # ---------------------------------------------------------------------------
 
 
+def _history_preview(messages: list[dict]) -> str:
+    """Compact multi-turn summary shown below the response in the node body."""
+    lines = []
+    for m in messages[-6:]:
+        prefix = "▶" if m["role"] == "user" else "·"
+        snippet = m["content"][:100]
+        if len(m["content"]) > 100:
+            snippet += "…"
+        lines.append(f"{prefix} {snippet}")
+    return "\n".join(lines)
+
+
 class OllamaChatCompletion:
+    OUTPUT_NODE = True
+
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -294,7 +308,16 @@ class OllamaChatCompletion:
         updated = list(history)
         updated.append({"role": "user", "content": prompt})
         updated.append({"role": "assistant", "content": response_text})
-        return (response_text, updated, effective_model)
+        n = len(updated)
+        ui_text = (
+            f"{response_text}\n\n── History: {n} message(s) ──\n{_history_preview(updated)}"
+            if n > 2
+            else response_text
+        )
+        return {
+            "ui": {"text": [ui_text]},
+            "result": (response_text, updated, effective_model),
+        }
 
 
 # ---------------------------------------------------------------------------
