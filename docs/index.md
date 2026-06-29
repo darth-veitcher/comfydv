@@ -93,6 +93,14 @@ Configure the server address once; all downstream Ollama nodes inherit it automa
 
 ![Ollama Client](assets/ollama_client.png)
 
+### Model lifecycle (load and unload)
+
+On memory-constrained machines and single-GPU setups, explicitly loading and unloading the model before and after inference is critical. **Ollama Load Model** pins the model into VRAM (`keep_alive=-1`); **Ollama Unload Model** evicts it immediately (`keep_alive=0`), freeing memory for image generation or other models.
+
+![Ollama Load / Unload](assets/ollama_lifecycle.png)
+
+Wire the same **Ollama Client** output into both nodes. Place **Load Model** at the start of your workflow and **Unload Model** at the end — after Chat Completion has finished — so VRAM is only occupied during inference.
+
 ### Minimal chat workflow
 
 1. **Ollama Client** → set host (default `http://localhost:11434`)

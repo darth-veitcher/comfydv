@@ -447,6 +447,78 @@ async def scene_ollama_workflow(page: Page, out: Path) -> None:
     await _capture(page, out, info["pos"], info["size"], scale=1.0)
 
 
+async def scene_ollama_lifecycle(page: Page, out: Path) -> None:
+    """OllamaLoadModel and OllamaUnloadModel — showing the load/unload pair."""
+    await _clear(page)
+
+    info = await page.evaluate(
+        """
+        async () => {
+            const graph = window.app.graph;
+
+            // OllamaClient — top-left
+            const client = LiteGraph.createNode("OllamaClient");
+            client.pos = [40, 40];
+            graph.add(client);
+            const hostWidget = client.widgets && client.widgets.find(w => w.name === "host");
+            if (hostWidget) hostWidget.value = "http://localhost:11434";
+
+            // OllamaLoadModel — middle
+            const load = LiteGraph.createNode("OllamaLoadModel");
+            load.pos = [320, 40];
+            graph.add(load);
+
+            // OllamaUnloadModel — right
+            const unload = LiteGraph.createNode("OllamaUnloadModel");
+            unload.pos = [320, 200];
+            graph.add(unload);
+
+            // Populate model dropdowns from live Ollama
+            const modelWidgets = [
+                load.widgets && load.widgets.find(w => w.name === "model"),
+                unload.widgets && unload.widgets.find(w => w.name === "model"),
+            ];
+            try {
+                const resp = await fetch("/dv/ollama/models?host=http://host.docker.internal:11434");
+                if (resp.ok) {
+                    const data = await resp.json();
+                    const models = data.models || [];
+                    if (models.length) {
+                        for (const w of modelWidgets) {
+                            if (w) {
+                                w.options = w.options || {};
+                                w.options.values = models;
+                                w.value = models[0];
+                            }
+                        }
+                    }
+                }
+            } catch(e) {}
+
+            // Wire client → load and client → unload
+            client.connect(0, load, 0);
+            client.connect(0, unload, 0);
+
+            await new Promise(r => setTimeout(r, 800));
+            window.app.canvas.setDirty(true, true);
+            window.app.canvas.draw(true, true);
+
+            const nodes = [client, load, unload];
+            const minX = Math.min(...nodes.map(n => n.pos[0])) - 20;
+            const minY = Math.min(...nodes.map(n => n.pos[1])) - 20;
+            const maxX = Math.max(...nodes.map(n => n.pos[0] + n.size[0])) + 20;
+            const maxY = Math.max(...nodes.map(n => n.pos[1] + n.size[1])) + 20;
+            return { pos: [minX, minY], size: [maxX - minX, maxY - minY] };
+        }
+        """
+    )
+
+    await asyncio.sleep(1.5)
+    await _redraw(page)
+    await _frame_node(page, info["pos"], info["size"], scale=1.2)
+    await _capture(page, out, info["pos"], info["size"], scale=1.2)
+
+
 async def scene_ollama_options(page: Page, out: Path) -> None:
     """OllamaOption nodes — Temperature, Seed, MaxTokens in a vertical chain."""
     await _clear(page)
@@ -509,6 +581,7 @@ SCENES = [
     ("ollama_chat.png", scene_ollama_chat),
     ("ollama_workflow.png", scene_ollama_workflow),
     ("ollama_options.png", scene_ollama_options),
+    ("ollama_lifecycle.png", scene_ollama_lifecycle),
 ]
 
 
