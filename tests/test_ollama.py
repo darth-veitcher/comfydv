@@ -445,6 +445,50 @@ class TestUS4ChatCompletion:
             "model_name",
         )
 
+    def test_chat_is_output_node(self):
+        """OllamaChatCompletion must have OUTPUT_NODE=True for inline display."""
+        assert getattr(OllamaChatCompletion, "OUTPUT_NODE", False) is True
+
+    def test_chat_returns_ui_result_dict(self, monkeypatch):
+        """chat() must return {'ui': ..., 'result': ...} not a bare tuple."""
+        async def fake_post(url, payload, *, timeout=120.0):
+            return {"message": {"content": "hello"}}
+
+        import comfydv.ollama as ollama_mod
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        ret = OllamaChatCompletion().chat(client="http://x", model="m", prompt="hi")
+        assert isinstance(ret, dict), f"Expected dict, got {type(ret)}"
+        assert "ui" in ret, "Missing 'ui' key"
+        assert "result" in ret, "Missing 'result' key"
+
+    def test_chat_ui_contains_response_text(self, monkeypatch):
+        """Response text must appear in ui['text'] for the inline display."""
+        async def fake_post(url, payload, *, timeout=120.0):
+            return {"message": {"content": "hello world"}}
+
+        import comfydv.ollama as ollama_mod
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        ret = OllamaChatCompletion().chat(client="http://x", model="m", prompt="hi")
+        assert "hello world" in ret["ui"]["text"][0]
+
+    def test_chat_result_is_3_tuple(self, monkeypatch):
+        """result key must be the 3-tuple (response, history, model_name)."""
+        async def fake_post(url, payload, *, timeout=120.0):
+            return {"message": {"content": "hello"}}
+
+        import comfydv.ollama as ollama_mod
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        ret = OllamaChatCompletion().chat(client="http://x", model="m", prompt="hi")
+        assert isinstance(ret["result"], tuple)
+        assert len(ret["result"]) == 3
+        response, history, model_name = ret["result"]
+        assert response == "hello"
+        assert isinstance(history, list)
+        assert model_name == "m"
+
     def test_wired_model_name_overrides_combo(self, monkeypatch):
         """model_name kwarg takes precedence over the COMBO widget value."""
         captured = {}
@@ -462,7 +506,7 @@ class TestUS4ChatCompletion:
             model="dropdown-value",
             prompt="hi",
             model_name="wired-value",
-        )
+        )["result"]
         assert effective == "wired-value"
         assert captured.get("model") == "wired-value"
 
@@ -520,7 +564,7 @@ class TestUS4ChatCompletion:
             model=_CHAT_MODEL,
             prompt="Say exactly the word: pong",
             history=[],
-        )
+        )["result"]
         assert isinstance(response, str)
         assert len(response) > 0
         assert len(updated_history) == 2
@@ -536,13 +580,13 @@ class TestUS4ChatCompletion:
             model=_CHAT_MODEL,
             prompt="My name is Alice. Remember it.",
             history=[],
-        )
+        )["result"]
         response, updated, _ = OllamaChatCompletion().chat(
             client=ollama_host,
             model=_CHAT_MODEL,
             prompt="What is my name?",
             history=history,
-        )
+        )["result"]
         assert "Alice" in response
         assert len(updated) == 4
 
@@ -551,11 +595,11 @@ class TestUS4ChatCompletion:
         """History list grows by 2 entries per turn."""
         _, h1, _ = OllamaChatCompletion().chat(
             client=ollama_host, model=_CHAT_MODEL, prompt="Turn 1", history=[]
-        )
+        )["result"]
         assert len(h1) == 2
         _, h2, _ = OllamaChatCompletion().chat(
             client=ollama_host, model=_CHAT_MODEL, prompt="Turn 2", history=h1
-        )
+        )["result"]
         assert len(h2) == 4
 
 
@@ -630,8 +674,8 @@ class TestUS5ComposableOptions:
             history=[],
             options=opts2,
         )
-        r1, _, _model = OllamaChatCompletion().chat(**kwargs)
-        r2, _, _model = OllamaChatCompletion().chat(**kwargs)
+        r1, _, _model = OllamaChatCompletion().chat(**kwargs)["result"]
+        r2, _, _model = OllamaChatCompletion().chat(**kwargs)["result"]
         assert r1 == r2
 
 
