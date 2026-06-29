@@ -15,6 +15,7 @@ BDD coverage:
   features/us6_history_inspection.feature
 """
 
+import asyncio
 import json
 
 import pytest
@@ -36,8 +37,160 @@ from comfydv.ollama import (
     OllamaOptionTopP,
     OllamaUnloadModel,
     _fetch_models,
+    _post_json,
     _run_async,
 )
+
+# ---------------------------------------------------------------------------
+# Infrastructure tests (Issues 1–3: event loop safety, HTTP errors, timeout)
+# ---------------------------------------------------------------------------
+
+
+class TestInfrastructure:
+    # ---- Issue 1: _run_async event loop safety --------------------------------
+
+    def test_run_async_works_from_running_loop(self):
+        """Issue 1: _run_async must work when called from inside a running event loop.
+
+        ComfyUI drives nodes inside its own asyncio event loop.  Calling
+        _run_async (which currently spawns a new loop) from within that context
+        raises "Cannot run the event loop while another loop is running".
+        """
+
+        async def _simple():
+            return 42
+
+        async def _caller():
+            # Simulates a synchronous ComfyUI node method being invoked from
+            # within the server's async event loop.
+            return _run_async(_simple())
+
+        result = asyncio.run(_caller())
+        assert result == 42
+
+    # ---- Issue 2: _post_json HTTP error checking ------------------------------
+
+    def test_post_json_raises_on_http_4xx(self, monkeypatch):
+        """Issue 2: _post_json must raise RuntimeError on 4xx responses.
+
+        Currently it silently returns the response body as a dict.
+        """
+        import aiohttp
+
+        class FakeResponse:
+            status = 422
+
+            async def text(self):
+                return "Unprocessable"
+
+            async def json(self):
+                return {"error": "Unprocessable"}
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+        class FakeSession:
+            def post(self, *args, **kwargs):
+                return FakeResponse()
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+        monkeypatch.setattr(aiohttp, "ClientSession", lambda: FakeSession())
+
+        with pytest.raises(RuntimeError, match="HTTP 422"):
+            _run_async(_post_json("http://localhost/test", {}))
+
+    def test_post_json_raises_on_http_5xx(self, monkeypatch):
+        """Issue 2: _post_json must raise RuntimeError on 5xx responses.
+
+        Currently it silently returns the response body as a dict.
+        """
+        import aiohttp
+
+        class FakeResponse:
+            status = 500
+
+            async def text(self):
+                return "Internal Server Error"
+
+            async def json(self):
+                return {"error": "Internal Server Error"}
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+        class FakeSession:
+            def post(self, *args, **kwargs):
+                return FakeResponse()
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+        monkeypatch.setattr(aiohttp, "ClientSession", lambda: FakeSession())
+
+        with pytest.raises(RuntimeError, match="HTTP 500"):
+            _run_async(_post_json("http://localhost/test", {}))
+
+    # ---- Issue 3: _post_json timeout parameter --------------------------------
+
+    def test_post_json_timeout_forwarded(self, monkeypatch):
+        """Issue 3: _post_json must accept a timeout kwarg and forward it to aiohttp.
+
+        Currently _post_json has no timeout parameter, so the call raises TypeError.
+        """
+        import aiohttp
+
+        captured = {}
+
+        class FakeResponse:
+            status = 200
+
+            async def text(self):
+                return "{}"
+
+            async def json(self):
+                return {}
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+        class FakeSession:
+            def post(self, url, *, json=None, timeout=None):
+                captured["timeout"] = timeout
+                return FakeResponse()
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+        monkeypatch.setattr(aiohttp, "ClientSession", lambda: FakeSession())
+
+        _run_async(_post_json("http://localhost/test", {}, timeout=42.0))
+        assert captured.get("timeout") is not None, (
+            "_post_json did not forward a timeout object to aiohttp"
+        )
+        assert captured["timeout"].total == 42.0, (
+            f"Expected ClientTimeout(total=42.0) but got total={captured['timeout'].total}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # US1 — Ollama Connection  (us1_ollama_connection.feature)
@@ -128,6 +281,94 @@ class TestUS3ModelLifecycle:
         with pytest.raises(ValueError, match="cannot be empty"):
             OllamaUnloadModel().unload_model(client="http://localhost:11434", model="")
 
+    # ---- Issue 4: Load/Unload API endpoint ------------------------------------
+
+    def test_load_uses_api_generate_not_api_show(self, monkeypatch):
+        """Issue 4: load_model should POST to /api/generate, not /api/show."""
+        captured = {}
+
+        async def fake_post(url, payload, *, timeout=120.0):
+            captured["url"] = url
+            return {}
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        OllamaLoadModel().load_model(client="http://localhost:11434", model="test-model")
+
+        assert captured.get("url", "").endswith("/api/generate"), (
+            f"Expected URL ending in /api/generate but got: {captured.get('url')}"
+        )
+
+    def test_unload_uses_api_generate_not_api_show(self, monkeypatch):
+        """Issue 4: unload_model should POST to /api/generate, not /api/show."""
+        captured = {}
+
+        async def fake_post(url, payload, *, timeout=120.0):
+            captured["url"] = url
+            return {}
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        OllamaUnloadModel().unload_model(
+            client="http://localhost:11434", model="test-model"
+        )
+
+        assert captured.get("url", "").endswith("/api/generate"), (
+            f"Expected URL ending in /api/generate but got: {captured.get('url')}"
+        )
+
+    # ---- Issue 5: keep_alive integer type -------------------------------------
+
+    def test_load_keep_alive_is_integer_negative_one(self, monkeypatch):
+        """Issue 5: load_model must send keep_alive as integer -1, not string '-1'."""
+        captured = {}
+
+        async def fake_post(url, payload, *, timeout=120.0):
+            captured["payload"] = payload
+            return {}
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        OllamaLoadModel().load_model(client="http://localhost:11434", model="test-model")
+
+        payload = captured.get("payload", {})
+        assert payload.get("keep_alive") == -1, (
+            f"Expected keep_alive=-1 (int) but got {payload.get('keep_alive')!r}"
+        )
+        assert isinstance(payload.get("keep_alive"), int), (
+            f"keep_alive must be int, got {type(payload.get('keep_alive'))}"
+        )
+
+    def test_unload_keep_alive_is_integer_zero(self, monkeypatch):
+        """Issue 5: unload_model must send keep_alive as integer 0."""
+        captured = {}
+
+        async def fake_post(url, payload, *, timeout=120.0):
+            captured["payload"] = payload
+            return {}
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        OllamaUnloadModel().unload_model(
+            client="http://localhost:11434", model="test-model"
+        )
+
+        payload = captured.get("payload", {})
+        assert payload.get("keep_alive") == 0, (
+            f"Expected keep_alive=0 (int) but got {payload.get('keep_alive')!r}"
+        )
+        assert isinstance(payload.get("keep_alive"), int), (
+            f"keep_alive must be int, got {type(payload.get('keep_alive'))}"
+        )
+
     @pytest.mark.integration
     def test_load_model_returns_name(self, ollama_host, skip_if_no_ollama):
         """Scenario: Load Model loads model into Ollama memory."""
@@ -204,7 +445,7 @@ class TestUS4ChatCompletion:
         """model_name kwarg takes precedence over the COMBO widget value."""
         captured = {}
 
-        async def fake_post(url, payload):
+        async def fake_post(url, payload, *, timeout=120.0):
             captured["model"] = payload.get("model")
             return {"message": {"content": "ok"}}
 
@@ -220,6 +461,50 @@ class TestUS4ChatCompletion:
         )
         assert effective == "wired-value"
         assert captured.get("model") == "wired-value"
+
+    # ---- Issue 6: Chat timeout widget -----------------------------------------
+
+    def test_chat_has_timeout_secs_input(self):
+        """Issue 6: OllamaChatCompletion must expose a timeout_secs input widget.
+
+        Currently INPUT_TYPES() does not include 'timeout_secs'.
+        """
+        input_types = OllamaChatCompletion.INPUT_TYPES()
+        all_inputs = {
+            **input_types.get("required", {}),
+            **input_types.get("optional", {}),
+        }
+        assert "timeout_secs" in all_inputs, (
+            "OllamaChatCompletion.INPUT_TYPES() must include 'timeout_secs' "
+            "(in required or optional)"
+        )
+
+    def test_chat_timeout_forwarded_to_http(self, monkeypatch):
+        """Issue 6: timeout_secs kwarg must be forwarded to _post_json's timeout param.
+
+        Currently the chat() method does not accept timeout_secs, so this raises
+        TypeError before reaching _post_json.
+        """
+        captured = {}
+
+        async def fake_post(url, payload, *, timeout=120.0):
+            captured["timeout"] = timeout
+            return {"message": {"content": "ok"}}
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        OllamaChatCompletion().chat(
+            client="http://x",
+            model="m",
+            prompt="p",
+            timeout_secs=600,
+        )
+
+        assert captured.get("timeout") == 600.0, (
+            f"Expected timeout forwarded as 600.0 but got {captured.get('timeout')!r}"
+        )
 
     @pytest.mark.integration
     def test_single_turn_returns_non_empty_response(
@@ -341,8 +626,8 @@ class TestUS5ComposableOptions:
             history=[],
             options=opts2,
         )
-        r1, _ = OllamaChatCompletion().chat(**kwargs)
-        r2, _ = OllamaChatCompletion().chat(**kwargs)
+        r1, _, _model = OllamaChatCompletion().chat(**kwargs)
+        r2, _, _model = OllamaChatCompletion().chat(**kwargs)
         assert r1 == r2
 
 
