@@ -9,6 +9,10 @@ services:
     # On macOS/Windows Docker Desktop: host.docker.internal is built-in.
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    environment:
+      # Tells comfydv where to reach Ollama on the host so model dropdowns are
+      # pre-populated at server start without needing a manual Refresh click.
+      - OLLAMA_HOST=http://host.docker.internal:11434
     command:
       - sh
       - -c

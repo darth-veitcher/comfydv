@@ -89,6 +89,25 @@ def skip_if_no_ollama(ollama_available):
         )
 
 
+@pytest.fixture(scope="session")
+def first_generative_model(ollama_host, ollama_available):
+    """Return the first model available from Ollama, skipping embedding-only models.
+
+    Used by lifecycle tests that call /api/generate — embedding models like
+    embeddinggemma reject that endpoint with HTTP 400.
+    """
+    if not ollama_available:
+        pytest.skip("Ollama not reachable at localhost:11434")
+    import asyncio
+
+    from comfydv.ollama import _fetch_models
+
+    models = asyncio.run(_fetch_models(ollama_host))
+    if not models:
+        pytest.skip("No models installed in Ollama")
+    return models[0]
+
+
 # ---------------------------------------------------------------------------
 # Existing ComfyUI node fixtures
 # ---------------------------------------------------------------------------

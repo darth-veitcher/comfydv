@@ -374,12 +374,14 @@ class TestUS3ModelLifecycle:
         )
 
     @pytest.mark.integration
-    def test_load_model_returns_name(self, ollama_host, skip_if_no_ollama):
+    def test_load_model_returns_name(
+        self, ollama_host, skip_if_no_ollama, first_generative_model
+    ):
         """Scenario: Load Model loads model into Ollama memory."""
         (result,) = OllamaLoadModel().load_model(
-            client=ollama_host, model="embeddinggemma:latest"
+            client=ollama_host, model=first_generative_model
         )
-        assert result == "embeddinggemma:latest"
+        assert result == first_generative_model
 
     def test_unload_returns_two_values(self):
         """OllamaUnloadModel returns (model_name, passthrough) tuple."""
@@ -396,15 +398,15 @@ class TestUS3ModelLifecycle:
 
     @pytest.mark.integration
     def test_unload_model_returns_name_and_passthrough(
-        self, ollama_host, skip_if_no_ollama
+        self, ollama_host, skip_if_no_ollama, first_generative_model
     ):
         """Scenario: Unload evicts model; passthrough flows through unchanged."""
         model_name, passthrough = OllamaUnloadModel().unload_model(
             client=ollama_host,
-            model="embeddinggemma:latest",
+            model=first_generative_model,
             passthrough="sentinel",
         )
-        assert model_name == "embeddinggemma:latest"
+        assert model_name == first_generative_model
         assert passthrough == "sentinel"
 
 
@@ -521,7 +523,6 @@ class TestUS4ChatCompletion:
         assert isinstance(history, list)
         assert model_name == "m"
 
-
     # ---- Issue 6: Chat timeout widget -----------------------------------------
 
     def test_chat_has_timeout_secs_input(self):
@@ -586,18 +587,25 @@ class TestUS4ChatCompletion:
 
     @pytest.mark.integration
     def test_multi_turn_receives_context(self, ollama_host, skip_if_no_ollama):
-        """Scenario: Multi-turn completion receives full conversation context."""
+        """Scenario: Multi-turn completion receives full conversation context.
+
+        Passes think=False to prevent Qwen3-family models from returning all
+        output as thinking tokens with an empty content field.
+        """
+        no_think = {"think": False}
         _, history, _ = OllamaChatCompletion().chat(
             client=ollama_host,
             model=_CHAT_MODEL,
             prompt="My name is Alice. Remember it.",
             history=[],
+            options=no_think,
         )["result"]
         response, updated, _ = OllamaChatCompletion().chat(
             client=ollama_host,
             model=_CHAT_MODEL,
             prompt="What is my name?",
             history=history,
+            options=no_think,
         )["result"]
         assert "Alice" in response
         assert len(updated) == 4
