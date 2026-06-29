@@ -9,6 +9,7 @@ Playwright Chromium must be installed: `uv run playwright install chromium`.
 """
 
 import asyncio
+import json
 import sys
 from pathlib import Path
 
@@ -17,6 +18,34 @@ from playwright.async_api import Page, async_playwright
 COMFYUI_URL = "http://localhost:8188"
 OUTPUT_DIR = Path(__file__).parent.parent / "docs" / "assets"
 VIEWPORT = {"width": 1400, "height": 860}
+
+# Pre-seed localStorage so ComfyUI loads the canvas directly instead of showing
+# the template browser (which appears in fresh sessions without a saved workflow).
+_STORAGE_STATE = {
+    "cookies": [],
+    "origins": [
+        {
+            "origin": COMFYUI_URL,
+            "localStorage": [
+                {
+                    "name": "workflow",
+                    "value": json.dumps({
+                        "last_node_id": 0,
+                        "last_link_id": 0,
+                        "nodes": [],
+                        "links": [],
+                        "groups": [],
+                        "config": {},
+                        "extra": {},
+                        "version": 0.4,
+                    }),
+                },
+                {"name": "Comfy.OpenWorkflowsPaths", "value": "[]"},
+                {"name": "Comfy.ActiveWorkflowIndex", "value": "0"},
+            ],
+        }
+    ],
+}
 
 # LiteGraph DragAndScale transform: screen = (virtual + offset) * scale
 # Place the node at virtual (60, 60) and set offset/scale so it fills the frame nicely.
@@ -261,9 +290,9 @@ async def scene_ollama_client(page: Page, out: Path) -> None:
             const node = LiteGraph.createNode("OllamaClient");
             node.pos = [60, 60];
             window.app.graph.add(node);
-            // Use host.docker.internal so the server-side fetch can reach host Ollama
+            // Show the default localhost URL that users actually configure
             const hostWidget = node.widgets && node.widgets.find(w => w.name === "host");
-            if (hostWidget) hostWidget.value = "http://host.docker.internal:11434";
+            if (hostWidget) hostWidget.value = "http://localhost:11434";
             window.app.canvas.setDirty(true, true);
             window.app.canvas.draw(true, true);
             return { pos: [node.pos[0], node.pos[1]], size: [node.size[0], node.size[1]] };
@@ -488,7 +517,7 @@ async def main() -> int:
 
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(headless=True)
-        context = await browser.new_context(viewport=VIEWPORT)
+        context = await browser.new_context(viewport=VIEWPORT, storage_state=_STORAGE_STATE)
         page = await context.new_page()
 
         print(f"Opening {COMFYUI_URL} …")
