@@ -358,30 +358,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#comfydv.circuit_breaker.CircuitBreaker" class="md-nav__link">
-    <span class="md-ellipsis">
-      CircuitBreaker
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="CircuitBreaker">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#comfydv.circuit_breaker.CircuitBreaker.INPUT_TYPES" class="md-nav__link">
-    <span class="md-ellipsis">
-      INPUT_TYPES
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -403,6 +379,28 @@
   
   <span class="md-ellipsis">
     format_string
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ollama/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ollama
     
   </span>
   
@@ -505,30 +503,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#comfydv.circuit_breaker.CircuitBreaker" class="md-nav__link">
-    <span class="md-ellipsis">
-      CircuitBreaker
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="CircuitBreaker">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#comfydv.circuit_breaker.CircuitBreaker.INPUT_TYPES" class="md-nav__link">
-    <span class="md-ellipsis">
-      INPUT_TYPES
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -572,237 +546,6 @@
 
 
 
-
-<div class="doc doc-object doc-class">
-
-
-
-<h2 id="comfydv.circuit_breaker.CircuitBreaker" class="doc doc-heading">
-            <code>CircuitBreaker</code>
-
-
-</h2>
-
-
-    <div class="doc doc-contents ">
-
-
-
-
-
-
-
-
-              <details class="quote">
-                <summary>Source code in <code>src/comfydv/circuit_breaker.py</code></summary>
-                <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">18</span>
-<span class="normal">19</span>
-<span class="normal">20</span>
-<span class="normal">21</span>
-<span class="normal">22</span>
-<span class="normal">23</span>
-<span class="normal">24</span>
-<span class="normal">25</span>
-<span class="normal">26</span>
-<span class="normal">27</span>
-<span class="normal">28</span>
-<span class="normal">29</span>
-<span class="normal">30</span>
-<span class="normal">31</span>
-<span class="normal">32</span>
-<span class="normal">33</span>
-<span class="normal">34</span>
-<span class="normal">35</span>
-<span class="normal">36</span>
-<span class="normal">37</span>
-<span class="normal">38</span>
-<span class="normal">39</span>
-<span class="normal">40</span>
-<span class="normal">41</span>
-<span class="normal">42</span>
-<span class="normal">43</span>
-<span class="normal">44</span>
-<span class="normal">45</span>
-<span class="normal">46</span>
-<span class="normal">47</span>
-<span class="normal">48</span>
-<span class="normal">49</span>
-<span class="normal">50</span>
-<span class="normal">51</span>
-<span class="normal">52</span>
-<span class="normal">53</span>
-<span class="normal">54</span>
-<span class="normal">55</span>
-<span class="normal">56</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">CircuitBreaker</span><span class="p">:</span>
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">pass</span>
-
-    <span class="nd">@classmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">INPUT_TYPES</span><span class="p">(</span><span class="n">s</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Return a dictionary which contains config for all input fields.</span>
-<span class="sd">        Some types (string): &quot;MODEL&quot;, &quot;VAE&quot;, &quot;CLIP&quot;, &quot;CONDITIONING&quot;, &quot;LATENT&quot;, &quot;IMAGE&quot;, &quot;INT&quot;, &quot;STRING&quot;, &quot;FLOAT&quot;.</span>
-<span class="sd">        Input types &quot;INT&quot;, &quot;STRING&quot; or &quot;FLOAT&quot; are special values for fields on the node.</span>
-<span class="sd">        The type can be a list for selection.</span>
-
-<span class="sd">        Returns: `dict`:</span>
-<span class="sd">            - Key input_fields_group (`string`): Can be either required, hidden or optional. A node class must have property `required`</span>
-<span class="sd">            - Value input_fields (`dict`): Contains input fields config:</span>
-<span class="sd">                * Key field_name (`string`): Name of a entry-point method&#39;s argument</span>
-<span class="sd">                * Value field_config (`tuple`):</span>
-<span class="sd">                    + First value is a string indicate the type of field or a list for selection.</span>
-<span class="sd">                    + Secound value is a config for type &quot;INT&quot;, &quot;STRING&quot; or &quot;FLOAT&quot;.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="p">{</span>
-            <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;trigger&quot;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;IMAGE&quot;</span><span class="p">,</span> <span class="p">{})},</span>
-            <span class="s2">&quot;optional&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;BOOLEAN&quot;</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;default&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">})},</span>
-        <span class="p">}</span>
-
-    <span class="n">RETURN_TYPES</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;IMAGE&quot;</span><span class="p">,)</span>
-    <span class="n">RETURN_NAMES</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;passthrough&quot;</span><span class="p">,)</span>
-
-    <span class="n">FUNCTION</span> <span class="o">=</span> <span class="s2">&quot;doit&quot;</span>
-
-    <span class="n">OUTPUT_NODE</span> <span class="o">=</span> <span class="kc">True</span>
-
-    <span class="n">CATEGORY</span> <span class="o">=</span> <span class="s2">&quot;dv/utils&quot;</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="nf">doit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">trigger</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;status&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;CircuitBreaker: interrupt triggered&quot;</span><span class="p">)</span>
-            <span class="k">raise</span> <span class="n">InterruptProcessingException</span><span class="p">()</span>
-        <span class="k">return</span> <span class="p">(</span><span class="n">trigger</span><span class="p">,)</span>
-</code></pre></div></td></tr></table></div>
-              </details>
-
-
-
-  <div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="comfydv.circuit_breaker.CircuitBreaker.INPUT_TYPES" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">INPUT_TYPES</span><span class="p">(</span><span class="n">s</span><span class="p">)</span></code>
-
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
-  </span>
-
-</h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Return a dictionary which contains config for all input fields.
-Some types (string): "MODEL", "VAE", "CLIP", "CONDITIONING", "LATENT", "IMAGE", "INT", "STRING", "FLOAT".
-Input types "INT", "STRING" or "FLOAT" are special values for fields on the node.
-The type can be a list for selection.</p>
-
-
-    <p><span class="doc-section-title">`dict`:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <ul>
-<li>Key input_fields_group (<code>string</code>): Can be either required, hidden or optional. A node class must have property <code>required</code></li>
-</ul>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <ul>
-<li>Value input_fields (<code>dict</code>): Contains input fields config:</li>
-<li>Key field_name (<code>string</code>): Name of a entry-point method's argument</li>
-<li>Value field_config (<code>tuple</code>):<ul>
-<li>First value is a string indicate the type of field or a list for selection.</li>
-<li>Secound value is a config for type "INT", "STRING" or "FLOAT".</li>
-</ul>
-</li>
-</ul>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-            <details class="quote">
-              <summary>Source code in <code>src/comfydv/circuit_breaker.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">22</span>
-<span class="normal">23</span>
-<span class="normal">24</span>
-<span class="normal">25</span>
-<span class="normal">26</span>
-<span class="normal">27</span>
-<span class="normal">28</span>
-<span class="normal">29</span>
-<span class="normal">30</span>
-<span class="normal">31</span>
-<span class="normal">32</span>
-<span class="normal">33</span>
-<span class="normal">34</span>
-<span class="normal">35</span>
-<span class="normal">36</span>
-<span class="normal">37</span>
-<span class="normal">38</span>
-<span class="normal">39</span>
-<span class="normal">40</span>
-<span class="normal">41</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">INPUT_TYPES</span><span class="p">(</span><span class="n">s</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Return a dictionary which contains config for all input fields.</span>
-<span class="sd">    Some types (string): &quot;MODEL&quot;, &quot;VAE&quot;, &quot;CLIP&quot;, &quot;CONDITIONING&quot;, &quot;LATENT&quot;, &quot;IMAGE&quot;, &quot;INT&quot;, &quot;STRING&quot;, &quot;FLOAT&quot;.</span>
-<span class="sd">    Input types &quot;INT&quot;, &quot;STRING&quot; or &quot;FLOAT&quot; are special values for fields on the node.</span>
-<span class="sd">    The type can be a list for selection.</span>
-
-<span class="sd">    Returns: `dict`:</span>
-<span class="sd">        - Key input_fields_group (`string`): Can be either required, hidden or optional. A node class must have property `required`</span>
-<span class="sd">        - Value input_fields (`dict`): Contains input fields config:</span>
-<span class="sd">            * Key field_name (`string`): Name of a entry-point method&#39;s argument</span>
-<span class="sd">            * Value field_config (`tuple`):</span>
-<span class="sd">                + First value is a string indicate the type of field or a list for selection.</span>
-<span class="sd">                + Secound value is a config for type &quot;INT&quot;, &quot;STRING&quot; or &quot;FLOAT&quot;.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="p">{</span>
-        <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;trigger&quot;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;IMAGE&quot;</span><span class="p">,</span> <span class="p">{})},</span>
-        <span class="s2">&quot;optional&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;BOOLEAN&quot;</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;default&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">})},</span>
-    <span class="p">}</span>
-</code></pre></div></td></tr></table></div>
-            </details>
-    </div>
-
-</div>
-
-
-
-  </div>
-
-    </div>
-
-</div>
 
 
 

@@ -9,8 +9,10 @@
       
       
       
-        <link rel="prev" href="../random_choice/">
+        <link rel="prev" href="../format_string/">
       
+      
+        <link rel="next" href="../random_choice/">
       
       
       <link rel="icon" href="../../../assets/images/favicon.png">
@@ -18,7 +20,7 @@
     
     
       
-        <title>utils - ComfyPPT</title>
+        <title>ollama - ComfyPPT</title>
       
     
     
@@ -70,7 +72,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#comfydv.utils" class="md-skip">
+        <a href="#comfydv.ollama" class="md-skip">
           Skip to content
         </a>
       
@@ -106,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              utils
+              ollama
             
           </span>
         </div>
@@ -345,10 +347,29 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../ollama/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    ollama
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -358,6 +379,51 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#comfydv.ollama" class="md-nav__link">
+    <span class="md-ellipsis">
+      ollama
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#comfydv.ollama.OllamaClientType" class="md-nav__link">
+    <span class="md-ellipsis">
+      OllamaClientType
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#comfydv.ollama.OllamaUnloadModel" class="md-nav__link">
+    <span class="md-ellipsis">
+      OllamaUnloadModel
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -389,29 +455,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  <span class="md-ellipsis">
-    utils
-    
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../utils/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -421,42 +468,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#comfydv.utils" class="md-nav__link">
-    <span class="md-ellipsis">
-      utils
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#comfydv.utils.AnyType" class="md-nav__link">
-    <span class="md-ellipsis">
-      AnyType
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -502,18 +513,27 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#comfydv.utils" class="md-nav__link">
+  <a href="#comfydv.ollama" class="md-nav__link">
     <span class="md-ellipsis">
-      utils
+      ollama
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#comfydv.utils.AnyType" class="md-nav__link">
+  <a href="#comfydv.ollama.OllamaClientType" class="md-nav__link">
     <span class="md-ellipsis">
-      AnyType
+      OllamaClientType
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#comfydv.ollama.OllamaUnloadModel" class="md-nav__link">
+    <span class="md-ellipsis">
+      OllamaUnloadModel
     </span>
   </a>
   
@@ -535,14 +555,20 @@
 
 
 
-  <h1>utils</h1>
+  <h1>ollama</h1>
 
 <div class="doc doc-object doc-module">
 
 
 
-<a id="comfydv.utils"></a>
+<a id="comfydv.ollama"></a>
     <div class="doc doc-contents first">
+
+        <p>Ollama model integration nodes for ComfyUI.</p>
+<p>14 nodes: client configuration, model discovery, load/unload, chat completion,
+composable inference options, and history utilities.</p>
+<p>ADR-004: aiohttp (already in ComfyUI dep tree) for all Ollama HTTP calls.
+ADR-005: OllamaClient node is the single source of the host URL.</p>
 
 
 
@@ -565,8 +591,8 @@
 
 
 
-<h2 id="comfydv.utils.AnyType" class="doc doc-heading">
-            <code>AnyType</code>
+<h2 id="comfydv.ollama.OllamaClientType" class="doc doc-heading">
+            <code>OllamaClientType</code>
 
 
 </h2>
@@ -577,7 +603,7 @@
               Bases: <code><span title="str">str</span></code></p>
 
 
-        <p>A special class that is always equal in not equal comparisons. Credit to pythongosssss and rgthree.</p>
+        <p>Typed string carrying the Ollama host URL through the node graph.</p>
 
 
 
@@ -586,16 +612,118 @@
 
 
               <details class="quote">
-                <summary>Source code in <code>src/comfydv/utils.py</code></summary>
-                <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1</span>
-<span class="normal">2</span>
-<span class="normal">3</span>
-<span class="normal">4</span>
-<span class="normal">5</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">AnyType</span><span class="p">(</span><span class="nb">str</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A special class that is always equal in not equal comparisons. Credit to pythongosssss and rgthree.&quot;&quot;&quot;</span>
+                <summary>Source code in <code>src/comfydv/ollama.py</code></summary>
+                <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">25</span>
+<span class="normal">26</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">OllamaClientType</span><span class="p">(</span><span class="nb">str</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Typed string carrying the Ollama host URL through the node graph.&quot;&quot;&quot;</span>
+</code></pre></div></td></tr></table></div>
+              </details>
 
-    <span class="k">def</span><span class="w"> </span><span class="fm">__ne__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">__value</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-        <span class="k">return</span> <span class="kc">False</span>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="comfydv.ollama.OllamaUnloadModel" class="doc doc-heading">
+            <code>OllamaUnloadModel</code>
+
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+
+        <p>Evict a model from VRAM and pass a value through unchanged.</p>
+<p>Wire <code>passthrough</code> from a downstream node (e.g. the <code>response</code> output
+of OllamaChatCompletion) so ComfyUI executes this node <em>after</em> that node
+completes.  The value is returned unchanged so the rest of the workflow can
+continue using it.</p>
+
+
+
+
+
+
+
+              <details class="quote">
+                <summary>Source code in <code>src/comfydv/ollama.py</code></summary>
+                <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">221</span>
+<span class="normal">222</span>
+<span class="normal">223</span>
+<span class="normal">224</span>
+<span class="normal">225</span>
+<span class="normal">226</span>
+<span class="normal">227</span>
+<span class="normal">228</span>
+<span class="normal">229</span>
+<span class="normal">230</span>
+<span class="normal">231</span>
+<span class="normal">232</span>
+<span class="normal">233</span>
+<span class="normal">234</span>
+<span class="normal">235</span>
+<span class="normal">236</span>
+<span class="normal">237</span>
+<span class="normal">238</span>
+<span class="normal">239</span>
+<span class="normal">240</span>
+<span class="normal">241</span>
+<span class="normal">242</span>
+<span class="normal">243</span>
+<span class="normal">244</span>
+<span class="normal">245</span>
+<span class="normal">246</span>
+<span class="normal">247</span>
+<span class="normal">248</span>
+<span class="normal">249</span>
+<span class="normal">250</span>
+<span class="normal">251</span>
+<span class="normal">252</span>
+<span class="normal">253</span>
+<span class="normal">254</span>
+<span class="normal">255</span>
+<span class="normal">256</span>
+<span class="normal">257</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">OllamaUnloadModel</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Evict a model from VRAM and pass a value through unchanged.</span>
+
+<span class="sd">    Wire ``passthrough`` from a downstream node (e.g. the ``response`` output</span>
+<span class="sd">    of OllamaChatCompletion) so ComfyUI executes this node *after* that node</span>
+<span class="sd">    completes.  The value is returned unchanged so the rest of the workflow can</span>
+<span class="sd">    continue using it.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">INPUT_TYPES</span><span class="p">(</span><span class="n">s</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">&quot;client&quot;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;OLLAMA_CLIENT&quot;</span><span class="p">,),</span>
+                <span class="s2">&quot;model&quot;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;STRING&quot;</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;forceInput&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">}),</span>
+            <span class="p">},</span>
+            <span class="s2">&quot;optional&quot;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">&quot;passthrough&quot;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;STRING&quot;</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;forceInput&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">}),</span>
+            <span class="p">},</span>
+        <span class="p">}</span>
+
+    <span class="n">RETURN_TYPES</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;STRING&quot;</span><span class="p">,</span> <span class="s2">&quot;STRING&quot;</span><span class="p">)</span>
+    <span class="n">RETURN_NAMES</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;model_name&quot;</span><span class="p">,</span> <span class="s2">&quot;passthrough&quot;</span><span class="p">)</span>
+    <span class="n">FUNCTION</span> <span class="o">=</span> <span class="s2">&quot;unload_model&quot;</span>
+    <span class="n">CATEGORY</span> <span class="o">=</span> <span class="s2">&quot;dv/ollama&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">unload_model</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">passthrough</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">model</span><span class="o">.</span><span class="n">strip</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;model name cannot be empty&quot;</span><span class="p">)</span>
+        <span class="n">_run_async</span><span class="p">(</span>
+            <span class="n">_post_json</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">client</span><span class="si">}</span><span class="s2">/api/generate&quot;</span><span class="p">,</span>
+                <span class="p">{</span><span class="s2">&quot;model&quot;</span><span class="p">:</span> <span class="n">model</span><span class="p">,</span> <span class="s2">&quot;keep_alive&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;stream&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">},</span>
+                <span class="n">timeout</span><span class="o">=</span><span class="mf">30.0</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">passthrough</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
               </details>
 

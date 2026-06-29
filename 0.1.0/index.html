@@ -306,6 +306,66 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#ollama" class="md-nav__link">
+    <span class="md-ellipsis">
+      Ollama
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Ollama">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ollama-client-node" class="md-nav__link">
+    <span class="md-ellipsis">
+      Ollama Client node
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#model-lifecycle-load-and-unload" class="md-nav__link">
+    <span class="md-ellipsis">
+      Model lifecycle (load and unload)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#minimal-chat-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      Minimal chat workflow
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#option-nodes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Option nodes
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multi-turn-conversations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Multi-turn conversations
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -428,6 +488,28 @@
   
   <span class="md-ellipsis">
     format_string
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="reference/comfydv/ollama/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ollama
     
   </span>
   
@@ -583,6 +665,66 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#ollama" class="md-nav__link">
+    <span class="md-ellipsis">
+      Ollama
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Ollama">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ollama-client-node" class="md-nav__link">
+    <span class="md-ellipsis">
+      Ollama Client node
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#model-lifecycle-load-and-unload" class="md-nav__link">
+    <span class="md-ellipsis">
+      Model lifecycle (load and unload)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#minimal-chat-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      Minimal chat workflow
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#option-nodes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Option nodes
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multi-turn-conversations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Multi-turn conversations
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -621,6 +763,38 @@
 <td><strong>Circuit Breaker</strong></td>
 <td>Halts the current ComfyUI queue run gracefully without crashing the server. Wire the <code>status</code> toggle to a boolean condition to skip the rest of the queue when a condition isn't met.</td>
 </tr>
+<tr>
+<td><strong>Ollama Client</strong></td>
+<td>Configures a connection to an Ollama server (default: <code>http://localhost:11434</code>). Threads the host URL through the graph as an <code>OLLAMA_CLIENT</code> socket.</td>
+</tr>
+<tr>
+<td><strong>Ollama Model Selector</strong></td>
+<td>Fetches the live model list from Ollama and presents it as a dropdown. Outputs the selected model name.</td>
+</tr>
+<tr>
+<td><strong>Ollama Load Model</strong></td>
+<td>Loads a model into Ollama's memory using <code>/api/generate</code> with <code>keep_alive=-1</code>.</td>
+</tr>
+<tr>
+<td><strong>Ollama Unload Model</strong></td>
+<td>Evicts a model from Ollama's memory using <code>/api/generate</code> with <code>keep_alive=0</code>.</td>
+</tr>
+<tr>
+<td><strong>Ollama Chat Completion</strong></td>
+<td>Sends a prompt (and optional conversation history) to Ollama <code>/api/chat</code>. Response and history are shown inline in the node body and available as output sockets.</td>
+</tr>
+<tr>
+<td><strong>Ollama Option — *</strong></td>
+<td>Seven composable option nodes (Temperature, Seed, Max Tokens, Top P, Top K, Repeat Penalty, Extra Body) that merge into an <code>OLLAMA_OPTIONS</code> dict wired into Chat Completion.</td>
+</tr>
+<tr>
+<td><strong>Ollama Debug History</strong></td>
+<td>Serialises an <code>OLLAMA_HISTORY</code> list to a pretty-printed JSON string for inspection.</td>
+</tr>
+<tr>
+<td><strong>Ollama History Length</strong></td>
+<td>Returns the number of messages in an <code>OLLAMA_HISTORY</code> list as an integer.</td>
+</tr>
 </tbody>
 </table>
 <h2 id="install">Install</h2>
@@ -629,7 +803,8 @@
 <div class="language-bash highlight"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>/path/to/ComfyUI/custom_nodes
 git<span class="w"> </span>clone<span class="w"> </span>https://github.com/darth-veitcher/comfydv.git
 </code></pre></div>
-<p>Restart ComfyUI. The nodes appear under the <strong>dv/</strong> category in the node menu. The only runtime dependency is <code>jinja2</code>, installed automatically via <code>requirements.txt</code>.</p>
+<p>Restart ComfyUI. The nodes appear under the <strong>dv/</strong> and <strong>dv/ollama</strong> categories in the node menu. Runtime dependencies (<code>jinja2</code>, <code>aiohttp</code>) are installed automatically via <code>requirements.txt</code>.</p>
+<p>For Ollama nodes: <a href="https://ollama.com/download">install Ollama</a> and pull at least one model (<code>ollama pull qwen2.5:latest</code>) before using the Ollama nodes.</p>
 <hr />
 <h2 id="format-string">Format String</h2>
 <p>Formats text from a Python f-string or Jinja2 template. As you type the template, input sockets appear and disappear automatically — one per variable detected.</p>
@@ -677,6 +852,73 @@ git<span class="w"> </span>clone<span class="w"> </span>https://github.com/darth
 <p><img alt="Circuit Breaker" src="assets/circuit_breaker.png" /></p>
 <p>Wire an image (or any trigger) into <code>trigger</code> and a boolean into <code>status</code>. When <code>status</code> is <strong>false</strong> the node raises <code>InterruptProcessingException</code>, which tells ComfyUI to stop the current run cleanly. When <code>status</code> is <strong>true</strong> the image passes through unchanged.</p>
 <p>Typical use: skip an expensive upscale step when a quality-check node says the draft is already good enough.</p>
+<hr />
+<h2 id="ollama">Ollama</h2>
+<p>14 nodes for integrating a local Ollama LLM into your ComfyUI workflow. The host URL is configured once in <strong>Ollama Client</strong> and threaded through the graph — all downstream nodes receive it via the <code>OLLAMA_CLIENT</code> socket.</p>
+<h3 id="ollama-client-node">Ollama Client node</h3>
+<p>Configure the server address once; all downstream Ollama nodes inherit it automatically.</p>
+<p><img alt="Ollama Client" src="assets/ollama_client.png" /></p>
+<h3 id="model-lifecycle-load-and-unload">Model lifecycle (load and unload)</h3>
+<p>On memory-constrained machines and single-GPU setups, explicitly loading and unloading the model before and after inference is critical. <strong>Ollama Load Model</strong> pins the model into VRAM (<code>keep_alive=-1</code>); <strong>Ollama Unload Model</strong> evicts it immediately (<code>keep_alive=0</code>), freeing memory for image generation or other models.</p>
+<p><img alt="Ollama Load / Unload" src="assets/ollama_lifecycle.png" /></p>
+<p>The correct chain is <strong>Load → Chat → Unload</strong>, enforced through data dependencies:</p>
+<ol>
+<li>Wire <code>OllamaLoadModel.model_name</code> → <code>OllamaChatCompletion.model</code>. This creates the data dependency that guarantees Load runs before Chat and passes the model name into the Chat node's plain-string <code>model</code> input.</li>
+<li>Wire <code>OllamaChatCompletion.model_name</code> → <code>OllamaUnloadModel.model</code>. This guarantees Unload runs after Chat completes.</li>
+<li>Optionally wire <code>OllamaChatCompletion.response</code> → <code>OllamaUnloadModel.passthrough</code> — Unload returns the response unchanged so the rest of your workflow can still consume it.</li>
+</ol>
+<h3 id="minimal-chat-workflow">Minimal chat workflow</h3>
+<ol>
+<li><strong>Ollama Client</strong> → set host (default <code>http://localhost:11434</code>)</li>
+<li><strong>Ollama Model Selector</strong> → pick a model from the live dropdown (or type/wire a model name directly into Chat Completion's <code>model</code> input)</li>
+<li><strong>Ollama Chat Completion</strong> → wire client + model + prompt; the response appears inline in the node body and is also available as an output socket</li>
+</ol>
+<p><img alt="Ollama Chat Completion" src="assets/ollama_chat.png" /></p>
+<p>Wire multiple nodes together for a complete end-to-end workflow:</p>
+<p><img alt="Ollama Full Workflow" src="assets/ollama_workflow.png" /></p>
+<h3 id="option-nodes">Option nodes</h3>
+<p>Chain any combination of <strong>Ollama Option —</strong> nodes before Chat Completion to override inference parameters:</p>
+<table>
+<thead>
+<tr>
+<th>Option node</th>
+<th>Ollama param</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Temperature</td>
+<td><code>temperature</code></td>
+</tr>
+<tr>
+<td>Seed</td>
+<td><code>seed</code></td>
+</tr>
+<tr>
+<td>Max Tokens</td>
+<td><code>num_predict</code></td>
+</tr>
+<tr>
+<td>Top P</td>
+<td><code>top_p</code></td>
+</tr>
+<tr>
+<td>Top K</td>
+<td><code>top_k</code></td>
+</tr>
+<tr>
+<td>Repeat Penalty</td>
+<td><code>repeat_penalty</code></td>
+</tr>
+<tr>
+<td>Extra Body</td>
+<td>arbitrary JSON merged into options</td>
+</tr>
+</tbody>
+</table>
+<p><img alt="Ollama Option Nodes" src="assets/ollama_options.png" /></p>
+<h3 id="multi-turn-conversations">Multi-turn conversations</h3>
+<p><code>OLLAMA_HISTORY</code> flows out of Chat Completion as a list of <code>{"role", "content"}</code> dicts. Wire it back into the next Chat Completion for multi-turn conversations, or inspect it with <strong>Ollama Debug History</strong> / <strong>Ollama History Length</strong>.</p>
 
 
 
