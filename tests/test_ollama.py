@@ -136,13 +136,31 @@ class TestUS3ModelLifecycle:
         )
         assert result == "embeddinggemma:latest"
 
-    @pytest.mark.integration
-    def test_unload_model_returns_name(self, ollama_host, skip_if_no_ollama):
-        """Scenario: Unload Model evicts model from Ollama memory."""
-        (result,) = OllamaUnloadModel().unload_model(
-            client=ollama_host, model="embeddinggemma:latest"
+    def test_unload_returns_two_values(self):
+        """OllamaUnloadModel returns (model_name, passthrough) tuple."""
+        assert OllamaUnloadModel.RETURN_TYPES == ("STRING", "STRING")
+        assert OllamaUnloadModel.RETURN_NAMES == ("model_name", "passthrough")
+
+    def test_unload_passthrough_is_optional(self):
+        """passthrough defaults to empty string when not wired."""
+        inputs = OllamaUnloadModel.INPUT_TYPES()
+        assert "passthrough" in inputs.get("optional", {}), (
+            "passthrough must be optional — it creates the sequencing dependency "
+            "but must not break standalone use"
         )
-        assert result == "embeddinggemma:latest"
+
+    @pytest.mark.integration
+    def test_unload_model_returns_name_and_passthrough(
+        self, ollama_host, skip_if_no_ollama
+    ):
+        """Scenario: Unload evicts model; passthrough flows through unchanged."""
+        model_name, passthrough = OllamaUnloadModel().unload_model(
+            client=ollama_host,
+            model="embeddinggemma:latest",
+            passthrough="sentinel",
+        )
+        assert model_name == "embeddinggemma:latest"
+        assert passthrough == "sentinel"
 
 
 # ---------------------------------------------------------------------------
@@ -161,12 +179,54 @@ class TestUS4ChatCompletion:
             "OllamaChatCompletion model input must be a COMBO (list) — Issue #1 fix"
         )
 
+    def test_chat_completion_accepts_wired_model_name(self):
+        """model_name optional input lets OllamaLoadModel.model_name wire in for ordering."""
+        inputs = OllamaChatCompletion.INPUT_TYPES()
+        assert "model_name" in inputs.get("optional", {}), (
+            "model_name must be optional so LoadModel can wire its output here "
+            "to guarantee Load → Chat execution order"
+        )
+
+    def test_chat_completion_returns_model_name(self):
+        """Third return value carries the effective model name for downstream unload."""
+        assert OllamaChatCompletion.RETURN_TYPES == (
+            "STRING",
+            "OLLAMA_HISTORY",
+            "STRING",
+        )
+        assert OllamaChatCompletion.RETURN_NAMES == (
+            "response",
+            "updated_history",
+            "model_name",
+        )
+
+    def test_wired_model_name_overrides_combo(self, monkeypatch):
+        """model_name kwarg takes precedence over the COMBO widget value."""
+        captured = {}
+
+        async def fake_post(url, payload):
+            captured["model"] = payload.get("model")
+            return {"message": {"content": "ok"}}
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        response, _, effective = OllamaChatCompletion().chat(
+            client="http://localhost:11434",
+            model="dropdown-value",
+            prompt="hi",
+            model_name="wired-value",
+        )
+        assert effective == "wired-value"
+        assert captured.get("model") == "wired-value"
+
     @pytest.mark.integration
     def test_single_turn_returns_non_empty_response(
         self, ollama_host, skip_if_no_ollama
     ):
         """Scenario: Single-turn completion returns non-empty response."""
-        response, updated_history = OllamaChatCompletion().chat(
+        response, updated_history, model_name = OllamaChatCompletion().chat(
             client=ollama_host,
             model=_CHAT_MODEL,
             prompt="Say exactly the word: pong",
@@ -177,17 +237,18 @@ class TestUS4ChatCompletion:
         assert len(updated_history) == 2
         assert updated_history[0]["role"] == "user"
         assert updated_history[1]["role"] == "assistant"
+        assert model_name == _CHAT_MODEL
 
     @pytest.mark.integration
     def test_multi_turn_receives_context(self, ollama_host, skip_if_no_ollama):
         """Scenario: Multi-turn completion receives full conversation context."""
-        _, history = OllamaChatCompletion().chat(
+        _, history, _ = OllamaChatCompletion().chat(
             client=ollama_host,
             model=_CHAT_MODEL,
             prompt="My name is Alice. Remember it.",
             history=[],
         )
-        response, updated = OllamaChatCompletion().chat(
+        response, updated, _ = OllamaChatCompletion().chat(
             client=ollama_host,
             model=_CHAT_MODEL,
             prompt="What is my name?",
@@ -199,11 +260,11 @@ class TestUS4ChatCompletion:
     @pytest.mark.integration
     def test_history_accumulated_correctly(self, ollama_host, skip_if_no_ollama):
         """History list grows by 2 entries per turn."""
-        _, h1 = OllamaChatCompletion().chat(
+        _, h1, _ = OllamaChatCompletion().chat(
             client=ollama_host, model=_CHAT_MODEL, prompt="Turn 1", history=[]
         )
         assert len(h1) == 2
-        _, h2 = OllamaChatCompletion().chat(
+        _, h2, _ = OllamaChatCompletion().chat(
             client=ollama_host, model=_CHAT_MODEL, prompt="Turn 2", history=h1
         )
         assert len(h2) == 4

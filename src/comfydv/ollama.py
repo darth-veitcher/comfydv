@@ -178,25 +178,36 @@ class OllamaLoadModel:
 
 
 class OllamaUnloadModel:
+    """Evict a model from VRAM and pass a value through unchanged.
+
+    Wire ``passthrough`` from a downstream node (e.g. the ``response`` output
+    of OllamaChatCompletion) so ComfyUI executes this node *after* that node
+    completes.  The value is returned unchanged so the rest of the workflow can
+    continue using it.
+    """
+
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
                 "client": ("OLLAMA_CLIENT",),
-                "model": ("STRING", {}),
-            }
+                "model": ("STRING", {"forceInput": True}),
+            },
+            "optional": {
+                "passthrough": ("STRING", {"forceInput": True}),
+            },
         }
 
-    RETURN_TYPES = ("STRING",)
-    RETURN_NAMES = ("model_name",)
+    RETURN_TYPES = ("STRING", "STRING")
+    RETURN_NAMES = ("model_name", "passthrough")
     FUNCTION = "unload_model"
     CATEGORY = "dv/ollama"
 
-    def unload_model(self, client, model: str):
+    def unload_model(self, client, model: str, passthrough: str = ""):
         if not model.strip():
             raise ValueError("model name cannot be empty")
         _run_async(_post_json(f"{client}/api/show", {"model": model, "keep_alive": 0}))
-        return (model,)
+        return (model, passthrough)
 
 
 # ---------------------------------------------------------------------------
@@ -217,22 +228,41 @@ class OllamaChatCompletion:
                 "system": ("STRING", {"multiline": True, "default": ""}),
                 "history": ("OLLAMA_HISTORY",),
                 "options": ("OLLAMA_OPTIONS",),
+                # Wire OllamaLoadModel.model_name here to guarantee load runs
+                # before chat and to override the dropdown with the wired value.
+                "model_name": ("STRING", {"forceInput": True}),
             },
         }
 
-    RETURN_TYPES = ("STRING", "OLLAMA_HISTORY")
-    RETURN_NAMES = ("response", "updated_history")
+    RETURN_TYPES = ("STRING", "OLLAMA_HISTORY", "STRING")
+    RETURN_NAMES = ("response", "updated_history", "model_name")
     FUNCTION = "chat"
     CATEGORY = "dv/ollama"
 
-    def chat(self, client, model, prompt, system="", history=None, options=None):
+    def chat(
+        self,
+        client,
+        model,
+        prompt,
+        system="",
+        history=None,
+        options=None,
+        model_name=None,
+    ):
+        effective_model = (
+            model_name.strip() if model_name and model_name.strip() else model
+        )
         if history is None:
             history = []
         messages = list(history)
         if system:
             messages = [{"role": "system", "content": system}] + messages
         messages.append({"role": "user", "content": prompt})
-        payload: dict = {"model": model, "messages": messages, "stream": False}
+        payload: dict = {
+            "model": effective_model,
+            "messages": messages,
+            "stream": False,
+        }
         if options:
             payload["options"] = options
         result = _run_async(_post_json(f"{client}/api/chat", payload))
@@ -240,7 +270,7 @@ class OllamaChatCompletion:
         updated = list(history)
         updated.append({"role": "user", "content": prompt})
         updated.append({"role": "assistant", "content": response_text})
-        return (response_text, updated)
+        return (response_text, updated, effective_model)
 
 
 # ---------------------------------------------------------------------------

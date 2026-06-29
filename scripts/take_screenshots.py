@@ -448,7 +448,7 @@ async def scene_ollama_workflow(page: Page, out: Path) -> None:
 
 
 async def scene_ollama_lifecycle(page: Page, out: Path) -> None:
-    """OllamaLoadModel and OllamaUnloadModel — showing the load/unload pair."""
+    """Full load → chat → unload chain showing the pass-through pattern."""
     await _clear(page)
 
     info = await page.evaluate(
@@ -456,54 +456,73 @@ async def scene_ollama_lifecycle(page: Page, out: Path) -> None:
         async () => {
             const graph = window.app.graph;
 
-            // OllamaClient — top-left
+            // OllamaClient — far left
             const client = LiteGraph.createNode("OllamaClient");
-            client.pos = [40, 40];
+            client.pos = [40, 140];
             graph.add(client);
             const hostWidget = client.widgets && client.widgets.find(w => w.name === "host");
             if (hostWidget) hostWidget.value = "http://localhost:11434";
 
-            // OllamaLoadModel — middle
+            // OllamaLoadModel — centre-left
             const load = LiteGraph.createNode("OllamaLoadModel");
-            load.pos = [320, 40];
+            load.pos = [300, 40];
             graph.add(load);
 
-            // OllamaUnloadModel — right
+            // OllamaChatCompletion — centre-right
+            const chat = LiteGraph.createNode("OllamaChatCompletion");
+            chat.pos = [580, 40];
+            graph.add(chat);
+            const twPrompt = chat.widgets && chat.widgets.find(w => w.name === "prompt");
+            if (twPrompt) twPrompt.value = "Describe this image in one sentence.";
+
+            // OllamaUnloadModel — far right
             const unload = LiteGraph.createNode("OllamaUnloadModel");
-            unload.pos = [320, 200];
+            unload.pos = [900, 120];
             graph.add(unload);
 
             // Populate model dropdowns from live Ollama
-            const modelWidgets = [
-                load.widgets && load.widgets.find(w => w.name === "model"),
-                unload.widgets && unload.widgets.find(w => w.name === "model"),
-            ];
             try {
                 const resp = await fetch("/dv/ollama/models?host=http://host.docker.internal:11434");
                 if (resp.ok) {
                     const data = await resp.json();
                     const models = data.models || [];
                     if (models.length) {
-                        for (const w of modelWidgets) {
-                            if (w) {
-                                w.options = w.options || {};
-                                w.options.values = models;
-                                w.value = models[0];
-                            }
+                        for (const node of [load, chat]) {
+                            const w = node.widgets && node.widgets.find(w => w.name === "model");
+                            if (w) { w.options = w.options || {}; w.options.values = models; w.value = models[0]; }
                         }
                     }
                 }
             } catch(e) {}
 
-            // Wire client → load and client → unload
+            // Wire: client → load.client, client → chat.client, client → unload.client
             client.connect(0, load, 0);
+            client.connect(0, chat, 0);
             client.connect(0, unload, 0);
 
-            await new Promise(r => setTimeout(r, 800));
+            // Wire: load.model_name (output 0) → chat.model_name input (optional)
+            // This forces Load to run before Chat.
+            const chatModelNameSlot = chat.inputs
+                ? chat.inputs.findIndex(i => i.name === "model_name")
+                : -1;
+            if (chatModelNameSlot >= 0) load.connect(0, chat, chatModelNameSlot);
+
+            // Wire: chat.model_name (output 2) → unload.model (input 1)
+            // Wire: chat.response (output 0) → unload.passthrough (optional input)
+            const unloadModelSlot = unload.inputs
+                ? unload.inputs.findIndex(i => i.name === "model")
+                : 1;
+            const unloadPassSlot = unload.inputs
+                ? unload.inputs.findIndex(i => i.name === "passthrough")
+                : -1;
+            chat.connect(2, unload, unloadModelSlot >= 0 ? unloadModelSlot : 1);
+            if (unloadPassSlot >= 0) chat.connect(0, unload, unloadPassSlot);
+
+            await new Promise(r => setTimeout(r, 1200));
             window.app.canvas.setDirty(true, true);
             window.app.canvas.draw(true, true);
 
-            const nodes = [client, load, unload];
+            const nodes = [client, load, chat, unload];
             const minX = Math.min(...nodes.map(n => n.pos[0])) - 20;
             const minY = Math.min(...nodes.map(n => n.pos[1])) - 20;
             const maxX = Math.max(...nodes.map(n => n.pos[0] + n.size[0])) + 20;
@@ -513,10 +532,10 @@ async def scene_ollama_lifecycle(page: Page, out: Path) -> None:
         """
     )
 
-    await asyncio.sleep(1.5)
+    await asyncio.sleep(2.0)
     await _redraw(page)
-    await _frame_node(page, info["pos"], info["size"], scale=1.2)
-    await _capture(page, out, info["pos"], info["size"], scale=1.2)
+    await _frame_node(page, info["pos"], info["size"], scale=0.85)
+    await _capture(page, out, info["pos"], info["size"], scale=0.85)
 
 
 async def scene_ollama_options(page: Page, out: Path) -> None:

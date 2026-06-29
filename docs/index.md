@@ -99,7 +99,11 @@ On memory-constrained machines and single-GPU setups, explicitly loading and unl
 
 ![Ollama Load / Unload](assets/ollama_lifecycle.png)
 
-Wire the same **Ollama Client** output into both nodes. Place **Load Model** at the start of your workflow and **Unload Model** at the end — after Chat Completion has finished — so VRAM is only occupied during inference.
+The correct chain is **Load → Chat → Unload**, enforced through data dependencies:
+
+1. Wire `OllamaLoadModel.model_name` → `OllamaChatCompletion.model_name` (optional input). This guarantees Load runs before Chat and overrides the Chat dropdown with the same model.
+2. Wire `OllamaChatCompletion.model_name` → `OllamaUnloadModel.model`. This guarantees Unload runs after Chat.
+3. Optionally wire `OllamaChatCompletion.response` → `OllamaUnloadModel.passthrough` — Unload returns the response unchanged so the rest of your workflow can still consume it.
 
 ### Minimal chat workflow
 
