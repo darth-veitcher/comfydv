@@ -416,21 +416,47 @@ _CHAT_MODEL = "lukey03/qwen3.5-9b-abliterated-vision:latest"
 
 
 class TestUS4ChatCompletion:
-    def test_chat_completion_input_types_uses_combo(self):
-        """Scenario: Chat Completion shows live dropdown (fixes Issue #1)."""
+    def test_chat_completion_model_is_plain_string(self):
+        """model input must be STRING (not COMBO) so it can receive wired values.
+
+        COMBO inputs cannot accept wired connections. Using STRING lets users
+        wire OllamaLoadModel.model_name → OllamaChatCompletion.model directly,
+        removing the need for a separate model_name socket.
+        """
         input_types = OllamaChatCompletion.INPUT_TYPES()
         model_input = input_types["required"]["model"]
-        assert isinstance(model_input[0], list), (
-            "OllamaChatCompletion model input must be a COMBO (list) — Issue #1 fix"
+        assert model_input[0] == "STRING", (
+            f"OllamaChatCompletion model input must be STRING so it can be wired, "
+            f"got {model_input[0]!r}"
         )
 
-    def test_chat_completion_accepts_wired_model_name(self):
-        """model_name optional input lets OllamaLoadModel.model_name wire in for ordering."""
+    def test_chat_has_no_model_name_input(self):
+        """model_name optional input must be removed — model STRING accepts wired values."""
         inputs = OllamaChatCompletion.INPUT_TYPES()
-        assert "model_name" in inputs.get("optional", {}), (
-            "model_name must be optional so LoadModel can wire its output here "
-            "to guarantee Load → Chat execution order"
+        assert "model_name" not in inputs.get("optional", {}), (
+            "model_name optional input is redundant now that model is a plain STRING "
+            "that accepts wired connections"
         )
+
+    def test_chat_model_receives_wired_string(self, monkeypatch):
+        """Wiring OllamaLoadModel.model_name → OllamaChatCompletion.model works."""
+        captured = {}
+
+        async def fake_post(url, payload, *, timeout=120.0):
+            captured["model"] = payload.get("model")
+            return {"message": {"content": "ok"}}
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        _, _, used_model = OllamaChatCompletion().chat(
+            client="http://localhost:11434",
+            model="llama3:latest",
+            prompt="hi",
+        )["result"]
+        assert used_model == "llama3:latest"
+        assert captured.get("model") == "llama3:latest"
 
     def test_chat_completion_returns_model_name(self):
         """Third return value carries the effective model name for downstream unload."""
@@ -495,26 +521,6 @@ class TestUS4ChatCompletion:
         assert isinstance(history, list)
         assert model_name == "m"
 
-    def test_wired_model_name_overrides_combo(self, monkeypatch):
-        """model_name kwarg takes precedence over the COMBO widget value."""
-        captured = {}
-
-        async def fake_post(url, payload, *, timeout=120.0):
-            captured["model"] = payload.get("model")
-            return {"message": {"content": "ok"}}
-
-        import comfydv.ollama as ollama_mod
-
-        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
-
-        response, _, effective = OllamaChatCompletion().chat(
-            client="http://localhost:11434",
-            model="dropdown-value",
-            prompt="hi",
-            model_name="wired-value",
-        )["result"]
-        assert effective == "wired-value"
-        assert captured.get("model") == "wired-value"
 
     # ---- Issue 6: Chat timeout widget -----------------------------------------
 
