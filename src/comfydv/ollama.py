@@ -1,11 +1,12 @@
 """
 Ollama model integration nodes for ComfyUI.
 
-14 nodes: client configuration, model discovery, load/unload, chat completion,
-composable inference options, and history utilities.
+17 nodes: client configuration, auth headers, model discovery, load/unload,
+chat completion, composable inference options, and history utilities.
 
 ADR-004: aiohttp (already in ComfyUI dep tree) for all Ollama HTTP calls.
-ADR-005: OllamaClient node is the single source of the host URL.
+ADR-005: OllamaClient node is the single source of the host URL (and, per
+US7, of any auth headers — every downstream node reaches the same server).
 """
 
 import asyncio
@@ -13,17 +14,100 @@ import json
 import logging
 import os
 import sys
+import threading
+import time
 
 logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Custom socket type
+# Local response cache
+# ---------------------------------------------------------------------------
+#
+# OllamaChatCompletion is OUTPUT_NODE=True (needed for inline display), which
+# means ComfyUI re-executes it on every queue run even when none of its
+# inputs changed — unlike normal nodes, it isn't skipped by ComfyUI's own
+# input-hash cache. This cache absorbs those redundant round-trips: identical
+# (client, headers, model, messages, options) reuse the prior response
+# instead of re-querying Ollama. Model discovery gets the same treatment
+# (many nodes independently query /api/tags on graph load) but with a short
+# TTL so a newly-pulled model still surfaces after a refresh.
+
+
+class _TTLLRUCache:
+    """Bounded cache, LRU-evicted, with an optional per-entry TTL."""
+
+    def __init__(self, maxsize: int, ttl_seconds: float | None = None):
+        self.maxsize = maxsize
+        self.ttl_seconds = ttl_seconds
+        self._data: dict = {}
+        self._lock = threading.Lock()
+
+    def get(self, key):
+        with self._lock:
+            entry = self._data.get(key)
+            if entry is None:
+                return None, False
+            expires_at, value = entry
+            if self.ttl_seconds is not None and time.monotonic() > expires_at:
+                del self._data[key]
+                return None, False
+            # Re-insert to mark as most-recently-used (dicts preserve insertion order).
+            del self._data[key]
+            self._data[key] = (expires_at, value)
+            return value, True
+
+    def set(self, key, value):
+        with self._lock:
+            expires_at = (
+                time.monotonic() + self.ttl_seconds
+                if self.ttl_seconds is not None
+                else float("inf")
+            )
+            self._data.pop(key, None)
+            self._data[key] = (expires_at, value)
+            while len(self._data) > self.maxsize:
+                oldest_key = next(iter(self._data))
+                del self._data[oldest_key]
+
+    def clear(self):
+        with self._lock:
+            self._data.clear()
+
+
+def _cache_key(*parts) -> str:
+    """Deterministic, hashable key from arbitrary JSON-serializable parts."""
+    return json.dumps(parts, sort_keys=True, default=str)
+
+
+_MODEL_LIST_CACHE = _TTLLRUCache(maxsize=32, ttl_seconds=20.0)
+_CHAT_RESPONSE_CACHE = _TTLLRUCache(maxsize=64, ttl_seconds=None)
+
+
+# ---------------------------------------------------------------------------
+# Custom socket types
 # ---------------------------------------------------------------------------
 
 
 class OllamaClientType(str):
-    """Typed string carrying the Ollama host URL through the node graph."""
+    """Typed string carrying the Ollama host URL through the node graph.
+
+    Also carries an optional ``.headers`` dict (US7 — basic auth / bearer
+    tokens for Ollama servers behind a reverse proxy). Since this is a plain
+    ``str`` subclass, every existing ``f"{client}/api/..."`` call site keeps
+    working unchanged; only code that wants auth reads ``.headers``.
+    """
+
+    def __new__(cls, host, headers=None):
+        obj = super().__new__(cls, host)
+        obj.headers = dict(headers) if headers else {}
+        return obj
+
+
+def _client_headers(client) -> dict | None:
+    """Extract auth headers stashed on an OllamaClientType, if any."""
+    headers = getattr(client, "headers", None)
+    return dict(headers) if headers else None
 
 
 # ---------------------------------------------------------------------------
@@ -45,24 +129,45 @@ def _run_async(coro):
         return asyncio.run(coro)
 
 
-async def _fetch_models(host: str) -> list[str]:
-    """GET {host}/api/tags — return list of model name strings."""
+async def _fetch_models(host: str, headers: dict | None = None) -> list[str]:
+    """GET {host}/api/tags — return list of model name strings.
+
+    Cached for _MODEL_LIST_CACHE.ttl_seconds per (host, headers) pair — node
+    creation, the Refresh button, and startup all otherwise re-issue this
+    same request in quick succession.
+    """
+    cache_key = _cache_key("models", host, headers or {})
+    cached, hit = _MODEL_LIST_CACHE.get(cache_key)
+    if hit:
+        return cached
+
     import aiohttp
 
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
                 f"{host}/api/tags",
+                headers=headers or None,
                 timeout=aiohttp.ClientTimeout(total=5),
             ) as resp:
                 data = await resp.json()
-                return [m["name"] for m in data.get("models", [])]
+                models = [m["name"] for m in data.get("models", [])]
     except Exception as exc:
         logger.warning("Could not fetch Ollama models from %s: %s", host, exc)
         return []
 
+    if models:
+        _MODEL_LIST_CACHE.set(cache_key, models)
+    return models
 
-async def _post_json(url: str, payload: dict, *, timeout: float = 120.0) -> dict:
+
+async def _post_json(
+    url: str,
+    payload: dict,
+    *,
+    timeout: float = 120.0,
+    headers: dict | None = None,
+) -> dict:
     """POST JSON to url, return parsed response dict."""
     import aiohttp
 
@@ -71,6 +176,7 @@ async def _post_json(url: str, payload: dict, *, timeout: float = 120.0) -> dict
             async with session.post(
                 url,
                 json=payload,
+                headers=headers or None,
                 timeout=aiohttp.ClientTimeout(total=timeout),
             ) as resp:
                 if resp.status >= 400:
@@ -149,7 +255,10 @@ class OllamaClient:
         return {
             "required": {
                 "host": ("STRING", {"default": "http://localhost:11434"}),
-            }
+            },
+            "optional": {
+                "headers": ("OLLAMA_HEADERS",),
+            },
         }
 
     RETURN_TYPES = ("OLLAMA_CLIENT",)
@@ -157,8 +266,83 @@ class OllamaClient:
     FUNCTION = "create_client"
     CATEGORY = "dv/ollama"
 
-    def create_client(self, host: str):
-        return (OllamaClientType(host),)
+    def create_client(self, host: str, headers: dict | None = None):
+        return (OllamaClientType(host, headers),)
+
+
+# ---------------------------------------------------------------------------
+# US7 — Composable auth headers
+# ---------------------------------------------------------------------------
+
+
+def _merge_header(headers, name, value):
+    result = dict(headers) if headers else {}
+    result[name] = value
+    return result
+
+
+class OllamaHeaderBasicAuth:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "username": ("STRING", {"default": ""}),
+                "password": ("STRING", {"default": ""}),
+            },
+            "optional": {"headers": ("OLLAMA_HEADERS",)},
+        }
+
+    RETURN_TYPES = ("OLLAMA_HEADERS",)
+    RETURN_NAMES = ("headers",)
+    FUNCTION = "set_basic_auth"
+    CATEGORY = "dv/ollama/headers"
+
+    def set_basic_auth(self, username, password, headers=None):
+        import base64
+
+        token = base64.b64encode(f"{username}:{password}".encode()).decode()
+        return (_merge_header(headers, "Authorization", f"Basic {token}"),)
+
+
+class OllamaHeaderBearerToken:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "token": ("STRING", {"default": ""}),
+            },
+            "optional": {"headers": ("OLLAMA_HEADERS",)},
+        }
+
+    RETURN_TYPES = ("OLLAMA_HEADERS",)
+    RETURN_NAMES = ("headers",)
+    FUNCTION = "set_bearer_token"
+    CATEGORY = "dv/ollama/headers"
+
+    def set_bearer_token(self, token, headers=None):
+        return (_merge_header(headers, "Authorization", f"Bearer {token}"),)
+
+
+class OllamaHeaderCustom:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "name": ("STRING", {"default": ""}),
+                "value": ("STRING", {"default": ""}),
+            },
+            "optional": {"headers": ("OLLAMA_HEADERS",)},
+        }
+
+    RETURN_TYPES = ("OLLAMA_HEADERS",)
+    RETURN_NAMES = ("headers",)
+    FUNCTION = "set_custom_header"
+    CATEGORY = "dv/ollama/headers"
+
+    def set_custom_header(self, name, value, headers=None):
+        if not name.strip():
+            raise ValueError("header name cannot be empty")
+        return (_merge_header(headers, name, value),)
 
 
 # ---------------------------------------------------------------------------
@@ -213,6 +397,7 @@ class OllamaLoadModel:
                 f"{client}/api/generate",
                 {"model": model, "keep_alive": -1, "stream": False},
                 timeout=300.0,
+                headers=_client_headers(client),
             )
         )
         return (model,)
@@ -252,6 +437,7 @@ class OllamaUnloadModel:
                 f"{client}/api/generate",
                 {"model": model, "keep_alive": 0, "stream": False},
                 timeout=30.0,
+                headers=_client_headers(client),
             )
         )
         return (model, passthrough)
@@ -326,10 +512,26 @@ class OllamaChatCompletion:
         }
         if options:
             payload["options"] = options
-        result = _run_async(
-            _post_json(f"{client}/api/chat", payload, timeout=float(timeout_secs))
+
+        headers = _client_headers(client)
+        cache_key = _cache_key(
+            "chat", client, headers or {}, effective_model, messages, options or {}
         )
-        response_text = result.get("message", {}).get("content", "")
+        cached, hit = _CHAT_RESPONSE_CACHE.get(cache_key)
+        if hit:
+            response_text = cached
+        else:
+            result = _run_async(
+                _post_json(
+                    f"{client}/api/chat",
+                    payload,
+                    timeout=float(timeout_secs),
+                    headers=headers,
+                )
+            )
+            response_text = result.get("message", {}).get("content", "")
+            _CHAT_RESPONSE_CACHE.set(cache_key, response_text)
+
         updated = list(history)
         updated.append({"role": "user", "content": prompt})
         updated.append({"role": "assistant", "content": response_text})
