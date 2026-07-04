@@ -66,6 +66,24 @@ def pytest_configure(config):
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def _clear_ollama_caches():
+    """Reset comfydv.ollama's module-level LRU caches around every test.
+
+    Several tests reuse identical client/model/prompt inputs across cases
+    with different monkeypatched responses — without this, a later test would
+    silently get an earlier test's cached result instead of exercising its
+    own fake.
+    """
+    from comfydv.ollama import _CHAT_RESPONSE_CACHE, _MODEL_LIST_CACHE
+
+    _MODEL_LIST_CACHE.clear()
+    _CHAT_RESPONSE_CACHE.clear()
+    yield
+    _MODEL_LIST_CACHE.clear()
+    _CHAT_RESPONSE_CACHE.clear()
+
+
 @pytest.fixture(scope="session")
 def ollama_host():
     return "http://localhost:11434"

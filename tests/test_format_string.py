@@ -86,7 +86,7 @@ class TestSimpleFormatting:
             save_path="",
             unique_id="test1",
             name=sample_data["name"],
-        )
+        )["result"]
         assert len(result) == 3  # formatted_string, saved_file_path, name
         assert result[0] == "Hello Alice"
         assert result[1] == ""
@@ -101,7 +101,7 @@ class TestSimpleFormatting:
             unique_id="test2",
             name=sample_data["name"],
             age=sample_data["age"],
-        )
+        )["result"]
         assert len(result) == 4  # formatted_string, saved_file_path, name, age
         assert result[0] == "Hello Alice, you are 30"
         assert result[1] == ""
@@ -115,7 +115,7 @@ class TestSimpleFormatting:
             template="Hello World",
             save_path="",
             unique_id="test3",
-        )
+        )["result"]
         assert len(result) == 2  # formatted_string, saved_file_path
         assert result[0] == "Hello World"
         assert result[1] == ""
@@ -142,7 +142,7 @@ class TestJinja2Formatting:
             save_path="",
             unique_id="test5",
             name=sample_data["name"],
-        )
+        )["result"]
         assert len(result) == 3  # formatted_string, saved_file_path, name
         assert result[0] == "Hello Alice"
         assert result[1] == ""
@@ -156,7 +156,7 @@ class TestJinja2Formatting:
             save_path="",
             unique_id="test6",
             name=sample_data["name"],
-        )
+        )["result"]
         assert len(result) == 3
         assert result[0] == "Hello ALICE"
         assert result[1] == ""
@@ -171,7 +171,7 @@ class TestJinja2Formatting:
             unique_id="test7",
             first=sample_data["first"],
             last=sample_data["last"],
-        )
+        )["result"]
         assert len(result) == 4  # formatted_string, saved_file_path, first, last
         assert result[0] == "JOHN doe"
         assert result[1] == ""
@@ -185,7 +185,7 @@ class TestJinja2Formatting:
             template="Time: {{ now() }}",
             save_path="",
             unique_id="test8",
-        )
+        )["result"]
         assert len(result) == 2  # formatted_string, saved_file_path (no extracted vars)
         assert result[0].startswith("Time: ")
         assert result[1] == ""
@@ -198,11 +198,66 @@ class TestJinja2Formatting:
             save_path="",
             unique_id="test9",
             value=sample_data["value"],
-        )
+        )["result"]
         # value is not extracted as a variable because it's used in an expression
         assert len(result) == 2  # Just formatted_string, saved_file_path
         assert result[0] == "Result: 10"
         assert result[1] == ""
+
+
+class TestInlineDisplay:
+    """FormatString is OUTPUT_NODE=True so formatted_string renders on the node itself."""
+
+    def test_is_output_node(self, format_string_class):
+        """FormatString must have OUTPUT_NODE=True for inline display."""
+        assert getattr(format_string_class, "OUTPUT_NODE", False) is True
+
+    def test_returns_ui_result_dict(self, format_string_class, sample_data):
+        """format_string() must return {'ui': ..., 'result': ...} not a bare tuple."""
+        ret = format_string_class.format_string(
+            template_type="Simple",
+            template="Hello {name}",
+            save_path="",
+            unique_id="test-inline-1",
+            name=sample_data["name"],
+        )
+        assert isinstance(ret, dict), f"Expected dict, got {type(ret)}"
+        assert "ui" in ret, "Missing 'ui' key"
+        assert "result" in ret, "Missing 'result' key"
+
+    def test_ui_contains_formatted_string(self, format_string_class, sample_data):
+        """Formatted string must appear in ui['text'] for the inline display."""
+        ret = format_string_class.format_string(
+            template_type="Simple",
+            template="Hello {name}",
+            save_path="",
+            unique_id="test-inline-2",
+            name=sample_data["name"],
+        )
+        assert ret["ui"]["text"][0] == "Hello Alice"
+
+    def test_ui_reflects_jinja2_output(self, format_string_class, sample_data):
+        """Jinja2-rendered output must also surface in the inline display."""
+        ret = format_string_class.format_string(
+            template_type="Jinja2",
+            template="Hello {{ name | upper }}",
+            save_path="",
+            unique_id="test-inline-3",
+            name=sample_data["name"],
+        )
+        assert ret["ui"]["text"][0] == "Hello ALICE"
+
+    def test_result_is_unchanged_tuple(self, format_string_class, sample_data):
+        """result key must still be the same output tuple as before OUTPUT_NODE was added."""
+        ret = format_string_class.format_string(
+            template_type="Simple",
+            template="Hello {name}, you are {age}",
+            save_path="",
+            unique_id="test-inline-4",
+            name=sample_data["name"],
+            age=sample_data["age"],
+        )
+        assert ret["result"] == ("Hello Alice, you are 30", "", "Alice", "30")
 
 
 class TestDynamicOutputs:
@@ -296,7 +351,7 @@ class TestOutputConsistency:
         format_string_class.update_widget("node1", "Simple", "Hello {name}")
         result = format_string_class.format_string(
             "Simple", "Hello {name}", "", "node1", name=sample_data["name"]
-        )
+        )["result"]
 
         assert len(result) == len(format_string_class.RETURN_TYPES)
         assert len(result) == len(format_string_class.RETURN_NAMES)
@@ -311,7 +366,7 @@ class TestOutputConsistency:
             "node2",
             name=sample_data["name"],
             age=sample_data["age"],
-        )
+        )["result"]
 
         assert len(result) == len(format_string_class.RETURN_TYPES)
         assert len(result) == len(format_string_class.RETURN_NAMES)
@@ -319,7 +374,9 @@ class TestOutputConsistency:
     def test_output_consistency_no_vars(self, format_string_class):
         """Test output consistency with no variables."""
         format_string_class.update_widget("node3", "Simple", "Hello World")
-        result = format_string_class.format_string("Simple", "Hello World", "", "node3")
+        result = format_string_class.format_string(
+            "Simple", "Hello World", "", "node3"
+        )["result"]
 
         assert len(result) == len(format_string_class.RETURN_TYPES)
         assert len(result) == len(format_string_class.RETURN_NAMES)
@@ -408,7 +465,7 @@ class TestStatePersistence:
             save_path="",
             unique_id="test",
             name=sample_data["name"],
-        )
+        )["result"]
         # Should complete without error
         assert result[1] == ""  # saved_file_path should be empty (position 1)
 
@@ -425,7 +482,7 @@ class TestEdgeCases:
         """Test with empty template."""
         result = format_string_class.format_string(
             template_type="Simple", template="", save_path="", unique_id="test"
-        )
+        )["result"]
         assert len(result) == 2
         assert result[0] == ""
         assert result[1] == ""
@@ -437,7 +494,7 @@ class TestEdgeCases:
             template="{{ unclosed",
             save_path="",
             unique_id="test",
-        )
+        )["result"]
         # Should return error message in formatted_string
         assert len(result) == 2
         assert "Error in Jinja2 template" in result[0]
@@ -450,7 +507,7 @@ class TestEdgeCases:
             save_path="",
             unique_id="test",
             name="<Alice & Bob>",
-        )
+        )["result"]
         assert "<Alice & Bob>" in result[0]  # formatted_string is at position 0
 
     def test_unicode_in_template(self, format_string_class):
@@ -461,7 +518,7 @@ class TestEdgeCases:
             save_path="",
             unique_id="test",
             name="世界",
-        )
+        )["result"]
         assert "你好 世界 🎉" in result[0]  # formatted_string is at position 0
 
 

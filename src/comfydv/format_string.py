@@ -18,7 +18,7 @@ import os
 import random
 import re
 import sys
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 from aiohttp import web
 from jinja2 import exceptions, sandbox
@@ -68,6 +68,7 @@ class FormatString:
     RETURN_TYPES = ("STRING", "STRING")
     RETURN_NAMES = ("formatted_string", "saved_file_path")
     OUTPUT_IS_LIST = (False, False)
+    OUTPUT_NODE = True
 
     # Store configurations for each node instance
     node_configs: Dict[str, Dict[str, Any]] = {}
@@ -294,12 +295,14 @@ class FormatString:
         save_path: str,
         unique_id: str = "",
         **kwargs,
-    ) -> Tuple[str, ...]:
+    ) -> Dict[str, Any]:
         """
         Format a string using the specified template type and variables.
 
         This is the main method executed by the node. It formats the template using either
         Python's str.format() or Jinja2 templating, and optionally saves the state to disk.
+        The node is OUTPUT_NODE=True so the formatted string also renders as a read-only
+        text display directly on the node (no separate Show Text node needed).
 
         Args:
             template_type (str): Either "Simple" or "Jinja2" to specify the template engine.
@@ -309,7 +312,8 @@ class FormatString:
             **kwargs: Variable keyword arguments that provide values for template variables.
 
         Returns:
-            Tuple[str, ...]: A tuple containing the formatted string, the save path,
+            Dict[str, Any]: ``{"ui": {"text": [formatted_string]}, "result": result}`` where
+                           ``result`` is a tuple containing the formatted string, the save path,
                            followed by the values of input variables (in order).
 
         Example:
@@ -317,7 +321,7 @@ class FormatString:
             from format_string import FormatString
 
             # Simple template example
-            result = FormatString.format_string(
+            ret = FormatString.format_string(
                 template_type="Simple",
                 template="Hello {name}, you are {age} years old",
                 save_path="",
@@ -325,40 +329,43 @@ class FormatString:
                 name="Alice",
                 age="30"
             )
-            print(result)  # Outputs: ('Hello Alice, you are 30 years old', '', 'Alice', '30')
+            print(ret["result"])  # Outputs: ('Hello Alice, you are 30 years old', '', 'Alice', '30')
 
             # Jinja2 template example
-            result = FormatString.format_string(
+            ret = FormatString.format_string(
                 template_type="Jinja2",
                 template="Hello {{ name }}, today is {{ datetime.now().strftime('%A') }}",
                 save_path="",
                 unique_id="124",
                 name="Bob"
             )
-            print(result)  # Outputs: ('Hello Bob, today is Wednesday', '', 'Bob')
+            print(ret["result"])  # Outputs: ('Hello Bob, today is Wednesday', '', 'Bob')
             ```
 
         <!-- Example Test:
         >>> # Test simple format
-        >>> result = FormatString.format_string(
+        >>> ret = FormatString.format_string(
         ...     template_type="Simple",
         ...     template="Hello {name}, you are {age} years old",
         ...     save_path="",
         ...     name="Alice",
         ...     age="30"
         ... )
+        >>> result = ret["result"]
         >>> assert result[0] == "Hello Alice, you are 30 years old"
         >>> assert result[1] == ""
         >>> assert result[2] == "Alice"
         >>> assert result[3] == "30"
+        >>> assert ret["ui"]["text"][0] == "Hello Alice, you are 30 years old"
         >>>
         >>> # Test Jinja2 format with datetime (can't test exact output due to time dependency)
-        >>> result = FormatString.format_string(
+        >>> ret = FormatString.format_string(
         ...     template_type="Jinja2",
         ...     template="Name: {{ name }}",
         ...     save_path="",
         ...     name="Bob"
         ... )
+        >>> result = ret["result"]
         >>> assert result[0] == "Name: Bob"
         >>> assert result[1] == ""
         >>> assert result[2] == "Bob"
@@ -452,7 +459,10 @@ class FormatString:
         logger.debug(
             "Full result tuple length: %d, expected: %d", len(result), len(keys) + 2
         )
-        return result
+        return {
+            "ui": {"text": [formatted_string]},
+            "result": result,
+        }
 
     @classmethod
     def update_widget(

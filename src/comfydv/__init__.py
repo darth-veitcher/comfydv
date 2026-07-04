@@ -6,6 +6,9 @@ from .ollama import (
     OllamaClient,
     OllamaChatCompletion,
     OllamaDebugHistory,
+    OllamaHeaderBasicAuth,
+    OllamaHeaderBearerToken,
+    OllamaHeaderCustom,
     OllamaHistoryLength,
     OllamaLoadModel,
     OllamaModelSelector,
@@ -43,6 +46,9 @@ NODE_CLASS_MAPPINGS = {
     "OllamaOptionExtraBody": OllamaOptionExtraBody,
     "OllamaDebugHistory": OllamaDebugHistory,
     "OllamaHistoryLength": OllamaHistoryLength,
+    "OllamaHeaderBasicAuth": OllamaHeaderBasicAuth,
+    "OllamaHeaderBearerToken": OllamaHeaderBearerToken,
+    "OllamaHeaderCustom": OllamaHeaderCustom,
 }
 
 # A dictionary that contains the friendly/humanly readable titles for the nodes
@@ -65,6 +71,9 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "OllamaOptionExtraBody": "Ollama Option — Extra Body",
     "OllamaDebugHistory": "Ollama Debug History",
     "OllamaHistoryLength": "Ollama History Length",
+    "OllamaHeaderBasicAuth": "Ollama Header — Basic Auth",
+    "OllamaHeaderBearerToken": "Ollama Header — Bearer Token",
+    "OllamaHeaderCustom": "Ollama Header — Custom",
 }
 
 WEB_DIRECTORY = "../js"

@@ -25,6 +25,9 @@ from comfydv.ollama import (
     OllamaClient,
     OllamaClientType,
     OllamaDebugHistory,
+    OllamaHeaderBasicAuth,
+    OllamaHeaderBearerToken,
+    OllamaHeaderCustom,
     OllamaHistoryLength,
     OllamaLoadModel,
     OllamaModelSelector,
@@ -36,6 +39,7 @@ from comfydv.ollama import (
     OllamaOptionTopK,
     OllamaOptionTopP,
     OllamaUnloadModel,
+    _MODEL_LIST_CACHE,
     _fetch_models,
     _post_json,
     _run_async,
@@ -171,7 +175,7 @@ class TestInfrastructure:
                 return False
 
         class FakeSession:
-            def post(self, url, *, json=None, timeout=None):
+            def post(self, url, *, json=None, timeout=None, headers=None):
                 captured["timeout"] = timeout
                 return FakeResponse()
 
@@ -287,7 +291,7 @@ class TestUS3ModelLifecycle:
         """Issue 4: load_model should POST to /api/generate, not /api/show."""
         captured = {}
 
-        async def fake_post(url, payload, *, timeout=120.0):
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
             captured["url"] = url
             return {}
 
@@ -307,7 +311,7 @@ class TestUS3ModelLifecycle:
         """Issue 4: unload_model should POST to /api/generate, not /api/show."""
         captured = {}
 
-        async def fake_post(url, payload, *, timeout=120.0):
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
             captured["url"] = url
             return {}
 
@@ -329,7 +333,7 @@ class TestUS3ModelLifecycle:
         """Issue 5: load_model must send keep_alive as integer -1, not string '-1'."""
         captured = {}
 
-        async def fake_post(url, payload, *, timeout=120.0):
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
             captured["payload"] = payload
             return {}
 
@@ -353,7 +357,7 @@ class TestUS3ModelLifecycle:
         """Issue 5: unload_model must send keep_alive as integer 0."""
         captured = {}
 
-        async def fake_post(url, payload, *, timeout=120.0):
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
             captured["payload"] = payload
             return {}
 
@@ -444,7 +448,7 @@ class TestUS4ChatCompletion:
         """Wiring OllamaLoadModel.model_name → OllamaChatCompletion.model works."""
         captured = {}
 
-        async def fake_post(url, payload, *, timeout=120.0):
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
             captured["model"] = payload.get("model")
             return {"message": {"content": "ok"}}
 
@@ -480,7 +484,7 @@ class TestUS4ChatCompletion:
     def test_chat_returns_ui_result_dict(self, monkeypatch):
         """chat() must return {'ui': ..., 'result': ...} not a bare tuple."""
 
-        async def fake_post(url, payload, *, timeout=120.0):
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
             return {"message": {"content": "hello"}}
 
         import comfydv.ollama as ollama_mod
@@ -495,7 +499,7 @@ class TestUS4ChatCompletion:
     def test_chat_ui_contains_response_text(self, monkeypatch):
         """Response text must appear in ui['text'] for the inline display."""
 
-        async def fake_post(url, payload, *, timeout=120.0):
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
             return {"message": {"content": "hello world"}}
 
         import comfydv.ollama as ollama_mod
@@ -508,7 +512,7 @@ class TestUS4ChatCompletion:
     def test_chat_result_is_3_tuple(self, monkeypatch):
         """result key must be the 3-tuple (response, history, model_name)."""
 
-        async def fake_post(url, payload, *, timeout=120.0):
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
             return {"message": {"content": "hello"}}
 
         import comfydv.ollama as ollama_mod
@@ -548,7 +552,7 @@ class TestUS4ChatCompletion:
         """
         captured = {}
 
-        async def fake_post(url, payload, *, timeout=120.0):
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
             captured["timeout"] = timeout
             return {"message": {"content": "ok"}}
 
@@ -740,12 +744,364 @@ class TestUS6HistoryInspection:
 
 
 # ---------------------------------------------------------------------------
+# US7 — Auth headers
+# ---------------------------------------------------------------------------
+
+
+class TestUS7AuthHeaders:
+    def test_client_without_headers_has_empty_dict(self):
+        (client,) = OllamaClient().create_client("http://localhost:11434")
+        assert client.headers == {}
+
+    def test_client_carries_headers(self):
+        (client,) = OllamaClient().create_client(
+            "http://localhost:11434", headers={"Authorization": "Bearer abc"}
+        )
+        assert client.headers == {"Authorization": "Bearer abc"}
+        assert client == "http://localhost:11434", (
+            "OllamaClientType must still compare equal to the plain host string"
+        )
+
+    def test_basic_auth_sets_authorization_header(self):
+        (headers,) = OllamaHeaderBasicAuth().set_basic_auth(
+            username="alice", password="hunter2"
+        )
+        assert headers["Authorization"].startswith("Basic ")
+
+    def test_basic_auth_encodes_username_password(self):
+        import base64
+
+        (headers,) = OllamaHeaderBasicAuth().set_basic_auth(
+            username="alice", password="hunter2"
+        )
+        token = headers["Authorization"].removeprefix("Basic ")
+        assert base64.b64decode(token).decode() == "alice:hunter2"
+
+    def test_bearer_token_sets_authorization_header(self):
+        (headers,) = OllamaHeaderBearerToken().set_bearer_token(token="sk-12345")
+        assert headers == {"Authorization": "Bearer sk-12345"}
+
+    def test_custom_header_sets_arbitrary_name(self):
+        (headers,) = OllamaHeaderCustom().set_custom_header(
+            name="X-Api-Key", value="abc123"
+        )
+        assert headers == {"X-Api-Key": "abc123"}
+
+    def test_custom_header_empty_name_raises(self):
+        with pytest.raises(ValueError, match="cannot be empty"):
+            OllamaHeaderCustom().set_custom_header(name="", value="abc123")
+
+    def test_headers_chain_and_merge(self):
+        """Scenario: Bearer token + a custom header both reach the request."""
+        (h1,) = OllamaHeaderBearerToken().set_bearer_token(token="sk-12345")
+        (h2,) = OllamaHeaderCustom().set_custom_header(
+            name="X-Api-Key", value="abc123", headers=h1
+        )
+        assert h2 == {"Authorization": "Bearer sk-12345", "X-Api-Key": "abc123"}
+
+    def test_load_model_forwards_client_headers(self, monkeypatch):
+        captured = {}
+
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
+            captured["headers"] = headers
+            return {}
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        (client,) = OllamaClient().create_client(
+            "http://localhost:11434", headers={"Authorization": "Bearer sk-1"}
+        )
+        OllamaLoadModel().load_model(client=client, model="test-model")
+
+        assert captured["headers"] == {"Authorization": "Bearer sk-1"}
+
+    def test_unload_model_forwards_client_headers(self, monkeypatch):
+        captured = {}
+
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
+            captured["headers"] = headers
+            return {}
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        (client,) = OllamaClient().create_client(
+            "http://localhost:11434", headers={"Authorization": "Bearer sk-1"}
+        )
+        OllamaUnloadModel().unload_model(client=client, model="test-model")
+
+        assert captured["headers"] == {"Authorization": "Bearer sk-1"}
+
+    def test_chat_forwards_client_headers(self, monkeypatch):
+        captured = {}
+
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
+            captured["headers"] = headers
+            return {"message": {"content": "ok"}}
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        (client,) = OllamaClient().create_client(
+            "http://localhost:11434", headers={"Authorization": "Bearer sk-1"}
+        )
+        OllamaChatCompletion().chat(client=client, model="m", prompt="hi")
+
+        assert captured["headers"] == {"Authorization": "Bearer sk-1"}
+
+    def test_plain_string_client_has_no_headers(self, monkeypatch):
+        """Backward compat: a bare string client (no OllamaClient node) sends no headers."""
+        captured = {}
+
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
+            captured["headers"] = headers
+            return {"message": {"content": "ok"}}
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        OllamaChatCompletion().chat(
+            client="http://localhost:11434", model="m", prompt="hi"
+        )
+
+        assert captured["headers"] is None
+
+
+# ---------------------------------------------------------------------------
+# Response cache — model discovery + chat completion
+# ---------------------------------------------------------------------------
+
+
+class TestResponseCache:
+    def test_fetch_models_second_call_is_cached(self, monkeypatch):
+        calls = {"n": 0}
+
+        class FakeResponse:
+            status = 200
+
+            async def json(self):
+                calls["n"] += 1
+                return {"models": [{"name": "llama3:latest"}]}
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+        class FakeSession:
+            def get(self, url, *, headers=None, timeout=None):
+                return FakeResponse()
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+        import aiohttp
+
+        monkeypatch.setattr(aiohttp, "ClientSession", lambda: FakeSession())
+
+        models1 = _run_async(_fetch_models("http://localhost:11434"))
+        models2 = _run_async(_fetch_models("http://localhost:11434"))
+
+        assert models1 == models2 == ["llama3:latest"]
+        assert calls["n"] == 1, "second call with identical inputs must hit the cache"
+
+    def test_fetch_models_different_host_not_cached(self, monkeypatch):
+        calls = {"n": 0}
+
+        class FakeResponse:
+            status = 200
+
+            async def json(self):
+                calls["n"] += 1
+                return {"models": [{"name": "llama3:latest"}]}
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+        class FakeSession:
+            def get(self, url, *, headers=None, timeout=None):
+                return FakeResponse()
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+        import aiohttp
+
+        monkeypatch.setattr(aiohttp, "ClientSession", lambda: FakeSession())
+
+        _run_async(_fetch_models("http://host-a:11434"))
+        _run_async(_fetch_models("http://host-b:11434"))
+
+        assert calls["n"] == 2, "different hosts must not share a cache entry"
+
+    def test_fetch_models_ttl_expiry_refetches(self, monkeypatch):
+        """A newly-installed model must surface once the TTL lapses."""
+        calls = {"n": 0}
+
+        class FakeResponse:
+            status = 200
+
+            async def json(self):
+                calls["n"] += 1
+                return {"models": [{"name": "llama3:latest"}]}
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+        class FakeSession:
+            def get(self, url, *, headers=None, timeout=None):
+                return FakeResponse()
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+        import aiohttp
+
+        monkeypatch.setattr(aiohttp, "ClientSession", lambda: FakeSession())
+
+        _run_async(_fetch_models("http://localhost:11434"))
+        assert calls["n"] == 1
+
+        # Simulate TTL lapsing by clearing the cache directly rather than
+        # sleeping in a unit test.
+        _MODEL_LIST_CACHE.clear()
+
+        _run_async(_fetch_models("http://localhost:11434"))
+        assert calls["n"] == 2
+
+    def test_chat_second_identical_call_is_cached(self, monkeypatch):
+        calls = {"n": 0}
+
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
+            calls["n"] += 1
+            return {"message": {"content": f"response #{calls['n']}"}}
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        r1, _, _ = OllamaChatCompletion().chat(
+            client="http://x", model="m", prompt="hi"
+        )["result"]
+        r2, _, _ = OllamaChatCompletion().chat(
+            client="http://x", model="m", prompt="hi"
+        )["result"]
+
+        assert r1 == r2 == "response #1"
+        assert calls["n"] == 1, "identical chat inputs must reuse the cached response"
+
+    def test_chat_different_prompt_not_cached(self, monkeypatch):
+        calls = {"n": 0}
+
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
+            calls["n"] += 1
+            return {"message": {"content": f"response #{calls['n']}"}}
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        OllamaChatCompletion().chat(client="http://x", model="m", prompt="hi")
+        OllamaChatCompletion().chat(client="http://x", model="m", prompt="bye")
+
+        assert calls["n"] == 2, "different prompts must not share a cache entry"
+
+    def test_chat_different_options_not_cached(self, monkeypatch):
+        calls = {"n": 0}
+
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
+            calls["n"] += 1
+            return {"message": {"content": f"response #{calls['n']}"}}
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        OllamaChatCompletion().chat(
+            client="http://x", model="m", prompt="hi", options={"temperature": 0.0}
+        )
+        OllamaChatCompletion().chat(
+            client="http://x", model="m", prompt="hi", options={"temperature": 0.9}
+        )
+
+        assert calls["n"] == 2, "different options must not share a cache entry"
+
+    def test_chat_grown_history_not_cached(self, monkeypatch):
+        """A follow-up turn (different message history) must not reuse turn 1's cache entry."""
+        calls = {"n": 0}
+
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
+            calls["n"] += 1
+            return {"message": {"content": f"response #{calls['n']}"}}
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        _, h1, _ = OllamaChatCompletion().chat(
+            client="http://x", model="m", prompt="turn 1", history=[]
+        )["result"]
+        OllamaChatCompletion().chat(
+            client="http://x", model="m", prompt="turn 2", history=h1
+        )
+
+        assert calls["n"] == 2
+
+    def test_chat_different_client_headers_not_cached(self, monkeypatch):
+        calls = {"n": 0}
+
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
+            calls["n"] += 1
+            return {"message": {"content": f"response #{calls['n']}"}}
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        (client_a,) = OllamaClient().create_client(
+            "http://x", headers={"Authorization": "Bearer a"}
+        )
+        (client_b,) = OllamaClient().create_client(
+            "http://x", headers={"Authorization": "Bearer b"}
+        )
+
+        OllamaChatCompletion().chat(client=client_a, model="m", prompt="hi")
+        OllamaChatCompletion().chat(client=client_b, model="m", prompt="hi")
+
+        assert calls["n"] == 2, (
+            "requests to the same host with different auth headers must not share "
+            "a cache entry"
+        )
+
+
+# ---------------------------------------------------------------------------
 # Node contract sanity checks (ComfyUI registration requirements)
 # ---------------------------------------------------------------------------
 
 
 class TestNodeContracts:
-    """All 14 nodes must satisfy ComfyUI's node registration contract."""
+    """All 17 nodes must satisfy ComfyUI's node registration contract."""
 
     NODE_CLASSES = [
         OllamaClient,
@@ -762,6 +1118,9 @@ class TestNodeContracts:
         OllamaOptionExtraBody,
         OllamaDebugHistory,
         OllamaHistoryLength,
+        OllamaHeaderBasicAuth,
+        OllamaHeaderBearerToken,
+        OllamaHeaderCustom,
     ]
 
     @pytest.mark.parametrize("node_cls", NODE_CLASSES, ids=lambda c: c.__name__)
