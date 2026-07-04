@@ -565,10 +565,11 @@
     <div class="doc doc-contents first">
 
         <p>Ollama model integration nodes for ComfyUI.</p>
-<p>14 nodes: client configuration, model discovery, load/unload, chat completion,
-composable inference options, and history utilities.</p>
+<p>17 nodes: client configuration, auth headers, model discovery, load/unload,
+chat completion, composable inference options, and history utilities.</p>
 <p>ADR-004: aiohttp (already in ComfyUI dep tree) for all Ollama HTTP calls.
-ADR-005: OllamaClient node is the single source of the host URL.</p>
+ADR-005: OllamaClient node is the single source of the host URL (and, per
+US7, of any auth headers — every downstream node reaches the same server).</p>
 
 
 
@@ -604,6 +605,10 @@ ADR-005: OllamaClient node is the single source of the host URL.</p>
 
 
         <p>Typed string carrying the Ollama host URL through the node graph.</p>
+<p>Also carries an optional <code>.headers</code> dict (US7 — basic auth / bearer
+tokens for Ollama servers behind a reverse proxy). Since this is a plain
+<code>str</code> subclass, every existing <code>f"{client}/api/..."</code> call site keeps
+working unchanged; only code that wants auth reads <code>.headers</code>.</p>
 
 
 
@@ -613,11 +618,49 @@ ADR-005: OllamaClient node is the single source of the host URL.</p>
 
               <details class="quote">
                 <summary>Source code in <code>src/comfydv/ollama.py</code></summary>
-                <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">25</span>
-<span class="normal">26</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">OllamaClientType</span><span class="p">(</span><span class="nb">str</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Typed string carrying the Ollama host URL through the node graph.&quot;&quot;&quot;</span>
+                <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 92</span>
+<span class="normal"> 93</span>
+<span class="normal"> 94</span>
+<span class="normal"> 95</span>
+<span class="normal"> 96</span>
+<span class="normal"> 97</span>
+<span class="normal"> 98</span>
+<span class="normal"> 99</span>
+<span class="normal">100</span>
+<span class="normal">101</span>
+<span class="normal">102</span>
+<span class="normal">103</span>
+<span class="normal">104</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">OllamaClientType</span><span class="p">(</span><span class="nb">str</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Typed string carrying the Ollama host URL through the node graph.</span>
+
+<span class="sd">    Also carries an optional ``.headers`` dict (US7 — basic auth / bearer</span>
+<span class="sd">    tokens for Ollama servers behind a reverse proxy). Since this is a plain</span>
+<span class="sd">    ``str`` subclass, every existing ``f&quot;{client}/api/...&quot;`` call site keeps</span>
+<span class="sd">    working unchanged; only code that wants auth reads ``.headers``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__new__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">obj</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__new__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">host</span><span class="p">)</span>
+        <span class="n">obj</span><span class="o">.</span><span class="n">headers</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">headers</span><span class="p">)</span> <span class="k">if</span> <span class="n">headers</span> <span class="k">else</span> <span class="p">{}</span>
+        <span class="k">return</span> <span class="n">obj</span>
 </code></pre></div></td></tr></table></div>
               </details>
+
+
+
+  <div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+  </div>
 
     </div>
 
@@ -651,43 +694,44 @@ continue using it.</p>
 
               <details class="quote">
                 <summary>Source code in <code>src/comfydv/ollama.py</code></summary>
-                <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">221</span>
-<span class="normal">222</span>
-<span class="normal">223</span>
-<span class="normal">224</span>
-<span class="normal">225</span>
-<span class="normal">226</span>
-<span class="normal">227</span>
-<span class="normal">228</span>
-<span class="normal">229</span>
-<span class="normal">230</span>
-<span class="normal">231</span>
-<span class="normal">232</span>
-<span class="normal">233</span>
-<span class="normal">234</span>
-<span class="normal">235</span>
-<span class="normal">236</span>
-<span class="normal">237</span>
-<span class="normal">238</span>
-<span class="normal">239</span>
-<span class="normal">240</span>
-<span class="normal">241</span>
-<span class="normal">242</span>
-<span class="normal">243</span>
-<span class="normal">244</span>
-<span class="normal">245</span>
-<span class="normal">246</span>
-<span class="normal">247</span>
-<span class="normal">248</span>
-<span class="normal">249</span>
-<span class="normal">250</span>
-<span class="normal">251</span>
-<span class="normal">252</span>
-<span class="normal">253</span>
-<span class="normal">254</span>
-<span class="normal">255</span>
-<span class="normal">256</span>
-<span class="normal">257</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">OllamaUnloadModel</span><span class="p">:</span>
+                <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">406</span>
+<span class="normal">407</span>
+<span class="normal">408</span>
+<span class="normal">409</span>
+<span class="normal">410</span>
+<span class="normal">411</span>
+<span class="normal">412</span>
+<span class="normal">413</span>
+<span class="normal">414</span>
+<span class="normal">415</span>
+<span class="normal">416</span>
+<span class="normal">417</span>
+<span class="normal">418</span>
+<span class="normal">419</span>
+<span class="normal">420</span>
+<span class="normal">421</span>
+<span class="normal">422</span>
+<span class="normal">423</span>
+<span class="normal">424</span>
+<span class="normal">425</span>
+<span class="normal">426</span>
+<span class="normal">427</span>
+<span class="normal">428</span>
+<span class="normal">429</span>
+<span class="normal">430</span>
+<span class="normal">431</span>
+<span class="normal">432</span>
+<span class="normal">433</span>
+<span class="normal">434</span>
+<span class="normal">435</span>
+<span class="normal">436</span>
+<span class="normal">437</span>
+<span class="normal">438</span>
+<span class="normal">439</span>
+<span class="normal">440</span>
+<span class="normal">441</span>
+<span class="normal">442</span>
+<span class="normal">443</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">OllamaUnloadModel</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Evict a model from VRAM and pass a value through unchanged.</span>
 
 <span class="sd">    Wire ``passthrough`` from a downstream node (e.g. the ``response`` output</span>
@@ -721,6 +765,7 @@ continue using it.</p>
                 <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">client</span><span class="si">}</span><span class="s2">/api/generate&quot;</span><span class="p">,</span>
                 <span class="p">{</span><span class="s2">&quot;model&quot;</span><span class="p">:</span> <span class="n">model</span><span class="p">,</span> <span class="s2">&quot;keep_alive&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;stream&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">},</span>
                 <span class="n">timeout</span><span class="o">=</span><span class="mf">30.0</span><span class="p">,</span>
+                <span class="n">headers</span><span class="o">=</span><span class="n">_client_headers</span><span class="p">(</span><span class="n">client</span><span class="p">),</span>
             <span class="p">)</span>
         <span class="p">)</span>
         <span class="k">return</span> <span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">passthrough</span><span class="p">)</span>
