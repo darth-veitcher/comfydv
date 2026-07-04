@@ -1,7 +1,7 @@
 # Epic: Ollama Model Integration
 
 ## Status
-Planning  — started 2026-06-28
+Done — completed 2026-07-04
 
 ## Why now
 
