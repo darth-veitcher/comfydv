@@ -2,3 +2,4 @@
 # Lists only deps NOT already provided by ComfyUI's own environment.
 # See ADR-003: never auto-generate this file with `uv export`.
 jinja2>=3.1.6
+pydantic>=2.0
