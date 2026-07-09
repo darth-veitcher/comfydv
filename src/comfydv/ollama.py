@@ -7,6 +7,9 @@ chat completion, composable inference options, and history utilities.
 ADR-004: aiohttp (already in ComfyUI dep tree) for all Ollama HTTP calls.
 ADR-005: OllamaClient node is the single source of the host URL (and, per
 US7, of any auth headers — every downstream node reaches the same server).
+ADR-006: structured_output uses Ollama's OpenAI-compatible tool-calling
+endpoint + a dynamically-built pydantic model for validation, not
+pydantic-ai — still plain aiohttp, no new HTTP client.
 """
 
 import asyncio
@@ -16,6 +19,8 @@ import os
 import sys
 import threading
 import time
+
+from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -460,8 +465,151 @@ def _history_preview(messages: list[dict]) -> str:
     return "\n".join(lines)
 
 
+# ---------------------------------------------------------------------------
+# Structured output — Ollama's OpenAI-compatible /v1/chat/completions
+# tool-calling, with a single forced tool matching output_schema
+# ---------------------------------------------------------------------------
+#
+# ADR-006: forces the model to emit its answer as a single tool call whose
+# arguments match output_schema, instead of relying on prompt wording —
+# fixes commentary, code-fence wrapping, and blank output at the source.
+# Ollama's native /api/chat "format" (JSON-Schema-constrained decoding) was
+# tried first but proved unreliable against at least one real model in
+# testing (a modified-tokenizer quantization silently ignored the schema
+# rather than erroring); tool-calling relies on the model's own trained
+# function-calling behavior instead of grammar-to-token mapping, and is
+# still reached over the existing aiohttp-based _post_json — no new HTTP
+# client. pydantic is used purely to dynamically build a validation model
+# from the user's schema, not as an HTTP client.
+
+_JSON_SCHEMA_TO_PY_TYPE: dict = {
+    "string": str,
+    "integer": int,
+    "number": float,
+    "boolean": bool,
+    "array": list,
+    "object": dict,
+}
+_JSON_SCHEMA_TO_COMFY_TYPE: dict = {
+    "string": "STRING",
+    "integer": "INT",
+    "number": "FLOAT",
+    "boolean": "BOOLEAN",
+    "array": "STRING",
+    "object": "STRING",
+}
+_DEFAULT_OUTPUT_SCHEMA = (
+    '{"type": "object", "properties": '
+    '{"output": {"type": "string"}}, "required": ["output"]}'
+)
+
+
+def _parse_output_schema(output_schema: str) -> dict:
+    """Parse+validate output_schema JSON, fail fast before any network call."""
+    try:
+        schema = json.loads(output_schema)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"output_schema is not valid JSON: {exc}") from exc
+    if not isinstance(schema, dict) or schema.get("type") != "object":
+        raise ValueError(
+            'output_schema must be a JSON Schema object with "type": "object" '
+            'at the root, e.g. {"type": "object", "properties": {...}}'
+        )
+    properties = schema.get("properties")
+    if not isinstance(properties, dict) or not properties:
+        raise ValueError(
+            "output_schema.properties must be a non-empty object — "
+            "structured_output requires at least one field to extract"
+        )
+    return schema
+
+
+def _comfy_types_for_schema(schema: dict) -> tuple:
+    return tuple(
+        _JSON_SCHEMA_TO_COMFY_TYPE.get(prop.get("type"), "STRING")
+        for prop in schema["properties"].values()
+    )
+
+
+def _build_structured_model(schema: dict):
+    """Dynamically build a pydantic BaseModel from schema properties/required.
+
+    Rebuilt every call — create_model() on a handful of fields is cheap, and
+    OllamaChatCompletion already re-executes every queue run (OUTPUT_NODE=True).
+
+    Required *string* fields get `min_length=1`: JSON Schema's "required"
+    only checks presence, so a model could satisfy it with `""` — which is
+    exactly the "blank output" problem this feature exists to eliminate. An
+    empty required string now fails validation and triggers a retry like any
+    other malformed response, rather than silently passing through.
+    """
+    from pydantic import Field, create_model
+
+    required = set(schema.get("required", []))
+    fields = {}
+    for name, prop in schema["properties"].items():
+        py_type = _JSON_SCHEMA_TO_PY_TYPE.get(prop.get("type"), str)
+        if name not in required:
+            fields[name] = (py_type, None)
+        elif py_type is str:
+            fields[name] = (py_type, Field(..., min_length=1))
+        else:
+            fields[name] = (py_type, ...)
+    return create_model("OllamaStructuredOutput", **fields)
+
+
+def _coerce_structured_value(value, comfy_type: str):
+    if comfy_type == "STRING" and isinstance(value, (list, dict)):
+        return json.dumps(value)
+    if comfy_type == "STRING" and value is None:
+        return ""
+    return value
+
+
+_STRUCTURED_TOOL_NAME = "emit_structured_output"
+
+
+def _build_tool_call_payload(schema: dict) -> tuple:
+    """tools/tool_choice extras forcing a single call matching schema."""
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": _STRUCTURED_TOOL_NAME,
+                "description": "Emit the result matching the required schema.",
+                "parameters": schema,
+            },
+        }
+    ]
+    tool_choice = {"type": "function", "function": {"name": _STRUCTURED_TOOL_NAME}}
+    return tools, tool_choice
+
+
+def _extract_tool_call_arguments(result: dict) -> str:
+    """Pull the forced tool call's arguments JSON string out of an OpenAI-
+    compatible /v1/chat/completions response. Empty string (which will fail
+    pydantic validation and trigger a retry) if the model didn't call the
+    tool at all — this happens on occasion even with tool_choice forcing it.
+    """
+    choices = result.get("choices") or []
+    if not choices:
+        return ""
+    message = choices[0].get("message", {})
+    tool_calls = message.get("tool_calls") or []
+    if not tool_calls:
+        return ""
+    return tool_calls[0].get("function", {}).get("arguments", "") or ""
+
+
 class OllamaChatCompletion:
     OUTPUT_NODE = True
+
+    _BASE_RETURN_TYPES = ("STRING", "OLLAMA_HISTORY", "STRING")
+    _BASE_RETURN_NAMES = ("response", "updated_history", "model_name")
+
+    # Per-node-instance structured-output config, keyed by unique_id — same
+    # pattern as FormatString.node_configs.
+    node_configs: dict = {}
 
     @classmethod
     def INPUT_TYPES(s):
@@ -478,13 +626,44 @@ class OllamaChatCompletion:
                 "history": ("OLLAMA_HISTORY",),
                 "options": ("OLLAMA_OPTIONS",),
                 "timeout_secs": ("INT", {"default": 300, "min": 30, "max": 3600}),
+                "structured_output": ("BOOLEAN", {"default": False}),
+                "output_schema": (
+                    "STRING",
+                    {"multiline": True, "default": _DEFAULT_OUTPUT_SCHEMA},
+                ),
+                "max_retries": ("INT", {"default": 2, "min": 0, "max": 5}),
             },
+            "hidden": {"unique_id": "UNIQUE_ID"},
         }
 
-    RETURN_TYPES = ("STRING", "OLLAMA_HISTORY", "STRING")
-    RETURN_NAMES = ("response", "updated_history", "model_name")
+    RETURN_TYPES = _BASE_RETURN_TYPES
+    RETURN_NAMES = _BASE_RETURN_NAMES
     FUNCTION = "chat"
     CATEGORY = "dv/ollama"
+
+    @classmethod
+    def update_outputs(
+        cls, unique_id: str, structured_output: bool, schema: dict | None
+    ) -> None:
+        """Mutate class-level RETURN_TYPES/RETURN_NAMES for structured_output mode.
+
+        Same class-level-shared-state pattern (and limitation) as
+        FormatString.update_widget: RETURN_TYPES/RETURN_NAMES are shared
+        across all instances of this node type in a graph, so the very first
+        execution after toggling structured_output or editing output_schema
+        may show stale downstream socket typing until it runs once.
+        """
+        cls.node_configs[unique_id] = {
+            "structured_output": structured_output,
+            "schema": schema,
+        }
+        if not structured_output or not schema:
+            cls.RETURN_TYPES = cls._BASE_RETURN_TYPES
+            cls.RETURN_NAMES = cls._BASE_RETURN_NAMES
+            return
+        names = tuple(schema["properties"].keys())
+        cls.RETURN_TYPES = cls._BASE_RETURN_TYPES + _comfy_types_for_schema(schema)
+        cls.RETURN_NAMES = cls._BASE_RETURN_NAMES + names
 
     def chat(
         self,
@@ -495,10 +674,24 @@ class OllamaChatCompletion:
         history=None,
         options=None,
         timeout_secs=300,
+        structured_output=False,
+        output_schema=_DEFAULT_OUTPUT_SCHEMA,
+        max_retries=2,
+        unique_id="",
     ):
         effective_model = model.strip()
         if not effective_model:
             raise ValueError("model cannot be empty — type a model name or wire one in")
+
+        schema = None
+        pydantic_model = None
+        if structured_output:
+            schema = _parse_output_schema(output_schema)  # fail fast, no network call
+            pydantic_model = _build_structured_model(schema)
+
+        if unique_id:
+            type(self).update_outputs(unique_id, structured_output, schema)
+
         if history is None:
             history = []
         messages = list(history)
@@ -512,25 +705,85 @@ class OllamaChatCompletion:
         }
         if options:
             payload["options"] = options
+        if structured_output:
+            # ADR-006: OpenAI-compatible tool-calling, not native /api/chat
+            # "format" — forces a single call whose arguments match schema.
+            assert schema is not None  # structured_output implies this was parsed
+            tools, tool_choice = _build_tool_call_payload(schema)
+            payload["tools"] = tools
+            payload["tool_choice"] = tool_choice
 
         headers = _client_headers(client)
         cache_key = _cache_key(
-            "chat", client, headers or {}, effective_model, messages, options or {}
+            "chat",
+            client,
+            headers or {},
+            effective_model,
+            messages,
+            options or {},
+            schema or {},
         )
         cached, hit = _CHAT_RESPONSE_CACHE.get(cache_key)
-        if hit:
-            response_text = cached
-        else:
-            result = _run_async(
-                _post_json(
-                    f"{client}/api/chat",
-                    payload,
-                    timeout=float(timeout_secs),
-                    headers=headers,
+        url = (
+            f"{client}/v1/chat/completions"
+            if structured_output
+            else f"{client}/api/chat"
+        )
+
+        parsed = None
+        if not structured_output:
+            # Unchanged from pre-structured-output behavior.
+            if hit:
+                response_text = cached
+            else:
+                result = _run_async(
+                    _post_json(
+                        url, payload, timeout=float(timeout_secs), headers=headers
+                    )
                 )
-            )
-            response_text = result.get("message", {}).get("content", "")
-            _CHAT_RESPONSE_CACHE.set(cache_key, response_text)
+                response_text = result.get("message", {}).get("content", "")
+                _CHAT_RESPONSE_CACHE.set(cache_key, response_text)
+        elif hit:
+            # schema is part of the cache key, so a hit was necessarily
+            # validated against this exact schema when it was written —
+            # re-parsing here is guaranteed-successful deserialization, not
+            # a fallible re-check.
+            assert (
+                pydantic_model is not None
+            )  # structured_output implies this was built
+            response_text = cached
+            parsed = pydantic_model.model_validate_json(response_text)
+        else:
+            assert (
+                pydantic_model is not None
+            )  # structured_output implies this was built
+            total_attempts = max(0, min(int(max_retries), 5)) + 1
+            response_text = None
+            last_invalid_text = ""
+            last_error = None
+            for _attempt in range(1, total_attempts + 1):
+                result = _run_async(
+                    _post_json(
+                        url, payload, timeout=float(timeout_secs), headers=headers
+                    )
+                )
+                candidate = _extract_tool_call_arguments(result)
+                try:
+                    parsed = pydantic_model.model_validate_json(candidate)
+                    response_text = candidate
+                    _CHAT_RESPONSE_CACHE.set(cache_key, response_text)
+                    break
+                except ValidationError as exc:
+                    last_invalid_text = candidate
+                    last_error = exc
+            else:
+                raise RuntimeError(
+                    f"OllamaChatCompletion: structured_output response failed "
+                    f"validation against output_schema after {total_attempts} "
+                    f"attempt(s) (model={effective_model!r}). Last error: "
+                    f"{last_error}. Last response (truncated): "
+                    f"{last_invalid_text[:300]!r}"
+                )
 
         updated = list(history)
         updated.append({"role": "user", "content": prompt})
@@ -541,10 +794,74 @@ class OllamaChatCompletion:
             if n > 2
             else response_text
         )
+
+        result_tuple = (response_text, updated, effective_model)
+        if structured_output:
+            assert schema is not None  # structured_output implies this was parsed
+            comfy_types = _comfy_types_for_schema(schema)
+            extra = tuple(
+                _coerce_structured_value(getattr(parsed, name), ctype)
+                for name, ctype in zip(schema["properties"].keys(), comfy_types)
+            )
+            result_tuple += extra
+
         return {
             "ui": {"text": [ui_text]},
-            "result": (response_text, updated, effective_model),
+            "result": result_tuple,
         }
+
+
+# ---------------------------------------------------------------------------
+# ComfyUI server route — live structured-output socket preview
+# ---------------------------------------------------------------------------
+#
+# Mirrors FormatString's /update_format_string_node route: as the user edits
+# structured_output/output_schema, the frontend posts here to recompute
+# OllamaChatCompletion.RETURN_TYPES/RETURN_NAMES (the same update_outputs()
+# path chat() uses at execution time) and get back the current output list,
+# so dynamic sockets appear on the node immediately — no need to run the
+# graph first. No network call to Ollama; schema parsing is pure/local.
+
+if "comfy" in sys.modules:
+    # PromptServer already imported at module scope by the /dv/ollama/models
+    # route registration above.
+    @PromptServer.instance.routes.post("/dv/ollama/update_structured_outputs")
+    async def _update_structured_outputs_endpoint(request):
+        from aiohttp import web
+
+        data = await request.json()
+        unique_id = str(data.get("unique_id", ""))
+        structured_output = bool(data.get("structured_output", False))
+        output_schema = data.get("output_schema", "")
+
+        schema = None
+        if structured_output:
+            try:
+                schema = _parse_output_schema(output_schema)
+            except ValueError:
+                # Invalid/incomplete JSON while the user is still typing —
+                # fall back to the base (non-structured) outputs rather than
+                # erroring the request.
+                schema = None
+
+        if unique_id:
+            OllamaChatCompletion.update_outputs(
+                unique_id, structured_output and schema is not None, schema
+            )
+
+        outputs = [
+            {"name": name, "type": otype}
+            for name, otype in zip(
+                OllamaChatCompletion.RETURN_NAMES, OllamaChatCompletion.RETURN_TYPES
+            )
+        ]
+        return web.json_response({"outputs": outputs})
+
+else:
+    logger.warning(
+        "ComfyUI not detected — /dv/ollama/update_structured_outputs route "
+        "will not be registered."
+    )
 
 
 # ---------------------------------------------------------------------------

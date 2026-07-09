@@ -626,6 +626,478 @@ class TestUS4ChatCompletion:
         )["result"]
         assert len(h2) == 4
 
+    @pytest.mark.integration
+    def test_structured_output_retries_then_raises_against_live_server(
+        self, ollama_host, skip_if_no_ollama
+    ):
+        """Scenario: structured_output's retry-then-raise fallback against a
+        real server, using an unreliable model that empirically cannot be
+        made to call the forced tool consistently.
+
+        This intentionally does NOT assert a happy-path clean result: the
+        only generative model available in CI/dev environments running this
+        (a community "abliterated" quantization) was found during
+        implementation to unreliably invoke tool calls regardless of
+        mechanism — see ADR-006. What IS worth proving against a live
+        server: the retry loop makes genuine repeated network calls (not
+        just replaying a mock) and produces a well-formed, diagnostic error
+        rather than hanging, crashing uninformatively, or silently returning
+        bad data. The happy path (clean structured extraction) is covered
+        thoroughly by the mocked TestStructuredOutput suite.
+        """
+        with pytest.raises(RuntimeError, match="failed validation") as exc_info:
+            OllamaChatCompletion().chat(
+                client=ollama_host,
+                model=_CHAT_MODEL,
+                prompt="Say exactly: pong",
+                options={"think": False},
+                structured_output=True,
+                output_schema=(
+                    '{"type":"object","properties":{"output":{"type":"string"}},'
+                    '"required":["output"]}'
+                ),
+                max_retries=1,
+                unique_id="smoke-test",
+            )
+        assert "2 attempt" in str(exc_info.value)
+        assert _CHAT_MODEL in str(exc_info.value)
+
+
+# ---------------------------------------------------------------------------
+# US8 — Structured output (OpenAI-compatible tool-calling + dynamic pydantic
+# model — see ADR-006 for why tool-calling rather than native `format`)
+# ---------------------------------------------------------------------------
+
+_SINGLE_FIELD_SCHEMA = (
+    '{"type": "object", "properties": {"output": {"type": "string"}}, '
+    '"required": ["output"]}'
+)
+_MULTI_FIELD_SCHEMA = (
+    '{"type": "object", "properties": {'
+    '"summary": {"type": "string"}, '
+    '"score": {"type": "integer"}, '
+    '"is_positive": {"type": "boolean"}}, '
+    '"required": ["summary", "score", "is_positive"]}'
+)
+
+
+def _tool_response(arguments_json: str) -> dict:
+    """Build an OpenAI-compatible /v1/chat/completions response with a single
+    forced tool call, matching what Ollama's compat layer returns."""
+    return {
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": "call_1",
+                            "type": "function",
+                            "function": {
+                                "name": "emit_structured_output",
+                                "arguments": arguments_json,
+                            },
+                        }
+                    ],
+                },
+                "finish_reason": "tool_calls",
+            }
+        ]
+    }
+
+
+def _no_tool_call_response() -> dict:
+    """Model didn't invoke the forced tool at all — happens even with
+    tool_choice forcing it, on some models. Empty arguments must fail
+    validation and trigger a retry like any other malformed response."""
+    return {
+        "choices": [
+            {"message": {"role": "assistant", "content": ""}, "finish_reason": "stop"}
+        ]
+    }
+
+
+class TestStructuredOutput:
+    def test_structured_output_defaults_to_false(self):
+        input_types = OllamaChatCompletion.INPUT_TYPES()
+        assert input_types["optional"]["structured_output"] == (
+            "BOOLEAN",
+            {"default": False},
+        )
+
+    def test_structured_output_false_payload_has_no_tools_key(self, monkeypatch):
+        captured = {}
+
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
+            captured["url"] = url
+            captured["payload"] = payload
+            return {"message": {"content": "hello"}}
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        OllamaChatCompletion().chat(
+            client="http://x", model="m", prompt="hi", structured_output=False
+        )
+        assert "tools" not in captured["payload"]
+        assert "tool_choice" not in captured["payload"]
+        assert captured["url"].endswith("/api/chat")
+
+    def test_structured_output_true_sends_tool_call_payload(self, monkeypatch):
+        captured = {}
+
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
+            captured["url"] = url
+            captured["payload"] = payload
+            return _tool_response('{"output": "hi there"}')
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        OllamaChatCompletion().chat(
+            client="http://x",
+            model="m",
+            prompt="hi",
+            structured_output=True,
+            output_schema=_SINGLE_FIELD_SCHEMA,
+            unique_id="n1",
+        )
+        assert captured["url"].endswith("/v1/chat/completions")
+        tool = captured["payload"]["tools"][0]
+        assert tool["type"] == "function"
+        assert tool["function"]["parameters"] == json.loads(_SINGLE_FIELD_SCHEMA)
+        assert captured["payload"]["tool_choice"] == {
+            "type": "function",
+            "function": {"name": tool["function"]["name"]},
+        }
+
+    def test_default_schema_produces_single_output_field(self, monkeypatch):
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
+            return _tool_response('{"output": "clean text"}')
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        ret = OllamaChatCompletion().chat(
+            client="http://x",
+            model="m",
+            prompt="hi",
+            structured_output=True,
+            unique_id="n2",
+        )
+        assert OllamaChatCompletion.RETURN_NAMES == (
+            "response",
+            "updated_history",
+            "model_name",
+            "output",
+        )
+        assert len(ret["result"]) == 4
+        assert ret["result"][3] == "clean text"
+        assert ret["result"][0] == '{"output": "clean text"}'
+
+    def test_multi_field_schema_sets_return_types_and_values(self, monkeypatch):
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
+            return _tool_response(
+                '{"summary": "great", "score": 9, "is_positive": true}'
+            )
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        ret = OllamaChatCompletion().chat(
+            client="http://x",
+            model="m",
+            prompt="hi",
+            structured_output=True,
+            output_schema=_MULTI_FIELD_SCHEMA,
+            unique_id="n3",
+        )
+        assert OllamaChatCompletion.RETURN_TYPES == (
+            "STRING",
+            "OLLAMA_HISTORY",
+            "STRING",
+            "STRING",
+            "INT",
+            "BOOLEAN",
+        )
+        assert OllamaChatCompletion.RETURN_NAMES == (
+            "response",
+            "updated_history",
+            "model_name",
+            "summary",
+            "score",
+            "is_positive",
+        )
+        _, _, _, summary, score, is_positive = ret["result"]
+        assert summary == "great"
+        assert score == 9
+        assert isinstance(score, int)
+        assert is_positive is True
+
+    def test_array_object_property_json_dumped_into_string_slot(self, monkeypatch):
+        schema = (
+            '{"type": "object", "properties": {'
+            '"tags": {"type": "array"}}, "required": ["tags"]}'
+        )
+
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
+            return _tool_response('{"tags": ["a", "b", "c"]}')
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        ret = OllamaChatCompletion().chat(
+            client="http://x",
+            model="m",
+            prompt="hi",
+            structured_output=True,
+            output_schema=schema,
+            unique_id="n4",
+        )
+        assert ret["result"][3] == json.dumps(["a", "b", "c"])
+
+    def test_return_types_reset_when_toggled_off(self, monkeypatch):
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
+            return _tool_response('{"output": "x"}')
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        OllamaChatCompletion().chat(
+            client="http://x",
+            model="m",
+            prompt="hi",
+            structured_output=True,
+            unique_id="n5",
+        )
+        assert len(OllamaChatCompletion.RETURN_TYPES) == 4
+
+        OllamaChatCompletion().chat(
+            client="http://x",
+            model="m",
+            prompt="hi",
+            structured_output=False,
+            unique_id="n5",
+        )
+        assert (
+            OllamaChatCompletion.RETURN_TYPES == OllamaChatCompletion._BASE_RETURN_TYPES
+        )
+        assert (
+            OllamaChatCompletion.RETURN_NAMES == OllamaChatCompletion._BASE_RETURN_NAMES
+        )
+
+    def test_invalid_output_schema_json_raises_before_network_call(self, monkeypatch):
+        calls = {"n": 0}
+
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
+            calls["n"] += 1
+            return _tool_response("{}")
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        with pytest.raises(ValueError, match="not valid JSON"):
+            OllamaChatCompletion().chat(
+                client="http://x",
+                model="m",
+                prompt="hi",
+                structured_output=True,
+                output_schema="not json",
+            )
+        assert calls["n"] == 0, "invalid schema must fail before touching the network"
+
+    def test_non_object_root_schema_raises(self):
+        with pytest.raises(ValueError, match='"type": "object"'):
+            OllamaChatCompletion().chat(
+                client="http://x",
+                model="m",
+                prompt="hi",
+                structured_output=True,
+                output_schema='{"type": "string"}',
+            )
+
+    def test_empty_properties_raises(self):
+        with pytest.raises(ValueError, match="non-empty object"):
+            OllamaChatCompletion().chat(
+                client="http://x",
+                model="m",
+                prompt="hi",
+                structured_output=True,
+                output_schema='{"type": "object", "properties": {}}',
+            )
+
+    def test_valid_json_first_attempt_no_retry(self, monkeypatch):
+        calls = {"n": 0}
+
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
+            calls["n"] += 1
+            return _tool_response('{"output": "ok"}')
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        OllamaChatCompletion().chat(
+            client="http://x", model="m", prompt="hi", structured_output=True
+        )
+        assert calls["n"] == 1
+
+    def test_retries_on_invalid_json_then_succeeds(self, monkeypatch):
+        calls = {"n": 0}
+
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return _tool_response("not json at all")
+            return _tool_response('{"output": "ok on retry"}')
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        ret = OllamaChatCompletion().chat(
+            client="http://x", model="m", prompt="hi", structured_output=True
+        )
+        assert calls["n"] == 2
+        assert ret["result"][3] == "ok on retry"
+
+    def test_retries_when_model_never_calls_the_tool(self, monkeypatch):
+        """The model can ignore tool_choice and just respond normally —
+        happens on occasion even with a forced tool. Must retry, not crash."""
+        calls = {"n": 0}
+
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return _no_tool_call_response()
+            return _tool_response('{"output": "ok on retry"}')
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        ret = OllamaChatCompletion().chat(
+            client="http://x", model="m", prompt="hi", structured_output=True
+        )
+        assert calls["n"] == 2
+        assert ret["result"][3] == "ok on retry"
+
+    def test_retries_on_missing_required_field(self, monkeypatch):
+        calls = {"n": 0}
+
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return _tool_response("{}")  # missing required "output"
+            return _tool_response('{"output": "ok"}')
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        OllamaChatCompletion().chat(
+            client="http://x", model="m", prompt="hi", structured_output=True
+        )
+        assert calls["n"] == 2
+
+    def test_retries_on_empty_required_string(self, monkeypatch):
+        """A required string field satisfied by "" must still be rejected —
+        JSON Schema "required" only checks presence, not non-emptiness, so
+        without this an empty answer would silently pass validation (exactly
+        the "blank output" problem structured_output exists to eliminate)."""
+        calls = {"n": 0}
+
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return _tool_response('{"output": ""}')
+            return _tool_response('{"output": "ok"}')
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        ret = OllamaChatCompletion().chat(
+            client="http://x", model="m", prompt="hi", structured_output=True
+        )
+        assert calls["n"] == 2
+        assert ret["result"][3] == "ok"
+
+    def test_exhausts_retries_raises_runtime_error(self, monkeypatch):
+        calls = {"n": 0}
+
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
+            calls["n"] += 1
+            return _tool_response("always broken")
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        with pytest.raises(RuntimeError, match="failed validation") as exc_info:
+            OllamaChatCompletion().chat(
+                client="http://x",
+                model="m",
+                prompt="hi",
+                structured_output=True,
+                max_retries=2,
+            )
+        assert calls["n"] == 3, "max_retries=2 must allow exactly 3 total attempts"
+        assert "3 attempt" in str(exc_info.value)
+        assert "always broken" in str(exc_info.value)
+
+    def test_max_retries_clamped_upper_bound(self, monkeypatch):
+        calls = {"n": 0}
+
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
+            calls["n"] += 1
+            return _tool_response("always broken")
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        with pytest.raises(RuntimeError):
+            OllamaChatCompletion().chat(
+                client="http://x",
+                model="m",
+                prompt="hi",
+                structured_output=True,
+                max_retries=99,
+            )
+        assert calls["n"] == 6, "max_retries must be clamped to 5 (6 total attempts)"
+
+    def test_max_retries_clamped_lower_bound(self, monkeypatch):
+        calls = {"n": 0}
+
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
+            calls["n"] += 1
+            return _tool_response("always broken")
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        with pytest.raises(RuntimeError):
+            OllamaChatCompletion().chat(
+                client="http://x",
+                model="m",
+                prompt="hi",
+                structured_output=True,
+                max_retries=-5,
+            )
+        assert calls["n"] == 1, (
+            "even a negative max_retries must allow at least 1 attempt"
+        )
+
 
 # ---------------------------------------------------------------------------
 # US5 — Composable Options  (us5_composable_options.feature)
@@ -1092,6 +1564,209 @@ class TestResponseCache:
         assert calls["n"] == 2, (
             "requests to the same host with different auth headers must not share "
             "a cache entry"
+        )
+
+    def test_structured_output_cache_hit_skips_network(self, monkeypatch):
+        calls = {"n": 0}
+
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
+            calls["n"] += 1
+            return _tool_response('{"output": "cached value"}')
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        kwargs = dict(
+            client="http://x",
+            model="m",
+            prompt="hi",
+            structured_output=True,
+            unique_id="cache-1",
+        )
+        ret1 = OllamaChatCompletion().chat(**kwargs)
+        ret2 = OllamaChatCompletion().chat(**kwargs)
+
+        assert calls["n"] == 1, "second identical structured call must hit the cache"
+        assert ret1["result"] == ret2["result"], (
+            "dynamic outputs must be correctly re-extracted from the cached text"
+        )
+        assert ret2["result"][3] == "cached value"
+
+    def test_structured_and_non_structured_do_not_collide_in_cache(self, monkeypatch):
+        calls = {"n": 0}
+
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
+            calls["n"] += 1
+            if "tools" in payload:
+                return _tool_response('{"output": "structured"}')
+            return {"message": {"content": "plain text"}}
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        OllamaChatCompletion().chat(
+            client="http://x", model="m", prompt="hi", structured_output=False
+        )
+        OllamaChatCompletion().chat(
+            client="http://x", model="m", prompt="hi", structured_output=True
+        )
+
+        assert calls["n"] == 2, (
+            "identical client/model/prompt with structured_output True vs False "
+            "must not share a cache entry"
+        )
+
+    def test_structured_output_only_caches_after_validation_passes(self, monkeypatch):
+        calls = {"n": 0}
+
+        async def fake_post(url, payload, *, timeout=120.0, headers=None):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return _tool_response("invalid json")
+            return _tool_response('{"output": "good"}')
+
+        import comfydv.ollama as ollama_mod
+
+        monkeypatch.setattr(ollama_mod, "_post_json", fake_post)
+
+        kwargs = dict(client="http://x", model="m", prompt="hi", structured_output=True)
+        OllamaChatCompletion().chat(
+            **kwargs
+        )  # attempt 1 invalid, attempt 2 caches "good"
+        assert calls["n"] == 2
+
+        ret = OllamaChatCompletion().chat(**kwargs)  # must hit cache, not re-call
+        assert calls["n"] == 2, "the invalid first attempt must never be cached"
+        assert ret["result"][3] == "good"
+
+
+# ---------------------------------------------------------------------------
+# Live structured-output socket preview route
+# (mirrors FormatString's /update_format_string_node — see US8 above)
+# ---------------------------------------------------------------------------
+
+
+class _FakeRequest:
+    def __init__(self, body: dict):
+        self._body = body
+
+    async def json(self):
+        return self._body
+
+
+class TestUpdateStructuredOutputsRoute:
+    def teardown_method(self):
+        # This route mutates OllamaChatCompletion's class-level RETURN_TYPES
+        # directly (same mechanism as chat()'s update_outputs call) — reset
+        # so it doesn't leak into other tests. The autouse conftest fixture
+        # only resets around chat()-driven tests within the same test; this
+        # class calls the route function directly, bypassing that fixture's
+        # normal per-test boundary, so reset explicitly here too for safety.
+        OllamaChatCompletion.RETURN_TYPES = OllamaChatCompletion._BASE_RETURN_TYPES
+        OllamaChatCompletion.RETURN_NAMES = OllamaChatCompletion._BASE_RETURN_NAMES
+        OllamaChatCompletion.node_configs.clear()
+
+    def _call(self, body: dict) -> dict:
+        import comfydv.ollama as ollama_mod
+
+        resp = _run_async(
+            ollama_mod._update_structured_outputs_endpoint(_FakeRequest(body))
+        )
+        return json.loads(resp.text)
+
+    def test_structured_output_false_returns_base_outputs(self):
+        data = self._call(
+            {"unique_id": "r1", "structured_output": False, "output_schema": "{}"}
+        )
+        assert [o["name"] for o in data["outputs"]] == [
+            "response",
+            "updated_history",
+            "model_name",
+        ]
+
+    def test_valid_schema_returns_dynamic_outputs(self):
+        data = self._call(
+            {
+                "unique_id": "r2",
+                "structured_output": True,
+                "output_schema": _MULTI_FIELD_SCHEMA,
+            }
+        )
+        names = [o["name"] for o in data["outputs"]]
+        types = [o["type"] for o in data["outputs"]]
+        assert names == [
+            "response",
+            "updated_history",
+            "model_name",
+            "summary",
+            "score",
+            "is_positive",
+        ]
+        assert types == [
+            "STRING",
+            "OLLAMA_HISTORY",
+            "STRING",
+            "STRING",
+            "INT",
+            "BOOLEAN",
+        ]
+
+    def test_invalid_json_while_typing_falls_back_to_base_outputs(self):
+        """Mid-keystroke output_schema (e.g. '{"type": "obj') must not error
+        the route — it should just report the base outputs until the JSON
+        becomes valid again."""
+        data = self._call(
+            {
+                "unique_id": "r3",
+                "structured_output": True,
+                "output_schema": '{"type": "obj',
+            }
+        )
+        assert [o["name"] for o in data["outputs"]] == [
+            "response",
+            "updated_history",
+            "model_name",
+        ]
+
+    def test_incomplete_schema_missing_properties_falls_back_to_base_outputs(self):
+        data = self._call(
+            {
+                "unique_id": "r4",
+                "structured_output": True,
+                "output_schema": '{"type": "object"}',
+            }
+        )
+        assert [o["name"] for o in data["outputs"]] == [
+            "response",
+            "updated_history",
+            "model_name",
+        ]
+
+    def test_response_reflects_class_state_not_just_this_call(self):
+        """RETURN_TYPES/RETURN_NAMES are class-level (see ADR/update_outputs
+        docstring) — the route must report the actual resulting class state,
+        not just echo back what was requested."""
+        self._call(
+            {
+                "unique_id": "r5",
+                "structured_output": True,
+                "output_schema": _SINGLE_FIELD_SCHEMA,
+            }
+        )
+        assert OllamaChatCompletion.RETURN_NAMES[-1] == "output"
+
+        data = self._call(
+            {"unique_id": "r5", "structured_output": False, "output_schema": "{}"}
+        )
+        assert [o["name"] for o in data["outputs"]] == [
+            "response",
+            "updated_history",
+            "model_name",
+        ]
+        assert (
+            OllamaChatCompletion.RETURN_NAMES == OllamaChatCompletion._BASE_RETURN_NAMES
         )
 
 

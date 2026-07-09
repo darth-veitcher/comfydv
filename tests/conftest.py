@@ -68,20 +68,34 @@ def pytest_configure(config):
 
 @pytest.fixture(autouse=True)
 def _clear_ollama_caches():
-    """Reset comfydv.ollama's module-level LRU caches around every test.
+    """Reset comfydv.ollama's module-level LRU caches and OllamaChatCompletion's
+    dynamic RETURN_TYPES/RETURN_NAMES around every test.
 
     Several tests reuse identical client/model/prompt inputs across cases
     with different monkeypatched responses — without this, a later test would
     silently get an earlier test's cached result instead of exercising its
-    own fake.
+    own fake. RETURN_TYPES/RETURN_NAMES are class-level mutable state (set by
+    OllamaChatCompletion.update_outputs for structured_output mode) shared
+    across every test in the module — without resetting them, a structured-
+    output test would leak its dynamic outputs into unrelated tests that
+    assert the fixed 3-tuple.
     """
-    from comfydv.ollama import _CHAT_RESPONSE_CACHE, _MODEL_LIST_CACHE
+    from comfydv.ollama import (
+        _CHAT_RESPONSE_CACHE,
+        _MODEL_LIST_CACHE,
+        OllamaChatCompletion,
+    )
 
-    _MODEL_LIST_CACHE.clear()
-    _CHAT_RESPONSE_CACHE.clear()
+    def _reset():
+        _MODEL_LIST_CACHE.clear()
+        _CHAT_RESPONSE_CACHE.clear()
+        OllamaChatCompletion.RETURN_TYPES = OllamaChatCompletion._BASE_RETURN_TYPES
+        OllamaChatCompletion.RETURN_NAMES = OllamaChatCompletion._BASE_RETURN_NAMES
+        OllamaChatCompletion.node_configs.clear()
+
+    _reset()
     yield
-    _MODEL_LIST_CACHE.clear()
-    _CHAT_RESPONSE_CACHE.clear()
+    _reset()
 
 
 @pytest.fixture(scope="session")
