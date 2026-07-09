@@ -1643,6 +1643,134 @@ class TestResponseCache:
 
 
 # ---------------------------------------------------------------------------
+# Live structured-output socket preview route
+# (mirrors FormatString's /update_format_string_node — see US8 above)
+# ---------------------------------------------------------------------------
+
+
+class _FakeRequest:
+    def __init__(self, body: dict):
+        self._body = body
+
+    async def json(self):
+        return self._body
+
+
+class TestUpdateStructuredOutputsRoute:
+    def teardown_method(self):
+        # This route mutates OllamaChatCompletion's class-level RETURN_TYPES
+        # directly (same mechanism as chat()'s update_outputs call) — reset
+        # so it doesn't leak into other tests. The autouse conftest fixture
+        # only resets around chat()-driven tests within the same test; this
+        # class calls the route function directly, bypassing that fixture's
+        # normal per-test boundary, so reset explicitly here too for safety.
+        OllamaChatCompletion.RETURN_TYPES = OllamaChatCompletion._BASE_RETURN_TYPES
+        OllamaChatCompletion.RETURN_NAMES = OllamaChatCompletion._BASE_RETURN_NAMES
+        OllamaChatCompletion.node_configs.clear()
+
+    def _call(self, body: dict) -> dict:
+        import comfydv.ollama as ollama_mod
+
+        resp = _run_async(
+            ollama_mod._update_structured_outputs_endpoint(_FakeRequest(body))
+        )
+        return json.loads(resp.text)
+
+    def test_structured_output_false_returns_base_outputs(self):
+        data = self._call(
+            {"unique_id": "r1", "structured_output": False, "output_schema": "{}"}
+        )
+        assert [o["name"] for o in data["outputs"]] == [
+            "response",
+            "updated_history",
+            "model_name",
+        ]
+
+    def test_valid_schema_returns_dynamic_outputs(self):
+        data = self._call(
+            {
+                "unique_id": "r2",
+                "structured_output": True,
+                "output_schema": _MULTI_FIELD_SCHEMA,
+            }
+        )
+        names = [o["name"] for o in data["outputs"]]
+        types = [o["type"] for o in data["outputs"]]
+        assert names == [
+            "response",
+            "updated_history",
+            "model_name",
+            "summary",
+            "score",
+            "is_positive",
+        ]
+        assert types == [
+            "STRING",
+            "OLLAMA_HISTORY",
+            "STRING",
+            "STRING",
+            "INT",
+            "BOOLEAN",
+        ]
+
+    def test_invalid_json_while_typing_falls_back_to_base_outputs(self):
+        """Mid-keystroke output_schema (e.g. '{"type": "obj') must not error
+        the route — it should just report the base outputs until the JSON
+        becomes valid again."""
+        data = self._call(
+            {
+                "unique_id": "r3",
+                "structured_output": True,
+                "output_schema": '{"type": "obj',
+            }
+        )
+        assert [o["name"] for o in data["outputs"]] == [
+            "response",
+            "updated_history",
+            "model_name",
+        ]
+
+    def test_incomplete_schema_missing_properties_falls_back_to_base_outputs(self):
+        data = self._call(
+            {
+                "unique_id": "r4",
+                "structured_output": True,
+                "output_schema": '{"type": "object"}',
+            }
+        )
+        assert [o["name"] for o in data["outputs"]] == [
+            "response",
+            "updated_history",
+            "model_name",
+        ]
+
+    def test_response_reflects_class_state_not_just_this_call(self):
+        """RETURN_TYPES/RETURN_NAMES are class-level (see ADR/update_outputs
+        docstring) — the route must report the actual resulting class state,
+        not just echo back what was requested."""
+        self._call(
+            {
+                "unique_id": "r5",
+                "structured_output": True,
+                "output_schema": _SINGLE_FIELD_SCHEMA,
+            }
+        )
+        assert OllamaChatCompletion.RETURN_NAMES[-1] == "output"
+
+        data = self._call(
+            {"unique_id": "r5", "structured_output": False, "output_schema": "{}"}
+        )
+        assert [o["name"] for o in data["outputs"]] == [
+            "response",
+            "updated_history",
+            "model_name",
+        ]
+        assert (
+            OllamaChatCompletion.RETURN_NAMES == OllamaChatCompletion._BASE_RETURN_NAMES
+        )
+
+
+# ---------------------------------------------------------------------------
 # Node contract sanity checks (ComfyUI registration requirements)
 # ---------------------------------------------------------------------------
 

@@ -812,6 +812,59 @@ class OllamaChatCompletion:
 
 
 # ---------------------------------------------------------------------------
+# ComfyUI server route — live structured-output socket preview
+# ---------------------------------------------------------------------------
+#
+# Mirrors FormatString's /update_format_string_node route: as the user edits
+# structured_output/output_schema, the frontend posts here to recompute
+# OllamaChatCompletion.RETURN_TYPES/RETURN_NAMES (the same update_outputs()
+# path chat() uses at execution time) and get back the current output list,
+# so dynamic sockets appear on the node immediately — no need to run the
+# graph first. No network call to Ollama; schema parsing is pure/local.
+
+if "comfy" in sys.modules:
+    # PromptServer already imported at module scope by the /dv/ollama/models
+    # route registration above.
+    @PromptServer.instance.routes.post("/dv/ollama/update_structured_outputs")
+    async def _update_structured_outputs_endpoint(request):
+        from aiohttp import web
+
+        data = await request.json()
+        unique_id = str(data.get("unique_id", ""))
+        structured_output = bool(data.get("structured_output", False))
+        output_schema = data.get("output_schema", "")
+
+        schema = None
+        if structured_output:
+            try:
+                schema = _parse_output_schema(output_schema)
+            except ValueError:
+                # Invalid/incomplete JSON while the user is still typing —
+                # fall back to the base (non-structured) outputs rather than
+                # erroring the request.
+                schema = None
+
+        if unique_id:
+            OllamaChatCompletion.update_outputs(
+                unique_id, structured_output and schema is not None, schema
+            )
+
+        outputs = [
+            {"name": name, "type": otype}
+            for name, otype in zip(
+                OllamaChatCompletion.RETURN_NAMES, OllamaChatCompletion.RETURN_TYPES
+            )
+        ]
+        return web.json_response({"outputs": outputs})
+
+else:
+    logger.warning(
+        "ComfyUI not detected — /dv/ollama/update_structured_outputs route "
+        "will not be registered."
+    )
+
+
+# ---------------------------------------------------------------------------
 # US5 — Composable option nodes
 # ---------------------------------------------------------------------------
 

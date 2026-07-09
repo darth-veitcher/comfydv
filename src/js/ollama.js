@@ -106,3 +106,64 @@ app.registerExtension({
         };
     },
 });
+
+/**
+ * Live structured-output dynamic sockets for OllamaChatCompletion.
+ *
+ * Mirrors FormatString's live dynamic-output pattern (see format_string.js):
+ * editing structured_output or output_schema posts to a backend route that
+ * recomputes OllamaChatCompletion.RETURN_TYPES/RETURN_NAMES (the same
+ * update_outputs() path chat() itself uses at execution time) and returns
+ * the resulting output list — applied to this node's sockets immediately,
+ * so you see the extracted fields appear without having to run the graph
+ * first.
+ */
+async function updateStructuredOutputs(node, structuredOutput, outputSchema) {
+    try {
+        const resp = await fetch("/dv/ollama/update_structured_outputs", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                unique_id: String(node.id),
+                structured_output: structuredOutput,
+                output_schema: outputSchema,
+            }),
+        });
+        if (!resp.ok) return;
+        const data = await resp.json();
+        applyOutputs(node, data.outputs ?? []);
+    } catch (_) {
+        // Backend unreachable — leave sockets unchanged.
+    }
+}
+
+function applyOutputs(node, outputs) {
+    node.outputs.length = 0;
+    outputs.forEach(o => node.addOutput(o.name, o.type));
+    node.setDirtyCanvas(true, true);
+    node.graph?.setDirtyCanvas(true, true);
+}
+
+app.registerExtension({
+    name: "comfydv.ollama.structuredOutput",
+
+    async beforeRegisterNodeDef(nodeType, nodeData) {
+        if (nodeData.name !== "OllamaChatCompletion") return;
+
+        const onNodeCreated = nodeType.prototype.onNodeCreated;
+        nodeType.prototype.onNodeCreated = function () {
+            const result = onNodeCreated?.apply(this, arguments);
+
+            const structuredWidget = this.widgets?.find(w => w.name === "structured_output");
+            const schemaWidget = this.widgets?.find(w => w.name === "output_schema");
+            if (!structuredWidget || !schemaWidget) return result;
+
+            const update = () =>
+                updateStructuredOutputs(this, structuredWidget.value, schemaWidget.value);
+            structuredWidget.callback = update;
+            schemaWidget.callback = update;
+
+            return result;
+        };
+    },
+});
