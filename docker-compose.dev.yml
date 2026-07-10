@@ -17,5 +17,7 @@ services:
       - sh
       - -c
       - |
+        git clone https://github.com/Comfy-Org/ComfyUI-Manager.git /app/ComfyUI/custom_nodes/comfyui-manager
+        pip install -q -r /app/ComfyUI/custom_nodes/comfyui-manager/requirements.txt
         pip install -q -r /app/ComfyUI/custom_nodes/comfydv/requirements.txt
         exec python main.py --cpu --listen 0.0.0.0 --port 8188

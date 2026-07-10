@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 WORKDIR /app
 
@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Clone ComfyUI (pinned tag for reproducibility; bump manually)
-ARG COMFYUI_VERSION=v0.3.44
+ARG COMFYUI_VERSION=v0.27.0
 RUN git clone --depth 1 --branch ${COMFYUI_VERSION} \
     https://github.com/comfyanonymous/ComfyUI.git /app/ComfyUI
 
