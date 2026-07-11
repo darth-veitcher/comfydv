@@ -7,10 +7,11 @@ A collection of workflow efficiency and quality-of-life nodes built out of neces
 | **Format String** | Formats a string from a Python f-string or Jinja2 template. Detects variables in the template and automatically adds/removes input sockets. |
 | **Random Choice** | Accepts any number of typed inputs and outputs one at random, with a configurable seed for reproducibility. |
 | **Circuit Breaker** | Halts the current ComfyUI queue run gracefully without crashing the server. Wire the `status` toggle to a boolean condition to skip the rest of the queue when a condition isn't met. |
-| **Ollama Client** | Configures a connection to an Ollama server (default: `http://localhost:11434`). Threads the connection through the graph as an `LLM_CLIENT` socket — the same generic socket any future backend's client node will emit. |
+| **Ollama Client** | Configures a connection to an Ollama server (default: `http://localhost:11434`). Threads the connection through the graph as an `LLM_CLIENT` socket — a generic connection type any backend's client node emits. |
+| **LlamaCpp Client** | Configures a connection to a `llama-server` instance running in router mode (default: `http://localhost:8080`). Emits the same `LLM_CLIENT` socket as Ollama Client — every node below works with either. |
 | **LLM Model Selector** | Fetches the live model list from the connected server and presents it as a dropdown. Outputs the selected model name. |
-| **LLM Load Model** | Loads a model into memory using `/api/generate` with `keep_alive=-1`. |
-| **LLM Unload Model** | Evicts a model from memory using `/api/generate` with `keep_alive=0`. |
+| **LLM Load Model** | Loads a model into memory on the connected server. |
+| **LLM Unload Model** | Evicts a model from memory on the connected server. |
 | **Chat Completion** | Sends a prompt (and optional conversation history) to the connected server. Response and history are shown inline in the node body and available as output sockets. |
 | **Ollama Option — \*** | Seven composable option nodes (Temperature, Seed, Max Tokens, Top P, Top K, Repeat Penalty, Extra Body) that merge into an `OLLAMA_OPTIONS` dict wired into Chat Completion. |
 | **Ollama Debug History** | Serialises an `OLLAMA_HISTORY` list to a pretty-printed JSON string for inspection. |
@@ -27,9 +28,12 @@ cd /path/to/ComfyUI/custom_nodes
 git clone https://github.com/darth-veitcher/comfydv.git
 ```
 
-Restart ComfyUI. The nodes appear under the **dv/** and **dv/ollama** categories in the node menu. Runtime dependencies (`jinja2`, `aiohttp`) are installed automatically via `requirements.txt`.
+Restart ComfyUI. The nodes appear under the **dv/**, **dv/ollama**, and **dv/llamacpp** categories in the node menu. Runtime dependencies (`jinja2`, `aiohttp`, `pydantic-ai`) are installed automatically via `requirements.txt`.
 
-For Ollama nodes: [install Ollama](https://ollama.com/download) and pull at least one model (`ollama pull qwen2.5:latest`) before using the Ollama nodes.
+For local LLM nodes, pick one backend (or both):
+
+- **Ollama**: [install Ollama](https://ollama.com/download) and pull at least one model (`ollama pull qwen2.5:latest`).
+- **llama.cpp**: [build/install `llama-server`](https://github.com/ggml-org/llama.cpp) and launch it in router mode (`llama-server --models-dir ./models`) — see the [llama.cpp section](#llamacpp) below.
 
 ---
 
@@ -150,3 +154,27 @@ If you saved a workflow before this rename, ComfyUI will report the old node typ
 | `OLLAMA_CLIENT` socket | `LLM_CLIENT` socket |
 
 `OllamaClient` keeps its name — just delete and re-add any downstream node showing as missing, then rewire it to the same `OllamaClient` node.
+
+---
+
+## llama.cpp
+
+A second backend for the same chat/model-management nodes documented above — **LlamaCpp Client** is the only new node; everything else (Chat Completion, LLM Model Selector, LLM Load Model, LLM Unload Model, structured output, multi-turn history) works unchanged, because they don't know or care which backend they're talking to.
+
+### Prerequisite: router mode
+
+`llama-server` needs to be launched in **router mode** — a directory of models, not a single `-m model.gguf`:
+
+```bash
+llama-server --models-dir ./models -c 8192
+```
+
+This gives `comfydv` live model status (including `loading`/`downloading`, not just loaded/unloaded — a richer picture than Ollama can report) and explicit load/unload, the same way the Ollama nodes already work.
+
+### LlamaCpp Client node
+
+Configure the server address once (default `http://localhost:8080`); every downstream node inherits it automatically — same pattern as Ollama Client, same `LLM_CLIENT` socket.
+
+### Switching an existing workflow from Ollama to llama.cpp
+
+Replace the **Ollama Client** node with an **LlamaCpp Client** node, pointed at your running `llama-server`. Nothing else changes — same Chat Completion node, same Load/Unload nodes, same structured-output behavior. That's the entire point of sharing one `LLM_CLIENT` socket type across backends.

@@ -2,6 +2,7 @@ import logging
 
 from .circuit_breaker import CircuitBreaker
 from .format_string import FormatString
+from .llamacpp import LlamaCppClient
 from .ollama import (
     ChatCompletion,
     LLMLoadModel,
@@ -34,6 +35,7 @@ NODE_CLASS_MAPPINGS = {
     # LLM nodes (generic, ADR-007) — see comfydv.ollama.MIGRATION_MAP for
     # the pre-cutover Ollama-specific names these replace
     "OllamaClient": OllamaClient,
+    "LlamaCppClient": LlamaCppClient,
     "LLMModelSelector": LLMModelSelector,
     "LLMLoadModel": LLMLoadModel,
     "LLMUnloadModel": LLMUnloadModel,
@@ -59,6 +61,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "FormatString": "Format String (Python f-strings)",
     # LLM nodes (generic, ADR-007)
     "OllamaClient": "Ollama Client",
+    "LlamaCppClient": "LlamaCpp Client",
     "LLMModelSelector": "LLM Model Selector",
     "LLMLoadModel": "LLM Load Model",
     "LLMUnloadModel": "LLM Unload Model",

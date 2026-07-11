@@ -25,7 +25,7 @@ Decision).
 ## Phase 1: Setup
 
 - [x] T001 No new dependencies — `aiohttp`/`pydantic-ai` already present from the prerequisite epic (verified in `pyproject.toml`)
-- [ ] T002 [P] Create `src/comfydv/_llm/llamacpp_provider.py` and `src/comfydv/llamacpp.py` (empty modules with docstrings, mirroring `ollama_provider.py`/`ollama.py`'s module docstring style)
+- [x] T002 [P] Create `src/comfydv/_llm/llamacpp_provider.py` and `src/comfydv/llamacpp.py` (empty modules with docstrings, mirroring `ollama_provider.py`/`ollama.py`'s module docstring style)
 
 ---
 
@@ -45,14 +45,14 @@ unmodified by this feature (plan.md Constitution Check, research.md).
 
 **Independent Test**: Wire `LlamaCppClient` → `ChatCompletion`, run against a live `llama-server` (router mode), confirm text output.
 
-- [ ] T003-T [US1] Write FAILING test: `LlamaCppProvider.chat()` POSTs to `{host}/v1/chat/completions` and parses `choices[0].message.content`, in `tests/test_llamacpp_provider.py` (witnesses `features/us1_connect_and_chat.feature` scenario "llama.cpp connection node feeds the existing chat node")
-- [ ] T003-I [US1] Implement `LlamaCppProvider.__init__`/`.chat()` in `src/comfydv/_llm/llamacpp_provider.py` (data-model.md — OpenAI-shape response parsing, not Ollama's native shape) — makes T003-T pass
-- [ ] T004-T [US1] Write FAILING test: `LlamaCppClient` node's `INPUT_TYPES`/`RETURN_TYPES` match `OllamaClient`'s shape (`LLM_CLIENT` output), and `create_client()` constructs a `LlamaCppProvider`, in `tests/test_llamacpp.py`
-- [ ] T004-I [US1] Implement `LlamaCppClient` node in `src/comfydv/llamacpp.py` (mirrors `OllamaClient` exactly, default host `http://localhost:8080` per llama-server's default port) — makes T004-T pass (depends on T003-I)
-- [ ] T005-T [US1] Write FAILING test: `LlamaCppClient` registered in `NODE_CLASS_MAPPINGS`/`NODE_DISPLAY_NAME_MAPPINGS`, in `tests/test_llamacpp.py`
-- [ ] T005-I [US1] Register `LlamaCppClient` in `src/comfydv/__init__.py` — makes T005-T pass (depends on T004-I)
-- [ ] T006-T [US1] Write FAILING test: `LlamaCppProvider` connection error surfaces a clear message (mirrors `OllamaProvider`'s `_post_json` connection-error contract), in `tests/test_llamacpp_provider.py` (witnesses `features/us1_connect_and_chat.feature` scenario "Unreachable llama.cpp server surfaces a clear error")
-- [ ] T006-I [US1] Confirm `LlamaCppProvider.chat()` reuses the shared `_post_json` connection-error handling unchanged (likely no code change needed — verify, don't assume) — makes T006-T pass
+- [x] T003-T [US1] Write FAILING test: `LlamaCppProvider.chat()` POSTs to `{host}/v1/chat/completions` and parses `choices[0].message.content`, in `tests/test_llamacpp_provider.py` (witnesses `features/us1_connect_and_chat.feature` scenario "llama.cpp connection node feeds the existing chat node")
+- [x] T003-I [US1] Implement `LlamaCppProvider.__init__`/`.chat()` in `src/comfydv/_llm/llamacpp_provider.py` (data-model.md — OpenAI-shape response parsing, not Ollama's native shape) — makes T003-T pass
+- [x] T004-T [US1] Write FAILING test: `LlamaCppClient` node's `INPUT_TYPES`/`RETURN_TYPES` match `OllamaClient`'s shape (`LLM_CLIENT` output), and `create_client()` constructs a `LlamaCppProvider`, in `tests/test_llamacpp.py`
+- [x] T004-I [US1] Implement `LlamaCppClient` node in `src/comfydv/llamacpp.py` (mirrors `OllamaClient` exactly, default host `http://localhost:8080` per llama-server's default port) — makes T004-T pass (depends on T003-I)
+- [x] T005-T [US1] Write FAILING test: `LlamaCppClient` registered in `NODE_CLASS_MAPPINGS`/`NODE_DISPLAY_NAME_MAPPINGS`, in `tests/test_llamacpp.py`
+- [x] T005-I [US1] Register `LlamaCppClient` in `src/comfydv/__init__.py` — makes T005-T pass (depends on T004-I)
+- [x] T006-T [US1] Write FAILING test: `LlamaCppProvider` connection error surfaces a clear message (mirrors `OllamaProvider`'s `_post_json` connection-error contract), in `tests/test_llamacpp_provider.py` (witnesses `features/us1_connect_and_chat.feature` scenario "Unreachable llama.cpp server surfaces a clear error")
+- [x] T006-I [US1] Confirm `LlamaCppProvider.chat()` reuses the shared `_post_json` connection-error handling unchanged (likely no code change needed — verify, don't assume) — makes T006-T pass
 
 **Checkpoint**: US1 fully functional and independently testable (MVP) — proves the adapter pattern for the chat path.
 
@@ -64,9 +64,9 @@ unmodified by this feature (plan.md Constitution Check, research.md).
 
 **Independent Test**: Enable `structured_output` with a schema, run against a llama.cpp-hosted model, confirm typed sockets populate and are never blank.
 
-- [ ] T007-T [US2] Write FAILING test: `LlamaCppProvider.chat_structured()` builds `base_url=f"{host}/v1"` and delegates to the shared `comfydv._llm.chat.chat_structured()` helper unchanged, in `tests/test_llamacpp_provider.py` (witnesses `features/us2_structured_output.feature` scenario "Valid structured response exposes typed fields, same as Ollama")
-- [ ] T007-I [US2] Implement `LlamaCppProvider.chat_structured()` in `src/comfydv/_llm/llamacpp_provider.py` — zero new structured-output logic, same call shape `OllamaProvider.chat_structured()` already makes — makes T007-T pass
-- [ ] T008 [US2] No new test needed for the retry-then-fail path (witnesses `features/us2_structured_output.feature` scenario "Invalid response retries then fails clearly, same as Ollama") — already fully covered by `tests/test_llm_chat_structured.py`'s existing suite, since `LlamaCppProvider.chat_structured()` calls the identical shared helper `OllamaProvider` does; re-testing it here would duplicate coverage without adding confidence (same reasoning as the prerequisite epic's D5)
+- [x] T007-T [US2] Write FAILING test: `LlamaCppProvider.chat_structured()` builds `base_url=f"{host}/v1"` and delegates to the shared `comfydv._llm.chat.chat_structured()` helper unchanged, in `tests/test_llamacpp_provider.py` (witnesses `features/us2_structured_output.feature` scenario "Valid structured response exposes typed fields, same as Ollama")
+- [x] T007-I [US2] Implement `LlamaCppProvider.chat_structured()` in `src/comfydv/_llm/llamacpp_provider.py` — zero new structured-output logic, same call shape `OllamaProvider.chat_structured()` already makes — makes T007-T pass
+- [x] T008 [US2] No new test needed for the retry-then-fail path (witnesses `features/us2_structured_output.feature` scenario "Invalid response retries then fails clearly, same as Ollama") — already fully covered by `tests/test_llm_chat_structured.py`'s existing suite, since `LlamaCppProvider.chat_structured()` calls the identical shared helper `OllamaProvider` does; re-testing it here would duplicate coverage without adding confidence (same reasoning as the prerequisite epic's D5)
 
 **Checkpoint**: US1 + US2 both independently functional — the chat surface is now backend-agnostic in practice, not just in name.
 
@@ -78,11 +78,11 @@ unmodified by this feature (plan.md Constitution Check, research.md).
 
 **Independent Test**: List models via `LLMModelSelector` wired to `LlamaCppClient`; load/unload one; confirm status changes, including `loading`/`downloading` states if triggered.
 
-- [ ] T009-T [P] [US3] Write FAILING test: `LlamaCppProvider.list_models()` maps `GET /models`'s `data[].id`→`ModelInfo.name` and `data[].status.value`→`ModelInfo.status`, surfacing all five `ModelStatus` values without normalization (data-model.md), in `tests/test_llamacpp_provider.py` (witnesses `features/us3_model_lifecycle.feature` scenario "List models with full status vocabulary")
-- [ ] T009-I [US3] Implement `LlamaCppProvider.list_models()` in `src/comfydv/_llm/llamacpp_provider.py` — makes T009-T pass
-- [ ] T010-T [P] [US3] Write FAILING test: `LlamaCppProvider.load_model()`/`unload_model()` POST `{"model": id}` to `/models/load`/`/models/unload` and are idempotent, in `tests/test_llamacpp_provider.py` (witnesses `features/us3_model_lifecycle.feature` scenarios "Load a model into memory" and "Unload a model from memory")
-- [ ] T010-I [US3] Implement `LlamaCppProvider.load_model()`/`unload_model()` in `src/comfydv/_llm/llamacpp_provider.py` — makes T010-T pass
-- [ ] T011 [US3] No new node-layer tests needed — `LLMModelSelector`/`LLMLoadModel`/`LLMUnloadModel` are untouched by this epic (plan.md Structure Decision) and already have delegation-test coverage against a generic `_FakeProvider` in `tests/test_ollama.py`; that coverage is provider-agnostic by construction (FR-002), so it already proves these nodes work with `LlamaCppProvider` too, not just `OllamaProvider`
+- [x] T009-T [P] [US3] Write FAILING test: `LlamaCppProvider.list_models()` maps `GET /models`'s `data[].id`→`ModelInfo.name` and `data[].status.value`→`ModelInfo.status`, surfacing all five `ModelStatus` values without normalization (data-model.md), in `tests/test_llamacpp_provider.py` (witnesses `features/us3_model_lifecycle.feature` scenario "List models with full status vocabulary")
+- [x] T009-I [US3] Implement `LlamaCppProvider.list_models()` in `src/comfydv/_llm/llamacpp_provider.py` — makes T009-T pass
+- [x] T010-T [P] [US3] Write FAILING test: `LlamaCppProvider.load_model()`/`unload_model()` POST `{"model": id}` to `/models/load`/`/models/unload` and are idempotent, in `tests/test_llamacpp_provider.py` (witnesses `features/us3_model_lifecycle.feature` scenarios "Load a model into memory" and "Unload a model from memory")
+- [x] T010-I [US3] Implement `LlamaCppProvider.load_model()`/`unload_model()` in `src/comfydv/_llm/llamacpp_provider.py` — makes T010-T pass
+- [x] T011 [US3] No new node-layer tests needed — `LLMModelSelector`/`LLMLoadModel`/`LLMUnloadModel` are untouched by this epic (plan.md Structure Decision) and already have delegation-test coverage against a generic `_FakeProvider` in `tests/test_ollama.py`; that coverage is provider-agnostic by construction (FR-002), so it already proves these nodes work with `LlamaCppProvider` too, not just `OllamaProvider`
 
 **Checkpoint**: US1 + US2 + US3 independently functional.
 
@@ -94,8 +94,8 @@ unmodified by this feature (plan.md Constitution Check, research.md).
 
 **Independent Test**: Same workflow, only the connection node changes.
 
-- [ ] T012-T [US4] Write FAILING test: a workflow-shaped test (client → `ChatCompletion` → `LLMModelSelector` → `LLMLoadModel` → `LLMUnloadModel`) runs identically whether `client` is an `OllamaProvider`-double or a `LlamaCppProvider`-double — i.e. no node branches on provider type, in `tests/test_llamacpp.py` (witnesses `features/us4_swap_backends.feature` scenario "Replacing only the connection node preserves the workflow")
-- [ ] T012-I [US4] No implementation expected — this test should already pass given T003-T011 (it's a regression/integration proof, not new functionality); if it fails, that reveals a node secretly branching on provider type, which would be a real bug to fix, not a feature to add
+- [x] T012-T [US4] Write FAILING test: a workflow-shaped test (client → `ChatCompletion` → `LLMModelSelector` → `LLMLoadModel` → `LLMUnloadModel`) runs identically whether `client` is an `OllamaProvider`-double or a `LlamaCppProvider`-double — i.e. no node branches on provider type, in `tests/test_llamacpp.py` (witnesses `features/us4_swap_backends.feature` scenario "Replacing only the connection node preserves the workflow")
+- [x] T012-I [US4] No implementation expected — this test should already pass given T003-T011 (it's a regression/integration proof, not new functionality); if it fails, that reveals a node secretly branching on provider type, which would be a real bug to fix, not a feature to add
 
 **Checkpoint**: all four user stories independently functional; the adapter pattern is proven end-to-end, not just asserted.
 
@@ -103,11 +103,11 @@ unmodified by this feature (plan.md Constitution Check, research.md).
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T013 [P] `uv run ruff check --fix && uv run ruff format` across `src/comfydv/_llm/llamacpp_provider.py`, `src/comfydv/llamacpp.py`, `src/comfydv/__init__.py`, and the new test files
-- [ ] T014 [P] `uv run ty check` — resolve any new typing errors
-- [ ] T015 Confirm Constitution Principle IV: `llamacpp_provider.py`/`llamacpp.py` import no `comfy`/`server` at module scope outside the existing guarded pattern
-- [ ] T016 `beacon doctor --strict` — resolve any new findings (pre-existing/disclosed items from the prerequisite epic are not this feature's concern)
-- [ ] T017 Manual/live smoke test against a real `llama-server` (router mode) if reachable in the environment — mirrors T-CUT-12's approach from the prerequisite epic (run live if possible, degrade to a documented walkthrough if not)
+- [x] T013 [P] `ruff check --fix && ruff format` — clean
+- [x] T014 [P] `ty check` — clean, same pre-existing diagnostics as the prerequisite epic (unrelated to this feature — `comfy`/`server`/`folder_paths` unresolved-import, `format_string.py`'s dynamic RETURN_TYPES, `create_model`/`RandomChoice` — none touch the new files)
+- [x] T015 Confirmed via grep: `llamacpp_provider.py`/`llamacpp.py` import no `comfy`/`server`/`folder_paths` at module scope
+- [x] T016 `beacon doctor --strict`: only the pre-existing `llm-provider-abstraction: all specs [complete]` epic-gates item (PR #18, the archive-bookkeeping PR for the *prerequisite* epic, not yet merged — unrelated to this feature) and `tdd-commit-discipline` (disclosed pattern, same reasoning as the prerequisite epic)
+- [-] T017 Live smoke test — _no `llama-server` reachable in this environment (checked port 8080, the default) unlike the prerequisite epic where Ollama happened to be running. Degraded to the mocked suite (23 new tests, all passing) plus the live-verified API research (research.md) as the coverage we have. A genuine live run against a real `llama-server` is still worth doing before this ships — flagging for whoever picks this branch up next, not silently skipping it._
 
 ---
 
