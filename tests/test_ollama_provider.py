@@ -275,6 +275,35 @@ def test_chat_structured_builds_v1_base_url_and_delegates(monkeypatch):
     assert captured["model"] == "llama3"
 
 
+def test_chat_structured_forwards_options(monkeypatch):
+    """Regression guard: options must reach the shared chat_structured()
+    helper, not just the cache key — see specs/007-llm-provider-abstraction
+    beacon-reviewer finding."""
+    from pydantic import BaseModel
+
+    class Widget(BaseModel):
+        name: str
+
+    captured = {}
+
+    async def fake_chat_structured(**kwargs):
+        captured.update(kwargs)
+        return Widget(name="x")
+
+    monkeypatch.setattr("comfydv._llm.chat.chat_structured", fake_chat_structured)
+
+    _run_async(
+        OllamaProvider("http://localhost:11434").chat_structured(
+            "llama3",
+            [Message(role="user", content="hi")],
+            Widget,
+            options={"temperature": 0.0, "seed": 42},
+        )
+    )
+
+    assert captured["options"] == {"temperature": 0.0, "seed": 42}
+
+
 def test_chat_structured_caches_after_successful_validation(monkeypatch):
     from pydantic import BaseModel
 

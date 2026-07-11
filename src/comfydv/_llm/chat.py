@@ -27,6 +27,7 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.settings import ModelSettings
 
 from comfydv._llm.provider import Message
 
@@ -81,11 +82,20 @@ async def chat_structured(
     messages: list[Message],
     schema: type[BaseModel],
     headers: dict | None = None,
+    options: dict | None = None,
     max_retries: int = 2,
     timeout_secs: float = 300.0,
 ) -> BaseModel:
     """Call ``model`` at ``base_url`` (an OpenAI-compatible ``/v1`` root) and
     return a validated instance of ``schema``.
+
+    ``options`` is forwarded verbatim as a top-level ``"options"`` field in
+    the request body via pydantic-ai's ``extra_body`` — the same shape the
+    pre-ADR-007 hand-rolled implementation sent, so provider-native sampling
+    params (Ollama's ``num_predict``/``repeat_penalty``/etc., set via the
+    ``OllamaOption*`` nodes) keep working unchanged rather than being
+    lossily remapped onto pydantic-ai's own standardized ``ModelSettings``
+    fields.
 
     Retries up to ``max_retries`` times (clamped 0-5) on validation failure
     before raising ``RuntimeError``. Never returns a value that failed
@@ -105,13 +115,18 @@ async def chat_structured(
     )
     history = _history_to_messages(messages)
     prompt = messages[-1].content
+    model_settings: ModelSettings | None = (
+        {"extra_body": {"options": options}} if options else None
+    )
 
     total_attempts = max(0, min(int(max_retries), 5)) + 1
     last_error: Exception | None = None
     last_invalid_text = ""
     for _attempt in range(1, total_attempts + 1):
         try:
-            result = await agent.run(prompt, message_history=history)
+            result = await agent.run(
+                prompt, message_history=history, model_settings=model_settings
+            )
             # agent's output_type is the caller's `schema` (a runtime value,
             # not a static type parameter), so the checker can't narrow
             # result.output past Agent's default `str` — cast to the

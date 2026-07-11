@@ -306,6 +306,7 @@ class OllamaProvider:
             messages=messages,
             schema=schema,
             headers=self.headers,
+            options=options,
             max_retries=max_retries,
             timeout_secs=timeout_secs,
         )

@@ -40,8 +40,8 @@ class _FakeAgent:
         self._responses = list(responses)
         self.calls = []
 
-    async def run(self, prompt, *, message_history=None):
-        self.calls.append((prompt, message_history))
+    async def run(self, prompt, *, message_history=None, model_settings=None):
+        self.calls.append((prompt, message_history, model_settings))
         outcome = self._responses.pop(0)
         if isinstance(outcome, Exception):
             raise outcome
@@ -132,6 +132,47 @@ def test_chat_structured_max_retries_clamped_to_five(monkeypatch):
             )
         )
     assert len(fake.calls) == 6
+
+
+def test_chat_structured_forwards_options_as_extra_body(monkeypatch):
+    """Regression guard: options (Ollama-native sampling params set via the
+    OllamaOption* nodes — temperature, seed, num_predict, repeat_penalty,
+    etc.) must reach the request, not be silently dropped in structured
+    mode. Forwarded verbatim via pydantic-ai's model_settings.extra_body,
+    matching the pre-ADR-007 payload shape exactly (no lossy remapping onto
+    ModelSettings' own standardized field names)."""
+    fake = _FakeAgent([_Widget(name="a", count=1)])
+    monkeypatch.setattr(chat_mod, "_build_agent", lambda **kw: fake)
+
+    _run_async(
+        chat_mod.chat_structured(
+            base_url="http://localhost:11434/v1",
+            model="llama3",
+            messages=_messages(),
+            schema=_Widget,
+            options={"temperature": 0.0, "seed": 42, "num_predict": 128},
+        )
+    )
+
+    assert fake.calls[0][2] == {
+        "extra_body": {"options": {"temperature": 0.0, "seed": 42, "num_predict": 128}}
+    }
+
+
+def test_chat_structured_no_options_means_no_model_settings(monkeypatch):
+    fake = _FakeAgent([_Widget(name="a", count=1)])
+    monkeypatch.setattr(chat_mod, "_build_agent", lambda **kw: fake)
+
+    _run_async(
+        chat_mod.chat_structured(
+            base_url="http://localhost:11434/v1",
+            model="llama3",
+            messages=_messages(),
+            schema=_Widget,
+        )
+    )
+
+    assert fake.calls[0][2] is None
 
 
 def test_chat_structured_requires_last_message_user_role():
