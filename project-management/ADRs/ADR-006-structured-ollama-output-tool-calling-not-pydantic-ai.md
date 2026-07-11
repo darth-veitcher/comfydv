@@ -2,7 +2,7 @@
 
 ## Status
 
-> Accepted
+> Superseded by [ADR-007](ADR-007-llm-provider-adapter-pattern.md)
 
 _Date:_ 2026-07-09
 _Deciders:_ darth-veitcher

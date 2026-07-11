@@ -26,6 +26,8 @@
 - **BEACON bootstrap** — `epics/archive/beacon-bootstrap.md` — ✅ DONE — BEACON framework wired up; problem statement, constitution, roadmap, and ADR template populated; quality gates clean
 - **Logging modernisation** — `epics/logging-modernisation.md` — ✅ DONE — stdlib logging, NullHandler, silent-by-default; colorama/rich/termcolor removed; 11 tests
 - **ComfyUI UX Polish & Manager Compatibility** — `epics/ux-and-install.md` — 🔄 ACTIVE — Fix installation, core UX bugs (debounce, connection drops, alert dialogs), correctness bugs (class-level mutation, IS_CHANGED, seed=0), and metadata drift
+- **LLM Provider Abstraction** — `epics/llm-provider-abstraction.md` — 🔄 ACTIVE — Introduce a shared `LLMProvider` protocol (list/load/unload/chat/structured-output) and generic ComfyUI nodes; migrate the existing Ollama integration onto it (ADR-007, supersedes ADR-006)
+- **llama.cpp Model Integration** — `epics/llamacpp-integration.md` — 📋 PROPOSED — Add a `LlamaCppProvider` implementing the shared protocol via llama-server's router mode; depends on LLM Provider Abstraction landing first (GitHub issue #15)
 
 For the live rollup (specs per epic, % tasks complete, last-commit age):
 
@@ -40,6 +42,7 @@ beacon epic list --detailed
 - **BEACON bootstrap** is a prerequisite for all other epics (quality gates need to pass before new work merges)
 - **Test hardening** is independent of documentation and can run in parallel
 - **Documentation** depends on the final node API (output order, input names) being stable — start after test hardening locks the contracts
+- **llama.cpp Model Integration** depends on **LLM Provider Abstraction** landing first — its `LlamaCppProvider` implements the protocol that epic defines, and reuses its generic nodes as-is
 
 ---
 
