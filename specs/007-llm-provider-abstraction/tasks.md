@@ -157,11 +157,15 @@ suite only needs to be green as a whole at T-CUT-10, not after every step.
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T022 [P] Run `uv run ruff check --fix && uv run ruff format` across `src/comfydv/_llm/`, `tests/test_ollama_provider.py`, and the modified `ollama.py`/`__init__.py`
-- [ ] T023 [P] Run `uv run ty check` and resolve any typing errors introduced by the `LLMProvider` `Protocol`
-- [ ] T024 Confirm Constitution Principle IV: `src/comfydv/_llm/` imports no `comfy`/`server` at module scope (guarded, matching `ollama.py`'s existing pattern)
-- [ ] T025 Run `beacon doctor --strict` and resolve any findings, including `spec-bdd-coverage` and `tdd-commit-discipline` for this spec
-- [ ] T026 Walk `quickstart.md` end-to-end manually against a live local server to confirm the documented flow works as written
+_Subsumed by T-CUT-10/T-CUT-12 (Phase 8) — same work, done together with the
+cutover rather than as a separate pass, since ruff/ty/doctor need to run
+against the final state anyway:_
+
+- [x] T022 [P] `ruff check --fix && ruff format` — clean (T-CUT-10)
+- [x] T023 [P] `ty check` — clean, pre-existing diagnostics confirmed unrelated via `git stash` comparison (T-CUT-10)
+- [x] T024 Constitution Principle IV confirmed: `src/comfydv/_llm/*.py` import no `comfy`/`server`/`folder_paths` at module scope (verified via grep)
+- [x] T025 `beacon doctor --strict`: only `tdd-commit-discipline` (documented deviation, see Phase 4's US2 notes) and `epic-gates` (`llamacpp-integration` correctly has no specs yet) — both pre-disclosed, not new findings (T-CUT-10)
+- [x] T026 Live-server validation done via the real `@pytest.mark.integration` suite rather than a separate manual walkthrough — Ollama was reachable in this environment (T-CUT-12); a literal `quickstart.md` click-through in ComfyUI itself is still worth doing whenever this branch is reviewed in a real ComfyUI install, but the underlying behavior is now proven against a live server
 
 ---
 
