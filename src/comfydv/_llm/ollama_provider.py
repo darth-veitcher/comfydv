@@ -132,7 +132,14 @@ async def _post_json(
 async def _get_json(
     url: str, *, timeout: float = 5.0, headers: dict | None = None
 ) -> dict:
-    """GET url, return parsed response dict. Raises on connection/HTTP error."""
+    """GET url, return parsed response dict.
+
+    Raises RuntimeError on an HTTP error status (distinct message, so callers
+    can tell "server responded with an error" from "couldn't reach it at
+    all" — aiohttp connection/timeout errors propagate unwrapped for that
+    reason). Message is generic, not backend-branded: this helper is shared
+    by every LLMProvider implementation.
+    """
     import aiohttp
 
     async with aiohttp.ClientSession() as session:
@@ -141,6 +148,11 @@ async def _get_json(
             headers=headers or None,
             timeout=aiohttp.ClientTimeout(total=timeout),
         ) as resp:
+            if resp.status >= 400:
+                body = await resp.text()
+                raise RuntimeError(
+                    f"Server returned HTTP {resp.status} for {url}: {body[:300]}"
+                )
             return await resp.json()
 
 

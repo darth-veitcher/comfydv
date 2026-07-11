@@ -1,7 +1,7 @@
 # Epic: llama.cpp Model Integration
 
 ## Status
-Planning — started 2026-07-11
+Active — spec 008-llamacpp-integration complete, ready to finish once merged
 
 ## Why now
 
@@ -32,6 +32,7 @@ epic.
 _Filled by `beacon specify --epic llamacpp-integration` / `/speckit-specify`
 once this epic is accepted._
 
+- specs/008-llamacpp-integration/
 ## ADRs
 
 - project-management/ADRs/ADR-007-llm-provider-adapter-pattern.md — decided during the prerequisite epic; this epic implements the second `LLMProvider` the ADR anticipated
