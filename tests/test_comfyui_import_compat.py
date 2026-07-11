@@ -24,7 +24,24 @@ import sys
 import textwrap
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).parent.parent
+
+
+@pytest.fixture(autouse=True)
+def _clear_ollama_caches():
+    """Shadow conftest.py's autouse fixture of the same name for this module
+    only. That fixture's own setup does `from comfydv._llm.ollama_provider
+    import ...` — this file's tests are the exact reproduction of an
+    environment where `comfydv` resolving correctly can't be assumed (that's
+    the point of the file), so depending on it for an unrelated cache-reset
+    would make these tests order-dependent on whichever other test file
+    happens to import `comfydv` "the normal way" first in the session. These
+    tests touch no OllamaProvider/ChatCompletion state, so there is nothing
+    to reset."""
+    yield
+
 
 _SUBPROCESS_SCRIPT = textwrap.dedent(
     """
