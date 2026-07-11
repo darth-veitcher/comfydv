@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - BEACON framework bootstrap: problem statement, constitution, roadmap, architecture document
 - `CHANGELOG.md` (this file)
 - README: What-is-this, Install, and Quickstart sections
+- `LLMProvider` protocol (`comfydv._llm`) — a shared adapter boundary so ComfyUI LLM nodes work with any backend that implements it, starting with `OllamaProvider`. Structured output now goes through `pydantic-ai` (ADR-007), superseding the hand-rolled Ollama tool-calling approach.
+
+### Changed
+- **Breaking:** `OllamaChatCompletion` → `ChatCompletion`, `OllamaModelSelector` → `LLMModelSelector`, `OllamaLoadModel` → `LLMLoadModel`, `OllamaUnloadModel` → `LLMUnloadModel`, and the `OLLAMA_CLIENT` socket type → `LLM_CLIENT` — these nodes are now backend-generic. `OllamaClient` is unchanged by name but now outputs an `OllamaProvider` rather than a plain string; existing saved workflows using the old node/socket names need reconnecting (see `comfydv.ollama.MIGRATION_MAP` for the full old→new mapping).
 
 ## [0.1.0] — 2026-06-01
 

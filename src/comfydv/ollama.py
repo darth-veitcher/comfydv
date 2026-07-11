@@ -538,11 +538,16 @@ class ChatCompletion:
             parsed = None
             response_text = _run_async(
                 client.chat(
-                    effective_model, messages, llm_options, timeout_secs=float(timeout_secs)
+                    effective_model,
+                    messages,
+                    llm_options,
+                    timeout_secs=float(timeout_secs),
                 )
             )
         else:
-            assert pydantic_model is not None  # structured_output implies this was built
+            assert (
+                pydantic_model is not None
+            )  # structured_output implies this was built
             parsed = _run_async(
                 client.chat_structured(
                     effective_model,
