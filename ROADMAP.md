@@ -14,11 +14,11 @@ gantt
 
     section Active
     llama.cpp Model Integration :active, llamacpp-integration, 2026-07-11, 7d
-    LLM Provider Abstraction :active, llm-provider-abstraction, 2026-07-11, 7d
     ComfyUI UX Polish & Manager Compatibility :active, ux-and-install, 2026-06-28, 21d
 
     section Done
     BEACON Bootstrap :done, beacon-bootstrap, 2026-07-11, 7d
+    LLM Provider Abstraction :done, llm-provider-abstraction, 2026-07-11, 7d
     Logging Modernisation :done, logging-modernisation, 2026-07-11, 7d
     Ollama Model Integration :done, ollama-integration, 2026-07-11, 7d
 
@@ -29,9 +29,9 @@ gantt
 | Epic | Title | Status | Specs | Fidelity |
 |---|---|---|---|---|
 | [llamacpp-integration](project-management/Roadmap/epics/llamacpp-integration.md) | llama.cpp Model Integration | Active | 1/1 shipped | S+ A+ T:96% |
-| [llm-provider-abstraction](project-management/Roadmap/epics/llm-provider-abstraction.md) | LLM Provider Abstraction | Active | 1/1 shipped | S+ A+ T:58% |
 | [ux-and-install](project-management/Roadmap/epics/ux-and-install.md) | ComfyUI UX Polish & Manager Compatibility | Active | 1/4 shipped | S+ A+ T:100% |
 | [beacon-bootstrap](project-management/Roadmap/epics/archive/beacon-bootstrap.md) | BEACON Bootstrap | Done | — | S? A? T:- |
+| [llm-provider-abstraction](project-management/Roadmap/epics/archive/llm-provider-abstraction.md) | LLM Provider Abstraction | Done | 1/1 shipped | S+ A+ T:58% |
 | [logging-modernisation](project-management/Roadmap/epics/archive/logging-modernisation.md) | Logging Modernisation | Done | 1/1 shipped | S+ A+ T:100% |
 | [ollama-integration](project-management/Roadmap/epics/archive/ollama-integration.md) | Ollama Model Integration | Done | 1/1 shipped | S+ A+ T:100% |
 
