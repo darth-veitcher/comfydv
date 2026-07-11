@@ -13,10 +13,8 @@ gantt
     excludes    weekends
 
     section Active
+    llama.cpp Model Integration :active, llamacpp-integration, 2026-07-11, 7d
     ComfyUI UX Polish & Manager Compatibility :active, ux-and-install, 2026-06-28, 21d
-
-    section Planned
-    llama.cpp Model Integration :llamacpp-integration, 2026-07-11, 7d
 
     section Done
     BEACON Bootstrap :done, beacon-bootstrap, 2026-07-11, 7d
@@ -29,7 +27,7 @@ gantt
 
 | Epic | Title | Status | Specs | Fidelity |
 |---|---|---|---|---|
-| [llamacpp-integration](project-management/Roadmap/epics/llamacpp-integration.md) | llama.cpp Model Integration | Planning | — | S? A+ T:- |
+| [llamacpp-integration](project-management/Roadmap/epics/llamacpp-integration.md) | llama.cpp Model Integration | Active | — | S? A+ T:- |
 | [ux-and-install](project-management/Roadmap/epics/ux-and-install.md) | ComfyUI UX Polish & Manager Compatibility | Active | 1/4 shipped | S+ A+ T:100% |
 | [beacon-bootstrap](project-management/Roadmap/epics/archive/beacon-bootstrap.md) | BEACON Bootstrap | Done | — | S? A? T:- |
 | [llm-provider-abstraction](project-management/Roadmap/epics/archive/llm-provider-abstraction.md) | LLM Provider Abstraction | Done | 1/1 shipped | S+ A+ T:58% |
