@@ -1,7 +1,7 @@
 # Epic: LLM Provider Abstraction
 
 ## Status
-Active — started 2026-07-11
+Done — completed 2026-07-11
 
 ## Why now
 

@@ -1,7 +1,7 @@
 # Epic: llama.cpp Model Integration
 
 ## Status
-Planning — started 2026-07-11
+Active — started 2026-07-11
 
 ## Why now
 
@@ -20,12 +20,14 @@ ComfyUI nodes.
 
 ## Dependencies
 
-Depends on the `llm-provider-abstraction` epic landing first. This epic's
-`LlamaCppProvider` implements the `LLMProvider` protocol that epic defines,
-and its `LlamaCppClient` node emits the same `LLM_CLIENT` socket type the
-generic `ChatCompletion`/`LLMModelSelector`/`LLMLoadModel`/`LLMUnloadModel`
-nodes already consume — none of those node classes are touched by this
-epic.
+Depended on the `llm-provider-abstraction` epic landing first — **satisfied**
+2026-07-11, merged via [PR #17](https://github.com/darth-veitcher/comfydv/pull/17)
+(`project-management/Roadmap/epics/archive/llm-provider-abstraction.md`).
+This epic's `LlamaCppProvider` implements the `LLMProvider` protocol that
+epic defined, and its `LlamaCppClient` node emits the same `LLM_CLIENT`
+socket type the generic `ChatCompletion`/`LLMModelSelector`/`LLMLoadModel`/
+`LLMUnloadModel` nodes already consume — none of those node classes are
+touched by this epic.
 
 ## Specs
 
