@@ -7,11 +7,11 @@ A collection of workflow efficiency and quality-of-life nodes built out of neces
 | **Format String** | Formats a string from a Python f-string or Jinja2 template. Detects variables in the template and automatically adds/removes input sockets. |
 | **Random Choice** | Accepts any number of typed inputs and outputs one at random, with a configurable seed for reproducibility. |
 | **Circuit Breaker** | Halts the current ComfyUI queue run gracefully without crashing the server. Wire the `status` toggle to a boolean condition to skip the rest of the queue when a condition isn't met. |
-| **Ollama Client** | Configures a connection to an Ollama server (default: `http://localhost:11434`). Threads the host URL through the graph as an `OLLAMA_CLIENT` socket. |
-| **Ollama Model Selector** | Fetches the live model list from Ollama and presents it as a dropdown. Outputs the selected model name. |
-| **Ollama Load Model** | Loads a model into Ollama's memory using `/api/generate` with `keep_alive=-1`. |
-| **Ollama Unload Model** | Evicts a model from Ollama's memory using `/api/generate` with `keep_alive=0`. |
-| **Ollama Chat Completion** | Sends a prompt (and optional conversation history) to Ollama `/api/chat`. Response and history are shown inline in the node body and available as output sockets. |
+| **Ollama Client** | Configures a connection to an Ollama server (default: `http://localhost:11434`). Threads the connection through the graph as an `LLM_CLIENT` socket — the same generic socket any future backend's client node will emit. |
+| **LLM Model Selector** | Fetches the live model list from the connected server and presents it as a dropdown. Outputs the selected model name. |
+| **LLM Load Model** | Loads a model into memory using `/api/generate` with `keep_alive=-1`. |
+| **LLM Unload Model** | Evicts a model from memory using `/api/generate` with `keep_alive=0`. |
+| **Chat Completion** | Sends a prompt (and optional conversation history) to the connected server. Response and history are shown inline in the node body and available as output sockets. |
 | **Ollama Option — \*** | Seven composable option nodes (Temperature, Seed, Max Tokens, Top P, Top K, Repeat Penalty, Extra Body) that merge into an `OLLAMA_OPTIONS` dict wired into Chat Completion. |
 | **Ollama Debug History** | Serialises an `OLLAMA_HISTORY` list to a pretty-printed JSON string for inspection. |
 | **Ollama History Length** | Returns the number of messages in an `OLLAMA_HISTORY` list as an integer. |
@@ -85,33 +85,33 @@ Typical use: skip an expensive upscale step when a quality-check node says the d
 
 ## Ollama
 
-14 nodes for integrating a local Ollama LLM into your ComfyUI workflow. The host URL is configured once in **Ollama Client** and threaded through the graph — all downstream nodes receive it via the `OLLAMA_CLIENT` socket.
+Nodes for integrating a local Ollama LLM into your ComfyUI workflow. The host is configured once in **Ollama Client** and threaded through the graph as an `LLM_CLIENT` socket — a generic connection type any future backend's client node can also emit, so the chat/model-management nodes below aren't Ollama-specific.
 
 ### Ollama Client node
 
-Configure the server address once; all downstream Ollama nodes inherit it automatically.
+Configure the server address once; all downstream nodes inherit it automatically.
 
 ![Ollama Client](assets/ollama_client.png)
 
 ### Model lifecycle (load and unload)
 
-On memory-constrained machines and single-GPU setups, explicitly loading and unloading the model before and after inference is critical. **Ollama Load Model** pins the model into VRAM (`keep_alive=-1`); **Ollama Unload Model** evicts it immediately (`keep_alive=0`), freeing memory for image generation or other models.
+On memory-constrained machines and single-GPU setups, explicitly loading and unloading the model before and after inference is critical. **LLM Load Model** pins the model into VRAM (`keep_alive=-1`); **LLM Unload Model** evicts it immediately (`keep_alive=0`), freeing memory for image generation or other models.
 
 ![Ollama Load / Unload](assets/ollama_lifecycle.png)
 
 The correct chain is **Load → Chat → Unload**, enforced through data dependencies:
 
-1. Wire `OllamaLoadModel.model_name` → `OllamaChatCompletion.model`. This creates the data dependency that guarantees Load runs before Chat and passes the model name into the Chat node's plain-string `model` input.
-2. Wire `OllamaChatCompletion.model_name` → `OllamaUnloadModel.model`. This guarantees Unload runs after Chat completes.
-3. Optionally wire `OllamaChatCompletion.response` → `OllamaUnloadModel.passthrough` — Unload returns the response unchanged so the rest of your workflow can still consume it.
+1. Wire `LLMLoadModel.model_name` → `ChatCompletion.model`. This creates the data dependency that guarantees Load runs before Chat and passes the model name into the Chat node's plain-string `model` input.
+2. Wire `ChatCompletion.model_name` → `LLMUnloadModel.model`. This guarantees Unload runs after Chat completes.
+3. Optionally wire `ChatCompletion.response` → `LLMUnloadModel.passthrough` — Unload returns the response unchanged so the rest of your workflow can still consume it.
 
 ### Minimal chat workflow
 
 1. **Ollama Client** → set host (default `http://localhost:11434`)
-2. **Ollama Model Selector** → pick a model from the live dropdown (or type/wire a model name directly into Chat Completion's `model` input)
-3. **Ollama Chat Completion** → wire client + model + prompt; the response appears inline in the node body and is also available as an output socket
+2. **LLM Model Selector** → pick a model from the live dropdown (or type/wire a model name directly into Chat Completion's `model` input)
+3. **Chat Completion** → wire client + model + prompt; the response appears inline in the node body and is also available as an output socket
 
-![Ollama Chat Completion](assets/ollama_chat.png)
+![Chat Completion](assets/ollama_chat.png)
 
 Wire multiple nodes together for a complete end-to-end workflow:
 
@@ -136,3 +136,17 @@ Chain any combination of **Ollama Option —** nodes before Chat Completion to o
 ### Multi-turn conversations
 
 `OLLAMA_HISTORY` flows out of Chat Completion as a list of `{"role", "content"}` dicts. Wire it back into the next Chat Completion for multi-turn conversations, or inspect it with **Ollama Debug History** / **Ollama History Length**.
+
+### Upgrading an older workflow
+
+If you saved a workflow before this rename, ComfyUI will report the old node types as missing when you reopen it. Reconnect using this mapping, then re-run — behavior is unchanged, only the names and the client socket type are different:
+
+| Old | New |
+|-----|-----|
+| `OllamaChatCompletion` | `ChatCompletion` |
+| `OllamaModelSelector` | `LLMModelSelector` |
+| `OllamaLoadModel` | `LLMLoadModel` |
+| `OllamaUnloadModel` | `LLMUnloadModel` |
+| `OLLAMA_CLIENT` socket | `LLM_CLIENT` socket |
+
+`OllamaClient` keeps its name — just delete and re-add any downstream node showing as missing, then rewire it to the same `OllamaClient` node.
