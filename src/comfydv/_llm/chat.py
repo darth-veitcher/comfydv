@@ -29,7 +29,7 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
 
-from comfydv._llm.provider import Message
+from .provider import Message
 
 _STRUCTURED_OUTPUT_FAILURE_EXCEPTIONS = (
     UnexpectedModelBehavior,

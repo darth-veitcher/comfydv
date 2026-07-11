@@ -117,7 +117,11 @@ async def _capture(
     pad: int = 60,
 ) -> None:
     """Screenshot the canvas, optionally cropped tightly around the node."""
-    canvas = page.locator("canvas#graph-canvas, canvas").first
+    # ComfyUI's frontend added a minimap canvas since this script was last
+    # verified — it appears before #graph-canvas in DOM order, so a bare
+    # union selector's `.first` silently grabbed the 250x200 minimap
+    # instead of the real graph. Target #graph-canvas explicitly.
+    canvas = page.locator("canvas#graph-canvas")
     box = await canvas.bounding_box()
     if box is None:
         await page.screenshot(path=str(out))
@@ -307,13 +311,13 @@ async def scene_ollama_client(page: Page, out: Path) -> None:
 
 
 async def scene_ollama_chat(page: Page, out: Path) -> None:
-    """OllamaChatCompletion — showing the live model dropdown and prompt widget."""
+    """ChatCompletion — showing the live model dropdown and prompt widget."""
     await _clear(page)
 
     info = await page.evaluate(
         """
         async () => {
-            const node = LiteGraph.createNode("OllamaChatCompletion");
+            const node = LiteGraph.createNode("ChatCompletion");
             node.pos = [60, 60];
             window.app.graph.add(node);
 
@@ -327,7 +331,7 @@ async def scene_ollama_chat(page: Page, out: Path) -> None:
             } else {
                 // Manually fetch and populate the COMBO
                 try {
-                    const resp = await fetch("/dv/ollama/models?host=http://host.docker.internal:11434");
+                    const resp = await fetch("/dv/ollama/models?host=http://host.docker.internal:11434&backend=ollama");
                     if (resp.ok) {
                         const data = await resp.json();
                         const models = data.models || [];
@@ -357,8 +361,142 @@ async def scene_ollama_chat(page: Page, out: Path) -> None:
     await _capture(page, out, info["pos"], info["size"])
 
 
+async def scene_structured_output(page: Page, out: Path) -> None:
+    """ChatCompletion with structured_output enabled — the live dynamic
+    output sockets (summary/sentiment/confidence) that appear as soon as
+    output_schema is edited, no graph run required. Exercises the real
+    js/ollama.js widget callbacks (structuredWidget.callback /
+    schemaWidget.callback), the same code path a live user's checkbox click
+    and schema edit trigger — not a hand-simulated approximation."""
+    await _clear(page)
+
+    schema = (
+        '{"type": "object", "properties": '
+        '{"summary": {"type": "string"}, '
+        '"sentiment": {"type": "string"}, '
+        '"confidence": {"type": "number"}}, '
+        '"required": ["summary", "sentiment", "confidence"]}'
+    )
+
+    info = await page.evaluate(
+        f"""
+        async () => {{
+            const node = LiteGraph.createNode("ChatCompletion");
+            node.pos = [60, 60];
+            window.app.graph.add(node);
+
+            const promptWidget = node.widgets.find(w => w.name === "prompt");
+            if (promptWidget) promptWidget.value =
+                "The new render pipeline cut our export time in half and the team is thrilled.";
+
+            const structuredWidget = node.widgets.find(w => w.name === "structured_output");
+            const schemaWidget = node.widgets.find(w => w.name === "output_schema");
+            if (structuredWidget) structuredWidget.value = true;
+            if (schemaWidget) schemaWidget.value = {json.dumps(schema)};
+
+            // Fire the same callbacks js/ollama.js attaches on node creation —
+            // real widget-edit code path, not a re-implementation.
+            if (structuredWidget?.callback) await structuredWidget.callback(true);
+            if (schemaWidget?.callback) await schemaWidget.callback({json.dumps(schema)});
+
+            await new Promise(r => setTimeout(r, 600));
+            window.app.canvas.setDirty(true, true);
+            window.app.canvas.draw(true, true);
+            return {{ pos: [node.pos[0], node.pos[1]], size: [node.size[0], node.size[1]] }};
+        }}
+        """
+    )
+
+    await asyncio.sleep(0.8)
+    await _redraw(page)
+    await _frame_node(page, info["pos"], info["size"])
+    await _capture(page, out, info["pos"], info["size"])
+
+
+async def scene_llamacpp_client(page: Page, out: Path) -> None:
+    """LlamaCppClient — single node showing the router-mode host URL widget."""
+    await _clear(page)
+
+    info = await page.evaluate(
+        """
+        () => {
+            const node = LiteGraph.createNode("LlamaCppClient");
+            node.pos = [60, 60];
+            window.app.graph.add(node);
+            const hostWidget = node.widgets && node.widgets.find(w => w.name === "host");
+            if (hostWidget) hostWidget.value = "http://localhost:8080";
+            window.app.canvas.setDirty(true, true);
+            window.app.canvas.draw(true, true);
+            return { pos: [node.pos[0], node.pos[1]], size: [node.size[0], node.size[1]] };
+        }
+        """
+    )
+
+    await _frame_node(page, info["pos"], info["size"])
+    await _capture(page, out, info["pos"], info["size"])
+
+
+async def scene_llamacpp_workflow(page: Page, out: Path) -> None:
+    """LlamaCppClient → the same ChatCompletion node the Ollama workflow
+    uses, unmodified — the actual point of the adapter pattern. Attempts a
+    live model-list refresh via backend=llamacpp against
+    host.docker.internal:8080; degrades gracefully (same as a real user's
+    "no server running yet" state) if nothing is listening there."""
+    await _clear(page)
+
+    info = await page.evaluate(
+        """
+        async () => {
+            const graph = window.app.graph;
+
+            const client = LiteGraph.createNode("LlamaCppClient");
+            client.pos = [40, 60];
+            graph.add(client);
+            const hostWidget = client.widgets.find(w => w.name === "host");
+            if (hostWidget) hostWidget.value = "http://host.docker.internal:8080";
+
+            const chat = LiteGraph.createNode("ChatCompletion");
+            chat.pos = [380, 40];
+            graph.add(chat);
+            const promptWidget = chat.widgets.find(w => w.name === "prompt");
+            if (promptWidget) promptWidget.value = "Write a haiku about ComfyUI.";
+
+            client.connect(0, chat, 0);
+
+            try {
+                const resp = await fetch("/dv/ollama/models?host=http://host.docker.internal:8080&backend=llamacpp");
+                if (resp.ok) {
+                    const data = await resp.json();
+                    const models = data.models || [];
+                    if (models.length) {
+                        const modelWidget = chat.widgets.find(w => w.name === "model");
+                        if (modelWidget) modelWidget.value = models[0];
+                    }
+                }
+            } catch (e) {}
+
+            await new Promise(r => setTimeout(r, 800));
+            window.app.canvas.setDirty(true, true);
+            window.app.canvas.draw(true, true);
+
+            const nodes = [client, chat];
+            const minX = Math.min(...nodes.map(n => n.pos[0])) - 20;
+            const minY = Math.min(...nodes.map(n => n.pos[1])) - 20;
+            const maxX = Math.max(...nodes.map(n => n.pos[0] + n.size[0])) + 20;
+            const maxY = Math.max(...nodes.map(n => n.pos[1] + n.size[1])) + 20;
+            return { pos: [minX, minY], size: [maxX - minX, maxY - minY] };
+        }
+        """
+    )
+
+    await asyncio.sleep(1.0)
+    await _redraw(page)
+    await _frame_node(page, info["pos"], info["size"], scale=1.0)
+    await _capture(page, out, info["pos"], info["size"], scale=1.0)
+
+
 async def scene_ollama_workflow(page: Page, out: Path) -> None:
-    """Full mini-workflow: OllamaClient → OllamaChatCompletion + Temperature + Seed options."""
+    """Full mini-workflow: OllamaClient → ChatCompletion + Temperature + Seed options."""
     await _clear(page)
 
     info = await page.evaluate(
@@ -386,7 +524,7 @@ async def scene_ollama_workflow(page: Page, out: Path) -> None:
             if (twSeed) twSeed.value = 42;
 
             // 4. ChatCompletion — right
-            const chat = LiteGraph.createNode("OllamaChatCompletion");
+            const chat = LiteGraph.createNode("ChatCompletion");
             chat.pos = [380, 100];
             graph.add(chat);
             const twPrompt = chat.widgets && chat.widgets.find(w => w.name === "prompt");
@@ -409,7 +547,7 @@ async def scene_ollama_workflow(page: Page, out: Path) -> None:
 
             // Refresh model dropdowns for chat node
             try {
-                const resp = await fetch("/dv/ollama/models?host=http://host.docker.internal:11434");
+                const resp = await fetch("/dv/ollama/models?host=http://host.docker.internal:11434&backend=ollama");
                 if (resp.ok) {
                     const data = await resp.json();
                     const models = data.models || [];
@@ -466,25 +604,25 @@ async def scene_ollama_lifecycle(page: Page, out: Path) -> None:
             if (hostWidget) hostWidget.value = "http://localhost:11434";
 
             // OllamaLoadModel — generous gap right of client
-            const load = LiteGraph.createNode("OllamaLoadModel");
+            const load = LiteGraph.createNode("LLMLoadModel");
             load.pos = [380, 80];
             graph.add(load);
 
             // OllamaChatCompletion — wide node, plenty of space to the right of load
-            const chat = LiteGraph.createNode("OllamaChatCompletion");
+            const chat = LiteGraph.createNode("ChatCompletion");
             chat.pos = [720, 40];
             graph.add(chat);
             const twPrompt = chat.widgets && chat.widgets.find(w => w.name === "prompt");
             if (twPrompt) twPrompt.value = "Describe this image in one sentence.";
 
             // OllamaUnloadModel — far right, vertically offset to match chat's outputs
-            const unload = LiteGraph.createNode("OllamaUnloadModel");
+            const unload = LiteGraph.createNode("LLMUnloadModel");
             unload.pos = [1200, 280];
             graph.add(unload);
 
             // Populate model dropdowns from live Ollama
             try {
-                const resp = await fetch("/dv/ollama/models?host=http://host.docker.internal:11434");
+                const resp = await fetch("/dv/ollama/models?host=http://host.docker.internal:11434&backend=ollama");
                 if (resp.ok) {
                     const data = await resp.json();
                     const models = data.models || [];
@@ -604,6 +742,11 @@ SCENES = [
     ("ollama_workflow.png", scene_ollama_workflow),
     ("ollama_options.png", scene_ollama_options),
     ("ollama_lifecycle.png", scene_ollama_lifecycle),
+    # Structured output (ADR-007 / pydantic-ai)
+    ("structured_output.png", scene_structured_output),
+    # llama.cpp (spec 008)
+    ("llamacpp_client.png", scene_llamacpp_client),
+    ("llamacpp_workflow.png", scene_llamacpp_workflow),
 ]
 
 

@@ -1,11 +1,15 @@
 /**
- * ollama.js — ComfyUI frontend extension for comfydv Ollama nodes.
+ * ollama.js — ComfyUI frontend extension for comfydv's generic LLM nodes.
  *
- * Populates the model widget on Ollama nodes from a live call to
- * GET /dv/ollama/models?host=<url>.
+ * Populates the model widget on LLM nodes from a live call to
+ * GET /dv/ollama/models?host=<url>&backend=<ollama|llamacpp>. Despite the
+ * file/route name (kept for historical reasons — see MIGRATION_MAP in
+ * comfydv.ollama), this now serves both backends: which one a given node's
+ * upstream client is determines the `backend` param (see
+ * getHostAndBackendFromNode below).
  *
- * OllamaModelSelector and OllamaLoadModel use a COMBO widget (dropdown).
- * OllamaChatCompletion uses a plain STRING widget (accepts wired values).
+ * LLMModelSelector and LLMLoadModel use a COMBO widget (dropdown).
+ * ChatCompletion uses a plain STRING widget (accepts wired values).
  * The Refresh button works the same way for both: it fetches the live list
  * and sets the widget value / updates COMBO options as appropriate.
  */
@@ -13,12 +17,15 @@
 import { app } from "../../scripts/app.js";
 
 /** Nodes whose model widget is a COMBO dropdown. */
-const OLLAMA_COMBO_NODES = new Set(["OllamaModelSelector", "OllamaLoadModel"]);
+const LLM_COMBO_NODES = new Set(["LLMModelSelector", "LLMLoadModel"]);
 
 /** Nodes whose model widget is a plain STRING (accepts wired input). */
-const OLLAMA_STRING_MODEL_NODES = new Set(["OllamaChatCompletion"]);
+const LLM_STRING_MODEL_NODES = new Set(["ChatCompletion"]);
 
-const OLLAMA_ALL_NODES = new Set([...OLLAMA_COMBO_NODES, ...OLLAMA_STRING_MODEL_NODES]);
+const LLM_ALL_NODES = new Set([...LLM_COMBO_NODES, ...LLM_STRING_MODEL_NODES]);
+
+/** Registered client node type -> backend param the /dv/ollama/models route expects. */
+const CLIENT_NODE_BACKENDS = { OllamaClient: "ollama", LlamaCppClient: "llamacpp" };
 
 /**
  * Fetch model list and update the node's model widget.
@@ -27,9 +34,11 @@ const OLLAMA_ALL_NODES = new Set([...OLLAMA_COMBO_NODES, ...OLLAMA_STRING_MODEL_
  *   - STRING: sets the value to the first model; keeps existing value if it
  *             still appears in the live list (user may have typed a valid name).
  */
-async function refreshModelWidget(node, host) {
+async function refreshModelWidget(node, host, backend) {
     try {
-        const resp = await fetch(`/dv/ollama/models?host=${encodeURIComponent(host)}`);
+        const resp = await fetch(
+            `/dv/ollama/models?host=${encodeURIComponent(host)}&backend=${encodeURIComponent(backend)}`
+        );
         if (!resp.ok) return;
         const data = await resp.json();
         const models = data.models ?? [];
@@ -53,54 +62,53 @@ async function refreshModelWidget(node, host) {
 
         node.setDirtyCanvas(true, false);
     } catch (_) {
-        // Ollama unreachable — leave widget unchanged
+        // Server unreachable — leave widget unchanged
     }
 }
 
 /**
- * Locate the host string for a node.
+ * Locate the host and backend for a node's connected LLM client.
  *
- * First checks the node's own widgets (OllamaClient has a "host" widget).
- * Otherwise traverses graph links to find a connected OllamaClient node and
- * reads its "host" widget — this is the common case for downstream nodes.
+ * Traverses graph links to find a connected OllamaClient or LlamaCppClient
+ * node and reads its "host" widget. Falls back to Ollama's default if
+ * nothing is wired yet, matching the pre-existing fallback behavior.
  */
-function getHostFromNode(node) {
-    const ownHostWidget = node.widgets?.find(w => w.name === "host");
-    if (ownHostWidget) return ownHostWidget.value;
-
+function getHostAndBackendFromNode(node) {
     for (const input of node.inputs ?? []) {
         if (!input.link) continue;
         const link = node.graph?.links[input.link];
         if (!link) continue;
         const sourceNode = node.graph?.getNodeById(link.origin_id);
-        if (sourceNode?.type === "OllamaClient") {
+        const backend = sourceNode ? CLIENT_NODE_BACKENDS[sourceNode.type] : undefined;
+        if (backend) {
             const hostWidget = sourceNode.widgets?.find(w => w.name === "host");
-            if (hostWidget?.value) return hostWidget.value;
+            if (hostWidget?.value) return { host: hostWidget.value, backend };
         }
     }
 
-    return "http://localhost:11434";
+    return { host: "http://localhost:11434", backend: "ollama" };
 }
 
 app.registerExtension({
     name: "comfydv.ollama",
 
     async beforeRegisterNodeDef(nodeType, nodeData) {
-        if (!OLLAMA_ALL_NODES.has(nodeData.name)) return;
+        if (!LLM_ALL_NODES.has(nodeData.name)) return;
 
         const onNodeCreated = nodeType.prototype.onNodeCreated;
         nodeType.prototype.onNodeCreated = function () {
             const result = onNodeCreated?.apply(this, arguments);
 
+            const refresh = () => {
+                const { host, backend } = getHostAndBackendFromNode(this);
+                refreshModelWidget(this, host, backend);
+            };
+
             // Add a Refresh button below the model widget
-            this.addWidget("button", "⟳ Refresh models", null, () => {
-                const host = getHostFromNode(this);
-                refreshModelWidget(this, host);
-            });
+            this.addWidget("button", "⟳ Refresh models", null, refresh);
 
             // Initial population on node creation
-            const host = getHostFromNode(this);
-            refreshModelWidget(this, host);
+            refresh();
 
             return result;
         };
@@ -108,15 +116,16 @@ app.registerExtension({
 });
 
 /**
- * Live structured-output dynamic sockets for OllamaChatCompletion.
+ * Live structured-output dynamic sockets for ChatCompletion.
  *
  * Mirrors FormatString's live dynamic-output pattern (see format_string.js):
  * editing structured_output or output_schema posts to a backend route that
- * recomputes OllamaChatCompletion.RETURN_TYPES/RETURN_NAMES (the same
+ * recomputes ChatCompletion.RETURN_TYPES/RETURN_NAMES (the same
  * update_outputs() path chat() itself uses at execution time) and returns
  * the resulting output list — applied to this node's sockets immediately,
  * so you see the extracted fields appear without having to run the graph
- * first.
+ * first. Backend-agnostic: ChatCompletion is the one generic node both
+ * OllamaProvider and LlamaCppProvider feed.
  */
 async function updateStructuredOutputs(node, structuredOutput, outputSchema) {
     try {
@@ -148,7 +157,7 @@ app.registerExtension({
     name: "comfydv.ollama.structuredOutput",
 
     async beforeRegisterNodeDef(nodeType, nodeData) {
-        if (nodeData.name !== "OllamaChatCompletion") return;
+        if (nodeData.name !== "ChatCompletion") return;
 
         const onNodeCreated = nodeType.prototype.onNodeCreated;
         nodeType.prototype.onNodeCreated = function () {

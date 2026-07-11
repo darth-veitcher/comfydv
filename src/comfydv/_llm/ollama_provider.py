@@ -18,7 +18,7 @@ import time
 
 from pydantic import BaseModel
 
-from comfydv._llm.provider import Message, ModelInfo, ModelStatus
+from .provider import Message, ModelInfo, ModelStatus
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +132,14 @@ async def _post_json(
 async def _get_json(
     url: str, *, timeout: float = 5.0, headers: dict | None = None
 ) -> dict:
-    """GET url, return parsed response dict. Raises on connection/HTTP error."""
+    """GET url, return parsed response dict.
+
+    Raises RuntimeError on an HTTP error status (distinct message, so callers
+    can tell "server responded with an error" from "couldn't reach it at
+    all" — aiohttp connection/timeout errors propagate unwrapped for that
+    reason). Message is generic, not backend-branded: this helper is shared
+    by every LLMProvider implementation.
+    """
     import aiohttp
 
     async with aiohttp.ClientSession() as session:
@@ -141,6 +148,11 @@ async def _get_json(
             headers=headers or None,
             timeout=aiohttp.ClientTimeout(total=timeout),
         ) as resp:
+            if resp.status >= 400:
+                body = await resp.text()
+                raise RuntimeError(
+                    f"Server returned HTTP {resp.status} for {url}: {body[:300]}"
+                )
             return await resp.json()
 
 
@@ -284,7 +296,7 @@ class OllamaProvider:
         timeout_secs: float = 300.0,
         max_retries: int = 2,
     ) -> BaseModel:
-        from comfydv._llm.chat import chat_structured as _chat_structured_impl
+        from .chat import chat_structured as _chat_structured_impl
 
         payload_messages = [m.model_dump() for m in messages]
         cache_key = _cache_key(
