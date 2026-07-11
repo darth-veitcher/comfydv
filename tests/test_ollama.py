@@ -824,6 +824,92 @@ class _FakeRequest:
         return self._body
 
 
+class _FakeRelUrl:
+    def __init__(self, query: dict):
+        self.query = query
+
+
+class _FakeGetRequest:
+    def __init__(self, query: dict):
+        self.rel_url = _FakeRelUrl(query)
+
+
+class TestModelsRoute:
+    """GET /dv/ollama/models — the JS refresh-button/auto-populate endpoint.
+
+    Previously untested (no test survived the atomic cutover rewrite), which
+    is exactly how a real bug shipped undetected: the `backend` dispatch
+    added here didn't exist until a live js/ollama.js bug was found (it
+    matched on pre-rename node names and always spoke Ollama's wire
+    protocol regardless of which client was actually connected)."""
+
+    def _call(self, query: dict):
+        import comfydv.ollama as ollama_mod
+        from comfydv._llm.ollama_provider import _run_async
+
+        resp = _run_async(ollama_mod._models_endpoint(_FakeGetRequest(query)))
+        return json.loads(resp.text), resp.status
+
+    def test_default_backend_dispatches_to_ollama(self, monkeypatch):
+        async def fake_fetch(host, headers=None):
+            assert host == "http://localhost:11434"
+            return ["a", "b"]
+
+        monkeypatch.setattr("comfydv.ollama._fetch_models", fake_fetch)
+        data, status = self._call({"host": "http://localhost:11434"})
+
+        assert status == 200
+        assert data == {"models": ["a", "b"]}
+
+    def test_explicit_ollama_backend_dispatches_to_ollama(self, monkeypatch):
+        async def fake_fetch(host, headers=None):
+            return ["m"]
+
+        monkeypatch.setattr("comfydv.ollama._fetch_models", fake_fetch)
+        data, status = self._call(
+            {"host": "http://localhost:11434", "backend": "ollama"}
+        )
+
+        assert status == 200
+        assert data == {"models": ["m"]}
+
+    def test_llamacpp_backend_dispatches_to_llamacpp_fetch(self, monkeypatch):
+        """The bug this regression-tests: before the fix, this endpoint
+        always called Ollama's _fetch_models regardless of `backend`, so a
+        llama.cpp host's models never populated the dropdown."""
+        called = {}
+
+        async def fake_llamacpp_fetch(host, headers=None):
+            called["host"] = host
+            return ["gemma-3-4b"]
+
+        async def fail_ollama_fetch(host, headers=None):
+            raise AssertionError("must not call Ollama's fetcher for backend=llamacpp")
+
+        monkeypatch.setattr(
+            "comfydv._llm.llamacpp_provider._fetch_models", fake_llamacpp_fetch
+        )
+        monkeypatch.setattr("comfydv.ollama._fetch_models", fail_ollama_fetch)
+
+        data, status = self._call(
+            {"host": "http://localhost:8080", "backend": "llamacpp"}
+        )
+
+        assert status == 200
+        assert data == {"models": ["gemma-3-4b"]}
+        assert called["host"] == "http://localhost:8080"
+
+    def test_no_models_returns_503(self, monkeypatch):
+        async def fake_fetch(host, headers=None):
+            return []
+
+        monkeypatch.setattr("comfydv.ollama._fetch_models", fake_fetch)
+        data, status = self._call({"host": "http://localhost:11434"})
+
+        assert status == 503
+        assert "error" in data
+
+
 class TestUpdateStructuredOutputsRoute:
     def teardown_method(self):
         # This route mutates ChatCompletion's class-level RETURN_TYPES

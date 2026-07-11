@@ -17,8 +17,8 @@ import logging
 
 from pydantic import BaseModel
 
-from comfydv._llm.ollama_provider import _TTLLRUCache, _cache_key, _get_json, _post_json
-from comfydv._llm.provider import Message, ModelInfo, ModelStatus
+from .ollama_provider import _TTLLRUCache, _cache_key, _get_json, _post_json
+from .provider import Message, ModelInfo, ModelStatus
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,26 @@ logger = logging.getLogger(__name__)
 # just Ollama.
 _MODEL_LIST_CACHE = _TTLLRUCache(maxsize=32, ttl_seconds=20.0)
 _CHAT_RESPONSE_CACHE = _TTLLRUCache(maxsize=64, ttl_seconds=None)
+
+
+async def _fetch_models(host: str, headers: dict | None = None) -> list[str]:
+    """Name-only view for ComfyUI's combo-widget population (the JS refresh
+    button and node-creation auto-populate) — mirrors
+    ollama_provider._fetch_models's narrower, gracefully-degrading contract.
+
+    Deliberately more forgiving than LlamaCppProvider.list_models(): that
+    method raises on a non-router-mode server (FR-006, for real workflow
+    execution, where a silent empty result would be misleading). This
+    combo-population use case wants the same quiet "just show an empty
+    dropdown" degradation Ollama's nodes already give for *any* failure —
+    consistent UX across backends for this specific, lower-stakes path.
+    """
+    try:
+        models = await LlamaCppProvider(host, headers).list_models()
+    except Exception as exc:
+        logger.warning("Could not fetch llama.cpp models from %s: %s", host, exc)
+        return []
+    return [m.name for m in models]
 
 
 class LlamaCppProvider:
@@ -184,7 +204,7 @@ class LlamaCppProvider:
         timeout_secs: float = 300.0,
         max_retries: int = 2,
     ) -> BaseModel:
-        from comfydv._llm.chat import chat_structured as _chat_structured_impl
+        from .chat import chat_structured as _chat_structured_impl
 
         payload_messages = [m.model_dump() for m in messages]
         cache_key = _cache_key(
