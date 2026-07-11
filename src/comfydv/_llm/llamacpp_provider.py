@@ -98,20 +98,37 @@ class LlamaCppProvider:
     async def load_model(self, model: str) -> None:
         if not model.strip():
             raise ValueError("model name cannot be empty")
-        await _post_json(
-            f"{self.host}/models/load",
-            {"model": model},
-            headers=self.headers,
-        )
+        try:
+            await _post_json(
+                f"{self.host}/models/load",
+                {"model": model},
+                headers=self.headers,
+            )
+        except RuntimeError as exc:
+            # Confirmed live: router mode's own /models/load is NOT
+            # idempotent — it 400s "model is already running" rather than
+            # the {"success": true} the contract assumed. The LLMProvider
+            # protocol requires load_model() to be idempotent, so this
+            # error is the desired end-state, not a failure — absorb it
+            # here rather than leaking the wire-level quirk to callers.
+            if "model is already running" not in str(exc):
+                raise
 
     async def unload_model(self, model: str) -> None:
         if not model.strip():
             raise ValueError("model name cannot be empty")
-        await _post_json(
-            f"{self.host}/models/unload",
-            {"model": model},
-            headers=self.headers,
-        )
+        try:
+            await _post_json(
+                f"{self.host}/models/unload",
+                {"model": model},
+                headers=self.headers,
+            )
+        except RuntimeError as exc:
+            # Mirror of load_model()'s non-idempotency above, confirmed live:
+            # /models/unload 400s "model is not running" on an already-
+            # unloaded model instead of {"success": true}.
+            if "model is not running" not in str(exc):
+                raise
 
     async def chat(
         self,

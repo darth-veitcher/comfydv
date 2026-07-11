@@ -28,9 +28,14 @@ class LlamaCppProvider:
 
 ## Behavioral requirements (inherited from the protocol contract, restated for this implementation)
 
-- `load_model`/`unload_model` MUST be idempotent — router mode's own
-  `{"success": true}` response on an already-loaded/unloaded model satisfies
-  this without extra handling.
+- `load_model`/`unload_model` MUST be idempotent. **Live-verified against a
+  real router-mode server**: router mode's own endpoints are *not*
+  idempotent — `/models/load` on an already-loaded model returns HTTP 400
+  `"model is already running"`, and `/models/unload` on an already-unloaded
+  model returns HTTP 400 `"model is not running"`, instead of `{"success": true}`.
+  `LlamaCppProvider` absorbs this itself: these two specific error messages
+  are treated as the desired end-state already reached, not a failure; any
+  other error still propagates.
 - `list_models()` MUST NOT normalize away llama.cpp's `sleeping`/`downloading`
   states (unlike `OllamaProvider`, which has no choice but to normalize —
   see `research.md`).

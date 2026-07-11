@@ -169,6 +169,56 @@ def test_unload_model_posts_to_models_unload_with_model_field(monkeypatch):
     assert captured["payload"] == {"model": "gemma-3-4b"}
 
 
+def test_load_model_already_running_is_idempotent(monkeypatch):
+    """Confirmed live: router mode's /models/load is NOT idempotent at the
+    wire level — it 400s "model is already running" rather than returning
+    {"success": true}. The LLMProvider protocol requires load_model() to be
+    idempotent, so LlamaCppProvider must absorb this itself."""
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        raise RuntimeError(
+            "Server returned HTTP 400 for "
+            f'{url}: {{"error":{{"code":400,"message":"model is already '
+            'running","type":"invalid_request_error"}}}}'
+        )
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    _run_async(LlamaCppProvider("http://localhost:8080").load_model("gemma-3-4b"))
+
+
+def test_load_model_other_http_error_still_raises(monkeypatch):
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        raise RuntimeError(f"Server returned HTTP 500 for {url}: internal error")
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    with pytest.raises(RuntimeError, match="500"):
+        _run_async(LlamaCppProvider("http://localhost:8080").load_model("gemma-3-4b"))
+
+
+def test_unload_model_not_running_is_idempotent(monkeypatch):
+    """Mirror of the load_model case, confirmed live: /models/unload 400s
+    "model is not running" on an already-unloaded model."""
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        raise RuntimeError(
+            "Server returned HTTP 400 for "
+            f'{url}: {{"error":{{"code":400,"message":"model is not '
+            'running","type":"invalid_request_error"}}}}'
+        )
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    _run_async(LlamaCppProvider("http://localhost:8080").unload_model("gemma-3-4b"))
+
+
+def test_unload_model_other_http_error_still_raises(monkeypatch):
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        raise RuntimeError(f"Server returned HTTP 500 for {url}: internal error")
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    with pytest.raises(RuntimeError, match="500"):
+        _run_async(LlamaCppProvider("http://localhost:8080").unload_model("gemma-3-4b"))
+
+
 def test_load_model_empty_raises_before_network(monkeypatch):
     def fail_post(*a, **k):
         raise AssertionError("must not call _post_json for an empty model name")

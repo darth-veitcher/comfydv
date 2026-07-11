@@ -107,7 +107,7 @@ unmodified by this feature (plan.md Constitution Check, research.md).
 - [x] T014 [P] `ty check` — clean, same pre-existing diagnostics as the prerequisite epic (unrelated to this feature — `comfy`/`server`/`folder_paths` unresolved-import, `format_string.py`'s dynamic RETURN_TYPES, `create_model`/`RandomChoice` — none touch the new files)
 - [x] T015 Confirmed via grep: `llamacpp_provider.py`/`llamacpp.py` import no `comfy`/`server`/`folder_paths` at module scope
 - [x] T016 `beacon doctor --strict`: only the pre-existing `llm-provider-abstraction: all specs [complete]` epic-gates item (PR #18, the archive-bookkeeping PR for the *prerequisite* epic, not yet merged — unrelated to this feature) and `tdd-commit-discipline` (disclosed pattern, same reasoning as the prerequisite epic)
-- [-] T017 Live smoke test — _no `llama-server` reachable in this environment (checked port 8080, the default) unlike the prerequisite epic where Ollama happened to be running. Degraded to the mocked suite (23 new tests, all passing) plus the live-verified API research (research.md) as the coverage we have. A genuine live run against a real `llama-server` is still worth doing before this ships — flagging for whoever picks this branch up next, not silently skipping it._
+- [x] T017 Live smoke test — run against a real router-mode `llama-server` (Homebrew-installed, already present in the dev environment; a prior pass wrongly assumed no server was reachable without actually checking). Full lifecycle exercised against a real 5.6GB local GGUF model: `list_models()` → `load_model()` → `chat()` → `unload_model()`, plus explicit idempotency checks (calling `load_model()`/`unload_model()` again in the already-satisfied state). Found and fixed a real gap not caught by the mocked suite — see the finding below.
 
 ---
 
@@ -174,3 +174,37 @@ re-raised naming router mode as the likely cause. Regression test added:
 `_fetch_models()` still catch broadly and degrade to `[]` unchanged — no
 spec requirement asks Ollama to make this distinction, and this fix doesn't
 force it to.
+
+---
+
+## Live smoke test finding (T017, fixed)
+
+T017 had been marked `[-]` deferred on the assumption that no `llama-server`
+was reachable in the dev environment. That assumption was never actually
+checked — `llama-server` was installed via Homebrew the whole time, and a
+router-mode server was launched against a real local GGUF model
+(`--models-dir` pointed at a symlinked model file) to run the smoke test for
+real.
+
+This caught a genuine gap the mocked suite couldn't: `contracts/llamacpp_provider_conformance.md`
+claimed router mode's `/models/load`/`/models/unload` return `{"success": true}`
+on an already-loaded/unloaded model, satisfying the `LLMProvider` protocol's
+idempotency requirement "without extra handling." That claim was never
+live-verified — live testing showed the opposite: both endpoints return HTTP
+400 (`"model is already running"` / `"model is not running"`) instead.
+`LlamaCppProvider.load_model()`/`unload_model()` now absorb exactly those two
+error messages as the desired end-state already reached (any other error
+still propagates); the contract doc is corrected to describe the real
+behavior. Regression tests added (mocked, so they run in CI):
+`test_load_model_already_running_is_idempotent`,
+`test_unload_model_not_running_is_idempotent`, and their
+`_other_http_error_still_raises` counterparts confirming non-idempotency
+errors aren't over-broadly swallowed.
+
+Also observed live (informational, no code change needed): `load_model()`/
+`unload_model()` return once the request is *accepted*, not once the state
+transition completes — a 5.6GB model reported `LOADING` for several seconds
+before `LOADED`. This matches `ModelStatus`'s documented vocabulary (`loading`
+is a real, intended state) and how a real UI would behave — fire the request,
+poll `list_models()` for the transition. No protocol change; noted here so
+it's not mistaken for a future bug report.
