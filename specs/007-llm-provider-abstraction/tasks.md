@@ -139,8 +139,8 @@ T-CUT step is still verified incrementally during implementation; the
 suite only needs to be green as a whole at T-CUT-10, not after every step.
 
 - [ ] T-CUT-01 [P] `ollama.py`: import HTTP/cache infra from `comfydv._llm.ollama_provider` instead of duplicating it; repoint `_load_default_models()`/`/dv/ollama/models` route (plan D1)
-- [ ] T-CUT-02 `ollama_provider.py`: implement `OllamaProvider.list_models()`/`load_model()`/`unload_model()`/`chat()`/`chat_structured()` method bodies (ports existing inline logic; `chat_structured()` delegates to `_llm/chat.py`)
-- [ ] T-CUT-03 `tests/test_ollama_provider.py` (new file): tests for T-CUT-02, mocking at the `ollama_provider` seam (plan D4/D5)
+- [x] T-CUT-02 `ollama_provider.py`: implement `OllamaProvider.list_models()`/`load_model()`/`unload_model()`/`chat()`/`chat_structured()` method bodies (ports existing inline logic; `chat_structured()` delegates to `_llm/chat.py`; `list_models()` also queries `/api/ps` to distinguish loaded/unloaded, a genuinely new capability the old `OllamaModelSelector` never had)
+- [x] T-CUT-03 `tests/test_ollama_provider.py` (new file): tests for T-CUT-02, mocking at the `ollama_provider` seam (plan D4/D5)
 - [ ] T-CUT-04 `ollama.py`: `OllamaClient.RETURN_TYPES` → `("LLM_CLIENT",)`, `create_client()` returns `OllamaProvider(host, headers)` (plan D2)
 - [ ] T-CUT-05 `ollama.py`: rename the 4 classes, `"OLLAMA_CLIENT"`→`"LLM_CLIENT"` on every consumer, rewrite the 3 delegating method bodies, delete `_client_headers` (plan D6)
 - [ ] T-CUT-06 `src/comfydv/__init__.py`: update imports and `NODE_CLASS_MAPPINGS`/`NODE_DISPLAY_NAME_MAPPINGS`

@@ -16,6 +16,10 @@ import logging
 import threading
 import time
 
+from pydantic import BaseModel
+
+from comfydv._llm.provider import Message, ModelInfo, ModelStatus
+
 logger = logging.getLogger(__name__)
 
 
@@ -125,18 +129,185 @@ async def _post_json(
         raise RuntimeError(f"Cannot reach Ollama at {url}: {exc}") from exc
 
 
+async def _get_json(
+    url: str, *, timeout: float = 5.0, headers: dict | None = None
+) -> dict:
+    """GET url, return parsed response dict. Raises on connection/HTTP error."""
+    import aiohttp
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(
+            url,
+            headers=headers or None,
+            timeout=aiohttp.ClientTimeout(total=timeout),
+        ) as resp:
+            return await resp.json()
+
+
+async def _fetch_models(host: str, headers: dict | None = None) -> list[str]:
+    """GET {host}/api/tags — return list of model name strings.
+
+    Used by comfydv.ollama's combo-widget population (_load_default_models,
+    the /dv/ollama/models route) — a narrower, name-only view than
+    OllamaProvider.list_models(), which returns full ModelInfo with status.
+    Cached for _MODEL_LIST_CACHE.ttl_seconds per (host, headers) pair.
+    """
+    cache_key = _cache_key("models", host, headers or {})
+    cached, hit = _MODEL_LIST_CACHE.get(cache_key)
+    if hit:
+        return cached
+
+    try:
+        data = await _get_json(f"{host}/api/tags", headers=headers)
+        models = [m["name"] for m in data.get("models", [])]
+    except Exception as exc:
+        logger.warning("Could not fetch Ollama models from %s: %s", host, exc)
+        return []
+
+    if models:
+        _MODEL_LIST_CACHE.set(cache_key, models)
+    return models
+
+
 class OllamaProvider:
     """LLMProvider implementation backed by Ollama's REST API.
 
     Host and headers are captured once at construction — every method
     reuses them, matching the ADR-005 config-node pattern (one
     ``OllamaClient`` node's output is one ``OllamaProvider`` instance).
-
-    Method bodies land incrementally across
-    specs/007-llm-provider-abstraction/tasks.md's user-story phases; see
-    that file for current status.
     """
 
     def __init__(self, host: str, headers: dict | None = None):
         self.host = host
         self.headers = dict(headers) if headers else None
+
+    async def list_models(self) -> list[ModelInfo]:
+        """Every installed model, with live loaded/unloaded status.
+
+        `/api/tags` lists installed models; `/api/ps` lists currently-loaded
+        ones. Ollama has no `sleeping`/`downloading` concept via this API —
+        never emitted here (ADR-007's documented approximation).
+        """
+        cache_key = _cache_key("list_models", self.host, self.headers or {})
+        cached, hit = _MODEL_LIST_CACHE.get(cache_key)
+        if hit:
+            return cached
+
+        try:
+            tags = await _get_json(f"{self.host}/api/tags", headers=self.headers)
+        except Exception as exc:
+            logger.warning("Could not fetch Ollama models from %s: %s", self.host, exc)
+            return []
+
+        loaded_names: set[str] = set()
+        try:
+            ps = await _get_json(f"{self.host}/api/ps", headers=self.headers)
+            loaded_names = {m["name"] for m in ps.get("models", [])}
+        except Exception as exc:
+            logger.warning(
+                "Could not fetch Ollama running models from %s: %s", self.host, exc
+            )
+
+        models = [
+            ModelInfo(
+                name=m["name"],
+                status=(
+                    ModelStatus.LOADED
+                    if m["name"] in loaded_names
+                    else ModelStatus.UNLOADED
+                ),
+                size=m.get("size"),
+            )
+            for m in tags.get("models", [])
+        ]
+        if models:
+            _MODEL_LIST_CACHE.set(cache_key, models)
+        return models
+
+    async def load_model(self, model: str) -> None:
+        if not model.strip():
+            raise ValueError("model name cannot be empty")
+        await _post_json(
+            f"{self.host}/api/generate",
+            {"model": model, "keep_alive": -1, "stream": False},
+            timeout=300.0,
+            headers=self.headers,
+        )
+
+    async def unload_model(self, model: str) -> None:
+        if not model.strip():
+            raise ValueError("model name cannot be empty")
+        await _post_json(
+            f"{self.host}/api/generate",
+            {"model": model, "keep_alive": 0, "stream": False},
+            timeout=30.0,
+            headers=self.headers,
+        )
+
+    async def chat(
+        self,
+        model: str,
+        messages: list[Message],
+        options: dict | None = None,
+        timeout_secs: float = 300.0,
+    ) -> str:
+        payload_messages = [m.model_dump() for m in messages]
+        payload: dict = {"model": model, "messages": payload_messages, "stream": False}
+        if options:
+            payload["options"] = options
+
+        cache_key = _cache_key(
+            "chat",
+            self.host,
+            self.headers or {},
+            model,
+            payload_messages,
+            options or {},
+        )
+        cached, hit = _CHAT_RESPONSE_CACHE.get(cache_key)
+        if hit:
+            return cached
+
+        result = await _post_json(
+            f"{self.host}/api/chat", payload, timeout=timeout_secs, headers=self.headers
+        )
+        response_text = result.get("message", {}).get("content", "")
+        _CHAT_RESPONSE_CACHE.set(cache_key, response_text)
+        return response_text
+
+    async def chat_structured(
+        self,
+        model: str,
+        messages: list[Message],
+        schema: type[BaseModel],
+        options: dict | None = None,
+        timeout_secs: float = 300.0,
+        max_retries: int = 2,
+    ) -> BaseModel:
+        from comfydv._llm.chat import chat_structured as _chat_structured_impl
+
+        payload_messages = [m.model_dump() for m in messages]
+        cache_key = _cache_key(
+            "chat_structured",
+            self.host,
+            self.headers or {},
+            model,
+            payload_messages,
+            options or {},
+            schema.model_json_schema(),
+        )
+        cached, hit = _CHAT_RESPONSE_CACHE.get(cache_key)
+        if hit:
+            return schema.model_validate(cached)
+
+        result = await _chat_structured_impl(
+            base_url=f"{self.host}/v1",
+            model=model,
+            messages=messages,
+            schema=schema,
+            headers=self.headers,
+            max_retries=max_retries,
+            timeout_secs=timeout_secs,
+        )
+        _CHAT_RESPONSE_CACHE.set(cache_key, result.model_dump())
+        return result
