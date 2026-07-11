@@ -1,0 +1,971 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../">
+      
+      
+        <link rel="next" href="../llamacpp_provider/">
+      
+      
+      <link rel="icon" href="../../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.9">
+    
+    
+      
+        <title>chat - ComfyPPT</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../../assets/stylesheets/main.4af4bdda.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#comfydv._llm.chat" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../../.." title="ComfyPPT" class="md-header__button md-logo" aria-label="ComfyPPT" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ComfyPPT
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              chat
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../../.." title="ComfyPPT" class="md-nav__button md-logo" aria-label="ComfyPPT" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ComfyPPT
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Code Reference
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Code Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_1" checked>
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    comfydv
+    
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_2_1" id="__nav_2_1_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_1_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2_1">
+            <span class="md-nav__icon md-icon"></span>
+            comfydv
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_1_1" checked>
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    _llm
+    
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_2_1_1" id="__nav_2_1_1_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_1_1_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2_1_1">
+            <span class="md-nav__icon md-icon"></span>
+            _llm
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    chat
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    chat
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#comfydv._llm.chat" class="md-nav__link">
+    <span class="md-ellipsis">
+      chat
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#comfydv._llm.chat.chat_structured" class="md-nav__link">
+    <span class="md-ellipsis">
+      chat_structured
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../llamacpp_provider/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    llamacpp_provider
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ollama_provider/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ollama_provider
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../provider/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    provider
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../circuit_breaker/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    circuit_breaker
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../format_string/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    format_string
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../llamacpp/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    llamacpp
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ollama/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ollama
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../random_choice/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    random_choice
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../utils/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    utils
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#comfydv._llm.chat" class="md-nav__link">
+    <span class="md-ellipsis">
+      chat
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#comfydv._llm.chat.chat_structured" class="md-nav__link">
+    <span class="md-ellipsis">
+      chat_structured
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+  <h1>chat</h1>
+
+<div class="doc doc-object doc-module">
+
+
+
+<a id="comfydv._llm.chat"></a>
+    <div class="doc doc-contents first">
+
+        <p>Shared chat_structured() helper — pydantic-ai backed structured output.</p>
+<p>Used by every <code>LLMProvider</code> implementation's <code>chat_structured()</code> method
+(ADR-007) so Ollama and llama.cpp share one implementation of tool-calling/
+structured-output logic instead of each hand-rolling it, since both speak
+OpenAI-compatible <code>/v1/chat/completions</code>.</p>
+<p>Ports ADR-006's retry/validation contract exactly: bounded retries (0-5,
+clamped), and a <code>RuntimeError</code> naming the model, attempt count, and a
+truncated snippet of the last invalid response on exhausted retries. The
+Agent's own internal retries are disabled (<code>retries=0</code>) — this helper
+drives its own retry loop so the error contract is comfydv's, not
+pydantic-ai's internal one.</p>
+
+
+
+
+
+
+
+
+
+  <div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="comfydv._llm.chat.chat_structured" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">chat_structured</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">base_url</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">messages</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">options</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_retries</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">timeout_secs</span><span class="o">=</span><span class="mf">300.0</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+</h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Call <code>model</code> at <code>base_url</code> (an OpenAI-compatible <code>/v1</code> root) and
+return a validated instance of <code>schema</code>.</p>
+<p><code>options</code> is forwarded verbatim as a top-level <code>"options"</code> field in
+the request body via pydantic-ai's <code>extra_body</code> — the same shape the
+pre-ADR-007 hand-rolled implementation sent, so provider-native sampling
+params (Ollama's <code>num_predict</code>/<code>repeat_penalty</code>/etc., set via the
+<code>OllamaOption*</code> nodes) keep working unchanged rather than being
+lossily remapped onto pydantic-ai's own standardized <code>ModelSettings</code>
+fields.</p>
+<p>Retries up to <code>max_retries</code> times (clamped 0-5) on validation failure
+before raising <code>RuntimeError</code>. Never returns a value that failed
+validation against <code>schema</code>.</p>
+
+
+            <details class="quote">
+              <summary>Source code in <code>src/comfydv/_llm/chat.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 78</span>
+<span class="normal"> 79</span>
+<span class="normal"> 80</span>
+<span class="normal"> 81</span>
+<span class="normal"> 82</span>
+<span class="normal"> 83</span>
+<span class="normal"> 84</span>
+<span class="normal"> 85</span>
+<span class="normal"> 86</span>
+<span class="normal"> 87</span>
+<span class="normal"> 88</span>
+<span class="normal"> 89</span>
+<span class="normal"> 90</span>
+<span class="normal"> 91</span>
+<span class="normal"> 92</span>
+<span class="normal"> 93</span>
+<span class="normal"> 94</span>
+<span class="normal"> 95</span>
+<span class="normal"> 96</span>
+<span class="normal"> 97</span>
+<span class="normal"> 98</span>
+<span class="normal"> 99</span>
+<span class="normal">100</span>
+<span class="normal">101</span>
+<span class="normal">102</span>
+<span class="normal">103</span>
+<span class="normal">104</span>
+<span class="normal">105</span>
+<span class="normal">106</span>
+<span class="normal">107</span>
+<span class="normal">108</span>
+<span class="normal">109</span>
+<span class="normal">110</span>
+<span class="normal">111</span>
+<span class="normal">112</span>
+<span class="normal">113</span>
+<span class="normal">114</span>
+<span class="normal">115</span>
+<span class="normal">116</span>
+<span class="normal">117</span>
+<span class="normal">118</span>
+<span class="normal">119</span>
+<span class="normal">120</span>
+<span class="normal">121</span>
+<span class="normal">122</span>
+<span class="normal">123</span>
+<span class="normal">124</span>
+<span class="normal">125</span>
+<span class="normal">126</span>
+<span class="normal">127</span>
+<span class="normal">128</span>
+<span class="normal">129</span>
+<span class="normal">130</span>
+<span class="normal">131</span>
+<span class="normal">132</span>
+<span class="normal">133</span>
+<span class="normal">134</span>
+<span class="normal">135</span>
+<span class="normal">136</span>
+<span class="normal">137</span>
+<span class="normal">138</span>
+<span class="normal">139</span>
+<span class="normal">140</span>
+<span class="normal">141</span>
+<span class="normal">142</span>
+<span class="normal">143</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">chat_structured</span><span class="p">(</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">base_url</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">model</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">messages</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Message</span><span class="p">],</span>
+    <span class="n">schema</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="n">BaseModel</span><span class="p">],</span>
+    <span class="n">headers</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">options</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">max_retries</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
+    <span class="n">timeout_secs</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">300.0</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BaseModel</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Call ``model`` at ``base_url`` (an OpenAI-compatible ``/v1`` root) and</span>
+<span class="sd">    return a validated instance of ``schema``.</span>
+
+<span class="sd">    ``options`` is forwarded verbatim as a top-level ``&quot;options&quot;`` field in</span>
+<span class="sd">    the request body via pydantic-ai&#39;s ``extra_body`` — the same shape the</span>
+<span class="sd">    pre-ADR-007 hand-rolled implementation sent, so provider-native sampling</span>
+<span class="sd">    params (Ollama&#39;s ``num_predict``/``repeat_penalty``/etc., set via the</span>
+<span class="sd">    ``OllamaOption*`` nodes) keep working unchanged rather than being</span>
+<span class="sd">    lossily remapped onto pydantic-ai&#39;s own standardized ``ModelSettings``</span>
+<span class="sd">    fields.</span>
+
+<span class="sd">    Retries up to ``max_retries`` times (clamped 0-5) on validation failure</span>
+<span class="sd">    before raising ``RuntimeError``. Never returns a value that failed</span>
+<span class="sd">    validation against ``schema``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">messages</span> <span class="ow">or</span> <span class="n">messages</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">role</span> <span class="o">!=</span> <span class="s2">&quot;user&quot;</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">&quot;chat_structured requires the last message to have role=&#39;user&#39;&quot;</span>
+        <span class="p">)</span>
+
+    <span class="n">agent</span> <span class="o">=</span> <span class="n">_build_agent</span><span class="p">(</span>
+        <span class="n">base_url</span><span class="o">=</span><span class="n">base_url</span><span class="p">,</span>
+        <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+        <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span>
+        <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span>
+        <span class="n">timeout_secs</span><span class="o">=</span><span class="n">timeout_secs</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">history</span> <span class="o">=</span> <span class="n">_history_to_messages</span><span class="p">(</span><span class="n">messages</span><span class="p">)</span>
+    <span class="n">prompt</span> <span class="o">=</span> <span class="n">messages</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">content</span>
+    <span class="n">model_settings</span><span class="p">:</span> <span class="n">ModelSettings</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="p">{</span><span class="s2">&quot;extra_body&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;options&quot;</span><span class="p">:</span> <span class="n">options</span><span class="p">}}</span> <span class="k">if</span> <span class="n">options</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="p">)</span>
+
+    <span class="n">total_attempts</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">min</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">max_retries</span><span class="p">),</span> <span class="mi">5</span><span class="p">))</span> <span class="o">+</span> <span class="mi">1</span>
+    <span class="n">last_error</span><span class="p">:</span> <span class="ne">Exception</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">last_invalid_text</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">_attempt</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">total_attempts</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">agent</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+                <span class="n">prompt</span><span class="p">,</span> <span class="n">message_history</span><span class="o">=</span><span class="n">history</span><span class="p">,</span> <span class="n">model_settings</span><span class="o">=</span><span class="n">model_settings</span>
+            <span class="p">)</span>
+            <span class="c1"># agent&#39;s output_type is the caller&#39;s `schema` (a runtime value,</span>
+            <span class="c1"># not a static type parameter), so the checker can&#39;t narrow</span>
+            <span class="c1"># result.output past Agent&#39;s default `str` — cast to the</span>
+            <span class="c1"># function&#39;s declared return type, which schema is a subtype of.</span>
+            <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">,</span> <span class="n">result</span><span class="o">.</span><span class="n">output</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">_STRUCTURED_OUTPUT_FAILURE_EXCEPTIONS</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">last_error</span> <span class="o">=</span> <span class="n">exc</span>
+            <span class="n">last_invalid_text</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">)</span>
+
+    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;chat_structured: response failed validation against schema after &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">total_attempts</span><span class="si">}</span><span class="s2"> attempt(s) (model=</span><span class="si">{</span><span class="n">model</span><span class="si">!r}</span><span class="s2">). Last error: &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">last_error</span><span class="si">}</span><span class="s2">. Last response (truncated): </span><span class="si">{</span><span class="n">last_invalid_text</span><span class="p">[:</span><span class="mi">300</span><span class="p">]</span><span class="si">!r}</span><span class="s2">&quot;</span>
+    <span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../../../..", "features": [], "search": "../../../../assets/javascripts/workers/search.f8cc74c7.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../../../assets/javascripts/bundle.c8b220af.min.js"></script>
+      
+    
+  </body>
+</html>
