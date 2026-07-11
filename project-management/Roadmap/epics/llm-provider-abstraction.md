@@ -106,3 +106,14 @@ was considered as a lighter-weight alternative to `create_model()` during
 research and rejected: it performs no pydantic validation at all, which
 would silently drop the "reject blank required strings" safeguard ADR-006
 introduced. Stick with `create_model()`-built `BaseModel` subclasses.
+
+**2026-07-11 — cutover executed, PR open:** T-CUT-01 through T-CUT-12
+complete (`specs/007-llm-provider-abstraction/tasks.md` — every task `[x]`
+or explicitly `[-]` superseded/deferred with a reason). `beacon epic
+refresh` reports 1/1 owned specs complete. An independent `beacon-reviewer`
+pass caught one real regression (`options` silently dropped in
+structured-output mode) before merge — fixed and re-verified clear. README
+and docs/index.md updated for the rename, including the FR-009 migration
+table. **PR: [#17](https://github.com/darth-veitcher/comfydv/pull/17)** —
+not yet merged; `beacon epic finish` waits for that, per
+`beacon epic refresh`'s own guidance.
