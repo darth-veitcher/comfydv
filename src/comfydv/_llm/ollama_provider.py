@@ -18,7 +18,7 @@ import time
 
 from pydantic import BaseModel
 
-from comfydv._llm.provider import Message, ModelInfo, ModelStatus
+from .provider import Message, ModelInfo, ModelStatus
 
 logger = logging.getLogger(__name__)
 
@@ -296,7 +296,7 @@ class OllamaProvider:
         timeout_secs: float = 300.0,
         max_retries: int = 2,
     ) -> BaseModel:
-        from comfydv._llm.chat import chat_structured as _chat_structured_impl
+        from .chat import chat_structured as _chat_structured_impl
 
         payload_messages = [m.model_dump() for m in messages]
         cache_key = _cache_key(

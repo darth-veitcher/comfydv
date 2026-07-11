@@ -21,8 +21,8 @@ import logging
 import os
 import sys
 
-from comfydv._llm.ollama_provider import OllamaProvider, _fetch_models, _run_async
-from comfydv._llm.provider import Message
+from ._llm.ollama_provider import OllamaProvider, _fetch_models, _run_async
+from ._llm.provider import Message
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +119,13 @@ if "comfy" in sys.modules:
         from aiohttp import web
 
         host = request.rel_url.query.get("host", "http://localhost:11434")
-        models = await _fetch_models(host)
+        backend = request.rel_url.query.get("backend", "ollama")
+        if backend == "llamacpp":
+            from ._llm.llamacpp_provider import _fetch_models as _fetch
+
+            models = await _fetch(host)
+        else:
+            models = await _fetch_models(host)
         if models:
             return web.json_response({"models": models})
         return web.json_response({"error": f"No models found at {host}"}, status=503)

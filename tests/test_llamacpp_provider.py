@@ -13,7 +13,7 @@ BDD coverage:
 import pytest
 
 import comfydv._llm.llamacpp_provider as provider_mod
-from comfydv._llm.llamacpp_provider import LlamaCppProvider
+from comfydv._llm.llamacpp_provider import LlamaCppProvider, _fetch_models
 from comfydv._llm.ollama_provider import _run_async
 from comfydv._llm.provider import Message, ModelStatus
 
@@ -355,3 +355,50 @@ def test_chat_structured_forwards_options(monkeypatch):
     )
 
     assert captured["options"] == {"temperature": 0.0}
+
+
+# ---------------------------------------------------------------------------
+# _fetch_models — name-only view used by ComfyUI's /dv/ollama/models?backend=
+# llamacpp route (the JS refresh button / node-creation auto-populate).
+# Deliberately more forgiving than list_models(): degrades to [] on any
+# failure rather than raising on a non-router-mode server, matching the
+# combo-widget UX OllamaProvider's own _fetch_models already gives.
+# ---------------------------------------------------------------------------
+
+
+def test_fetch_models_returns_name_only_list(monkeypatch):
+    async def fake_get(url, *, timeout=5.0, headers=None):
+        return {
+            "data": [
+                {"id": "a", "status": {"value": "loaded"}},
+                {"id": "b", "status": {"value": "unloaded"}},
+            ]
+        }
+
+    monkeypatch.setattr(provider_mod, "_get_json", fake_get)
+    names = _run_async(_fetch_models("http://localhost:8080"))
+
+    assert names == ["a", "b"]
+
+
+def test_fetch_models_degrades_to_empty_on_non_router_mode(monkeypatch):
+    """Unlike list_models() (FR-006), this combo-population view swallows
+    even the non-router-mode error — a quiet empty dropdown, not a toast."""
+
+    async def fake_get(url, *, timeout=5.0, headers=None):
+        raise RuntimeError("Server returned HTTP 404 for http://x/models: not found")
+
+    monkeypatch.setattr(provider_mod, "_get_json", fake_get)
+    names = _run_async(_fetch_models("http://localhost:8080"))
+
+    assert names == []
+
+
+def test_fetch_models_degrades_to_empty_when_unreachable(monkeypatch):
+    async def fake_get(url, *, timeout=5.0, headers=None):
+        raise ConnectionError("no route to host")
+
+    monkeypatch.setattr(provider_mod, "_get_json", fake_get)
+    names = _run_async(_fetch_models("http://localhost:19999"))
+
+    assert names == []

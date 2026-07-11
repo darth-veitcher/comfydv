@@ -10,7 +10,7 @@ Deployment prerequisite: llama-server must be launched in router mode
 (--models-dir or --models-preset) — see specs/008-llamacpp-integration/quickstart.md.
 """
 
-from comfydv._llm.llamacpp_provider import LlamaCppProvider
+from ._llm.llamacpp_provider import LlamaCppProvider
 
 
 class LlamaCppClient:
