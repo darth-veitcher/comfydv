@@ -89,6 +89,18 @@ correction note for full detail. Open question for the next session: does
 this take priority over `ux-and-install` (active, 1/4 specs shipped), since
 llama.cpp (issue #15) has no deadline.
 
+**2026-07-11 — properly specced:** the deferred cutover is now fully
+inventoried and planned in
+`specs/007-llm-provider-abstraction/atomic-cutover-plan.md` — a full
+line-by-line read of the ~125 affected references (not an estimate), the
+design decisions it surfaced (cache-singleton duplication, `client ==
+"<string>"` equality breaking, bare-string-client backward compat removal,
+and a test-layer split so the 35 `_post_json` monkeypatches land at the
+right architectural seam), and a 12-step sequenced task list (T-CUT-01 …
+T-CUT-12). This is now the authoritative implementation plan for the
+cutover — the next BUILD session executes it directly rather than
+re-deriving the approach.
+
 `pydantic-ai`'s `StructuredDict` (raw-JSON-Schema output, no Python class)
 was considered as a lighter-weight alternative to `create_model()` during
 research and rejected: it performs no pydantic validation at all, which

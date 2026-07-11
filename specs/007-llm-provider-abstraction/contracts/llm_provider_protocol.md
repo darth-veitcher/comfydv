@@ -28,10 +28,12 @@ class LLMProvider(Protocol):
     async def load_model(self, model: str) -> None: ...
     async def unload_model(self, model: str) -> None: ...
     async def chat(
-        self, model: str, messages: list[Message], options: dict
+        self, model: str, messages: list[Message], options: dict | None = None,
+        timeout_secs: float = 300.0,
     ) -> str: ...
     async def chat_structured(
-        self, model: str, messages: list[Message], schema: type[BaseModel], options: dict
+        self, model: str, messages: list[Message], schema: type[BaseModel],
+        options: dict | None = None, timeout_secs: float = 300.0, max_retries: int = 2,
     ) -> BaseModel: ...
 ```
 

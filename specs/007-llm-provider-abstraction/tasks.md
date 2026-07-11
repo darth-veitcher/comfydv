@@ -46,16 +46,25 @@ Single project: `src/comfydv/`, `tests/` at repository root (per plan.md's Proje
 
 **Independent Test**: Wire `OllamaClient` → `ChatCompletion`, run against a live server, confirm text output.
 
-- [ ] T007-T [US1] Write FAILING test: `OllamaClient` node constructs and outputs an `OllamaProvider` via the `LLM_CLIENT` socket, in `tests/test_ollama.py` (witnesses `features/us1_connect_and_chat.feature` scenario "Client node feeds a chat node")
-- [ ] T007-I [US1] Update `OllamaClient` in `src/comfydv/ollama.py` to construct and output an `OllamaProvider` via `LLM_CLIENT` — makes T007-T pass
-- [ ] T008-T [P] [US1] Write FAILING test: `OllamaProvider.chat()` returns model text via the existing `/api/chat` aiohttp call, in `tests/test_llm_provider.py`
-- [ ] T008-I [US1] Implement `OllamaProvider.chat()` in `src/comfydv/_llm/ollama_provider.py` (port of the existing non-structured path from `OllamaChatCompletion.chat`) — makes T008-T pass
-- [ ] T009-T [US1] Write FAILING test: generic `ChatCompletion` node (non-structured) calls `provider.chat()` and surfaces a clear error on an unreachable host, in `tests/test_ollama.py` (witnesses `features/us1_connect_and_chat.feature` scenarios "Client node feeds a chat node" and "Unreachable server surfaces a clear error")
-- [ ] T009-I [US1] Rename `OllamaChatCompletion` → `ChatCompletion` in `src/comfydv/ollama.py`, delegate the non-structured path to `LLMProvider.chat()`, update `NODE_CLASS_MAPPINGS`/`NODE_DISPLAY_NAME_MAPPINGS` in `src/comfydv/__init__.py` — makes T009-T pass (depends on T007-I, T008-I)
-- [ ] T010-T [US1] Write FAILING test: two `ChatCompletion` nodes sharing one `OllamaClient` both pick up a host change, in `tests/test_ollama.py` (witnesses `features/us1_connect_and_chat.feature` scenario "One client node configures multiple chat nodes")
-- [ ] T010-I [US1] Verify/adjust that `OllamaClient` → `OllamaProvider` construction happens per node execution (not stale-cached), so a shared client's host change propagates — makes T010-T pass
+**Superseded 2026-07-11 — see `atomic-cutover-plan.md`.** T007–T010 as
+written below assumed US1 was independently deliverable; it isn't (see the
+correction at the bottom of this file). The actual work is now
+`atomic-cutover-plan.md`'s **T-CUT-04, T-CUT-05, T-CUT-06, T-CUT-08**
+(`OllamaClient` output-type change, `ChatCompletion` rename+delegation,
+`__init__.py` registration, and the corresponding `test_ollama.py`
+rewrite using a `_FakeProvider` double). Original text kept below for
+history, not as the active task list:
 
-**Checkpoint**: US1 fully functional and independently testable (MVP).
+- [ ] ~~T007-T [US1] Write FAILING test: `OllamaClient` node constructs and outputs an `OllamaProvider` via the `LLM_CLIENT` socket, in `tests/test_ollama.py` (witnesses `features/us1_connect_and_chat.feature` scenario "Client node feeds a chat node")~~
+- [ ] ~~T007-I [US1] Update `OllamaClient` in `src/comfydv/ollama.py` to construct and output an `OllamaProvider` via `LLM_CLIENT` — makes T007-T pass~~
+- [ ] ~~T008-T [P] [US1] Write FAILING test: `OllamaProvider.chat()` returns model text via the existing `/api/chat` aiohttp call, in `tests/test_llm_provider.py`~~
+- [ ] ~~T008-I [US1] Implement `OllamaProvider.chat()` in `src/comfydv/_llm/ollama_provider.py` (port of the existing non-structured path from `OllamaChatCompletion.chat`) — makes T008-T pass~~
+- [ ] ~~T009-T [US1] Write FAILING test: generic `ChatCompletion` node (non-structured) calls `provider.chat()` and surfaces a clear error on an unreachable host, in `tests/test_ollama.py` (witnesses `features/us1_connect_and_chat.feature` scenarios "Client node feeds a chat node" and "Unreachable server surfaces a clear error")~~
+- [ ] ~~T009-I [US1] Rename `OllamaChatCompletion` → `ChatCompletion` in `src/comfydv/ollama.py`, delegate the non-structured path to `LLMProvider.chat()`, update `NODE_CLASS_MAPPINGS`/`NODE_DISPLAY_NAME_MAPPINGS` in `src/comfydv/__init__.py` — makes T009-T pass (depends on T007-I, T008-I)~~
+- [ ] ~~T010-T [US1] Write FAILING test: two `ChatCompletion` nodes sharing one `OllamaClient` both pick up a host change, in `tests/test_ollama.py` (witnesses `features/us1_connect_and_chat.feature` scenario "One client node configures multiple chat nodes")~~
+- [ ] ~~T010-I [US1] Verify/adjust that `OllamaClient` → `OllamaProvider` construction happens per node execution (not stale-cached), so a shared client's host change propagates — makes T010-T pass~~
+
+**Checkpoint**: superseded — see `atomic-cutover-plan.md`'s checkpoint (T-CUT-10, full suite green).
 
 ---
 
@@ -71,8 +80,8 @@ Single project: `src/comfydv/`, `tests/` at repository root (per plan.md's Proje
 - [x] T012-I [US2] Implement the bounded retry loop (0–5, matching ADR-006's existing contract) around the `pydantic-ai` call in `src/comfydv/_llm/chat.py`, with the Agent's own internal retries disabled (`retries=0`) so the error contract is comfydv's — makes T012-T pass (depends on T011-I)
 - [x] T013-T [US2] Write test: exhausted retries raise `RuntimeError` naming the model, attempt count, and a truncated last-response snippet, in `tests/test_llm_chat_structured.py` (witnesses `features/us2_structured_output.feature` scenario "Exhausted retries fail clearly instead of passing through bad data")
 - [x] T013-I [US2] Implement the exhausted-retry error path in `src/comfydv/_llm/chat.py`, matching ADR-006's existing error message contract (model, attempt count, truncated last response) — makes T013-T pass (depends on T012-I)
-- [-] T014-T [US2] Write FAILING test: `ChatCompletion`'s `structured_output=True` path wires a schema through `chat_structured()` to per-field dynamic ComfyUI output sockets, in `tests/test_ollama.py` _Deferred — folded into the atomic node cutover (issue #16); this touches `ollama.py`, which per the 2026-07-11 correction above cannot land independently of the US1/US3 rename._
-- [-] T014-I [US2] Wire `ChatCompletion`'s existing `structured_output`/`output_schema` inputs to `LLMProvider.chat_structured()`, preserving the existing dynamic-socket (`RETURN_TYPES` mutation via `unique_id`) UX from ADR-006 — makes T014-T pass (depends on T009-I, T013-I) _Deferred — same reason as T014-T._
+- [-] T014-T [US2] _Superseded — see `atomic-cutover-plan.md` D5 and T-CUT-08. Original: write FAILING test that `ChatCompletion`'s `structured_output=True` path wires a schema through `chat_structured()` to per-field dynamic ComfyUI output sockets. D5 replaces the originally-planned retry-count-style test with a delegation test against a `_FakeProvider`, since retry behavior is already covered by `tests/test_llm_chat_structured.py`._
+- [-] T014-I [US2] _Superseded — see `atomic-cutover-plan.md` T-CUT-05. Original: wire `ChatCompletion`'s `structured_output`/`output_schema` inputs to `LLMProvider.chat_structured()`, preserving the dynamic-socket UX from ADR-006 — still the right implementation shape, just executed as part of the coordinated T-CUT-05 rename, not standalone._
 
 **Checkpoint**: US1 + US2 both independently functional — matches today's Ollama capability, now on the shared mechanism.
 
@@ -84,16 +93,22 @@ Single project: `src/comfydv/`, `tests/` at repository root (per plan.md's Proje
 
 **Independent Test**: List models via `LLMModelSelector`; load/unload one via `LLMLoadModel`/`LLMUnloadModel`; confirm status changes.
 
-- [ ] T015-T [P] [US3] Write FAILING test: `OllamaProvider.list_models()` returns `ModelInfo` entries with status normalized into `ModelStatus` (never emitting `sleeping`/`downloading`), in `tests/test_llm_provider.py` (witnesses `features/us3_model_lifecycle.feature` scenario "List models with current status")
-- [ ] T015-I [US3] Implement `OllamaProvider.list_models()` in `src/comfydv/_llm/ollama_provider.py` (port of the existing `_fetch_models`/`/api/tags` logic, reusing the existing `_TTLLRUCache`) — makes T015-T pass (depends on T006)
-- [ ] T016-T [P] [US3] Write FAILING test: `OllamaProvider.load_model()`/`unload_model()` are idempotent and use `keep_alive` semantics equivalent to today's `OllamaLoadModel`/`OllamaUnloadModel`, in `tests/test_llm_provider.py` (witnesses `features/us3_model_lifecycle.feature` scenarios "Load a model into memory" and "Unload a model from memory")
-- [ ] T016-I [US3] Implement `OllamaProvider.load_model()`/`unload_model()` in `src/comfydv/_llm/ollama_provider.py` (port of the existing `keep_alive` logic) — makes T016-T pass (depends on T006)
-- [ ] T017-T [US3] Write FAILING test: generic `LLMModelSelector` node returns model+status pairs from any connected `LLM_CLIENT`, in `tests/test_ollama.py`
-- [ ] T017-I [US3] Rename `OllamaModelSelector` → `LLMModelSelector` in `src/comfydv/ollama.py`, delegate to `LLMProvider.list_models()`, update `NODE_CLASS_MAPPINGS` — makes T017-T pass (depends on T015-I)
-- [ ] T018-T [US3] Write FAILING test: generic `LLMLoadModel`/`LLMUnloadModel` nodes call `LLMProvider.load_model()`/`unload_model()` and reflect updated status, in `tests/test_ollama.py`
-- [ ] T018-I [US3] Rename `OllamaLoadModel`/`OllamaUnloadModel` → `LLMLoadModel`/`LLMUnloadModel` in `src/comfydv/ollama.py`, delegate to the protocol, update `NODE_CLASS_MAPPINGS` — makes T018-T pass (depends on T016-I)
+**Superseded 2026-07-11 — see `atomic-cutover-plan.md`.** Maps to
+**T-CUT-02** (`OllamaProvider.list_models`/`load_model`/`unload_model`
+method bodies), **T-CUT-03** (`tests/test_ollama_provider.py`, new file),
+and **T-CUT-05/T-CUT-06/T-CUT-08** (the node renames + delegation +
+registration + test rewrite). Original text kept for history:
 
-**Checkpoint**: US1 + US2 + US3 independently functional.
+- [ ] ~~T015-T [P] [US3] Write FAILING test: `OllamaProvider.list_models()` returns `ModelInfo` entries with status normalized into `ModelStatus` (never emitting `sleeping`/`downloading`), in `tests/test_llm_provider.py` (witnesses `features/us3_model_lifecycle.feature` scenario "List models with current status")~~
+- [ ] ~~T015-I [US3] Implement `OllamaProvider.list_models()` in `src/comfydv/_llm/ollama_provider.py` (port of the existing `_fetch_models`/`/api/tags` logic, reusing the existing `_TTLLRUCache`) — makes T015-T pass (depends on T006)~~
+- [ ] ~~T016-T [P] [US3] Write FAILING test: `OllamaProvider.load_model()`/`unload_model()` are idempotent and use `keep_alive` semantics equivalent to today's `OllamaLoadModel`/`OllamaUnloadModel`, in `tests/test_llm_provider.py` (witnesses `features/us3_model_lifecycle.feature` scenarios "Load a model into memory" and "Unload a model from memory")~~
+- [ ] ~~T016-I [US3] Implement `OllamaProvider.load_model()`/`unload_model()` in `src/comfydv/_llm/ollama_provider.py` (port of the existing `keep_alive` logic) — makes T016-T pass (depends on T006)~~
+- [ ] ~~T017-T [US3] Write FAILING test: generic `LLMModelSelector` node returns model+status pairs from any connected `LLM_CLIENT`, in `tests/test_ollama.py`~~
+- [ ] ~~T017-I [US3] Rename `OllamaModelSelector` → `LLMModelSelector` in `src/comfydv/ollama.py`, delegate to `LLMProvider.list_models()`, update `NODE_CLASS_MAPPINGS` — makes T017-T pass (depends on T015-I)~~
+- [ ] ~~T018-T [US3] Write FAILING test: generic `LLMLoadModel`/`LLMUnloadModel` nodes call `LLMProvider.load_model()`/`unload_model()` and reflect updated status, in `tests/test_ollama.py`~~
+- [ ] ~~T018-I [US3] Rename `OllamaLoadModel`/`OllamaUnloadModel` → `LLMLoadModel`/`LLMUnloadModel` in `src/comfydv/ollama.py`, delegate to the protocol, update `NODE_CLASS_MAPPINGS` — makes T018-T pass (depends on T016-I)~~
+
+**Checkpoint**: superseded — see `atomic-cutover-plan.md`.
 
 ---
 
@@ -103,10 +118,9 @@ Single project: `src/comfydv/`, `tests/` at repository root (per plan.md's Proje
 
 **Independent Test**: Follow the mapping to reconnect a pre-upgrade workflow; confirm equivalent output.
 
-- [ ] T019-T [US4] Write FAILING test: every renamed/removed node and socket name (`OllamaChatCompletion`, `OllamaModelSelector`, `OllamaLoadModel`, `OllamaUnloadModel`, `OLLAMA_CLIENT`) resolves to a documented replacement via a migration-mapping constant, in `tests/test_ollama.py` (witnesses `features/us4_migration.feature` scenario "Renamed nodes are reported with a documented replacement")
-- [ ] T019-I [US4] Add a migration mapping (old node/socket name → new node/socket name) as a module-level constant in `src/comfydv/ollama.py`, and surface it in the replacement nodes' `DESCRIPTION`/docstrings per FR-009 — makes T019-T pass (depends on T009-I, T017-I, T018-I)
-- [ ] T020 [US4] Run the full `tests/test_ollama.py` suite against the migrated implementation and confirm every existing assertion still passes unmodified in behavior (SC-003 equivalence check; witnesses `features/us4_migration.feature` scenario "Reconnected workflow produces equivalent output") — regression pass, not a new test
-- [ ] T021 [P] [US4] Update `quickstart.md`'s "Migrating an existing pre-upgrade workflow" section if the actual replacement mapping (T019-I) differs from what was drafted at plan time
+- [ ] T019 [US4] _Maps to `atomic-cutover-plan.md` T-CUT-11_ — add a migration mapping (old node/socket name → new node/socket name) as a module-level constant in `src/comfydv/ollama.py`, surfaced in the replacement nodes' docstrings per FR-009
+- [ ] T020 [US4] _Maps to T-CUT-10_ — full `tests/test_ollama.py` + `tests/test_ollama_provider.py` suite green, confirming SC-003 equivalence (witnesses `features/us4_migration.feature` scenario "Reconnected workflow produces equivalent output")
+- [ ] T021 [P] [US4] _Maps to T-CUT-12_ — update `quickstart.md`'s "Migrating an existing pre-upgrade workflow" section to match the actual replacement mapping, then walk it manually against a live local server
 
 **Checkpoint**: all four user stories independently functional; migration path documented.
 
@@ -114,7 +128,7 @@ Single project: `src/comfydv/`, `tests/` at repository root (per plan.md's Proje
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T022 [P] Run `uv run ruff check --fix && uv run ruff format` across `src/comfydv/_llm/` and the modified `ollama.py`/`__init__.py`
+- [ ] T022 [P] Run `uv run ruff check --fix && uv run ruff format` across `src/comfydv/_llm/`, `tests/test_ollama_provider.py`, and the modified `ollama.py`/`__init__.py`
 - [ ] T023 [P] Run `uv run ty check` and resolve any typing errors introduced by the `LLMProvider` `Protocol`
 - [ ] T024 Confirm Constitution Principle IV: `src/comfydv/_llm/` imports no `comfy`/`server` at module scope (guarded, matching `ollama.py`'s existing pattern)
 - [ ] T025 Run `beacon doctor --strict` and resolve any findings, including `spec-bdd-coverage` and `tdd-commit-discipline` for this spec
@@ -203,3 +217,18 @@ ADR-007's own decision (breaking rename, no deprecated aliases) is
 **unaffected** — that call was about user-facing blast radius (small,
 Ollama integration shipped 2026-07-04), which this finding doesn't change.
 What's re-scoped is delivery sequencing, not the design decision.
+
+---
+
+## ✅ Properly specced (2026-07-11) — see `atomic-cutover-plan.md`
+
+Full line-by-line inventory of every affected reference in `ollama.py` and
+`tests/test_ollama.py` (1820 lines, read in full), the design decisions it
+surfaced (cache-singleton duplication, `client == "<string>"` equality
+breaking, bare-string-client backward compat removal, and — the big one —
+a test-layer split so the 35 relocated `_post_json` monkeypatches land at
+the right architectural seam instead of being patched 1:1), and a
+12-step sequenced task list (T-CUT-01 … T-CUT-12) that supersedes the
+struck-through tasks above. That file is now the authoritative task list
+for this remaining work; this file's Phase 3/5/6 entries are kept only for
+history.
