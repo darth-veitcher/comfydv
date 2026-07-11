@@ -3,15 +3,16 @@ import logging
 from .circuit_breaker import CircuitBreaker
 from .format_string import FormatString
 from .ollama import (
+    ChatCompletion,
+    LLMLoadModel,
+    LLMModelSelector,
+    LLMUnloadModel,
     OllamaClient,
-    OllamaChatCompletion,
     OllamaDebugHistory,
     OllamaHeaderBasicAuth,
     OllamaHeaderBearerToken,
     OllamaHeaderCustom,
     OllamaHistoryLength,
-    OllamaLoadModel,
-    OllamaModelSelector,
     OllamaOptionExtraBody,
     OllamaOptionMaxTokens,
     OllamaOptionRepeatPenalty,
@@ -19,7 +20,6 @@ from .ollama import (
     OllamaOptionTemperature,
     OllamaOptionTopK,
     OllamaOptionTopP,
-    OllamaUnloadModel,
 )
 from .random_choice import RandomChoice
 
@@ -31,12 +31,13 @@ NODE_CLASS_MAPPINGS = {
     "RandomChoice": RandomChoice,
     "CircuitBreaker": CircuitBreaker,
     "FormatString": FormatString,
-    # Ollama nodes
+    # LLM nodes (generic, ADR-007) — see comfydv.ollama.MIGRATION_MAP for
+    # the pre-cutover Ollama-specific names these replace
     "OllamaClient": OllamaClient,
-    "OllamaModelSelector": OllamaModelSelector,
-    "OllamaLoadModel": OllamaLoadModel,
-    "OllamaUnloadModel": OllamaUnloadModel,
-    "OllamaChatCompletion": OllamaChatCompletion,
+    "LLMModelSelector": LLMModelSelector,
+    "LLMLoadModel": LLMLoadModel,
+    "LLMUnloadModel": LLMUnloadModel,
+    "ChatCompletion": ChatCompletion,
     "OllamaOptionTemperature": OllamaOptionTemperature,
     "OllamaOptionSeed": OllamaOptionSeed,
     "OllamaOptionMaxTokens": OllamaOptionMaxTokens,
@@ -56,12 +57,12 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "RandomChoice": "Random Choice",
     "CircuitBreaker": "Circuit Breaker",
     "FormatString": "Format String (Python f-strings)",
-    # Ollama nodes
+    # LLM nodes (generic, ADR-007)
     "OllamaClient": "Ollama Client",
-    "OllamaModelSelector": "Ollama Model Selector",
-    "OllamaLoadModel": "Ollama Load Model",
-    "OllamaUnloadModel": "Ollama Unload Model",
-    "OllamaChatCompletion": "Ollama Chat Completion",
+    "LLMModelSelector": "LLM Model Selector",
+    "LLMLoadModel": "LLM Load Model",
+    "LLMUnloadModel": "LLM Unload Model",
+    "ChatCompletion": "Chat Completion",
     "OllamaOptionTemperature": "Ollama Option — Temperature",
     "OllamaOptionSeed": "Ollama Option — Seed",
     "OllamaOptionMaxTokens": "Ollama Option — Max Tokens",

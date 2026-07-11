@@ -68,30 +68,31 @@ def pytest_configure(config):
 
 @pytest.fixture(autouse=True)
 def _clear_ollama_caches():
-    """Reset comfydv.ollama's module-level LRU caches and OllamaChatCompletion's
-    dynamic RETURN_TYPES/RETURN_NAMES around every test.
+    """Reset the shared LLM provider caches and ChatCompletion's dynamic
+    RETURN_TYPES/RETURN_NAMES around every test.
 
     Several tests reuse identical client/model/prompt inputs across cases
     with different monkeypatched responses — without this, a later test would
     silently get an earlier test's cached result instead of exercising its
     own fake. RETURN_TYPES/RETURN_NAMES are class-level mutable state (set by
-    OllamaChatCompletion.update_outputs for structured_output mode) shared
-    across every test in the module — without resetting them, a structured-
-    output test would leak its dynamic outputs into unrelated tests that
-    assert the fixed 3-tuple.
+    ChatCompletion.update_outputs for structured_output mode) shared across
+    every test in the module — without resetting them, a structured-output
+    test would leak its dynamic outputs into unrelated tests that assert the
+    fixed 3-tuple.
+
+    Caches live in comfydv._llm.ollama_provider (ADR-007's single source of
+    truth) — comfydv.ollama's combo-widget helpers (_fetch_models) share the
+    same cache instance, not a separate copy.
     """
-    from comfydv.ollama import (
-        _CHAT_RESPONSE_CACHE,
-        _MODEL_LIST_CACHE,
-        OllamaChatCompletion,
-    )
+    from comfydv._llm.ollama_provider import _CHAT_RESPONSE_CACHE, _MODEL_LIST_CACHE
+    from comfydv.ollama import ChatCompletion
 
     def _reset():
         _MODEL_LIST_CACHE.clear()
         _CHAT_RESPONSE_CACHE.clear()
-        OllamaChatCompletion.RETURN_TYPES = OllamaChatCompletion._BASE_RETURN_TYPES
-        OllamaChatCompletion.RETURN_NAMES = OllamaChatCompletion._BASE_RETURN_NAMES
-        OllamaChatCompletion.node_configs.clear()
+        ChatCompletion.RETURN_TYPES = ChatCompletion._BASE_RETURN_TYPES
+        ChatCompletion.RETURN_NAMES = ChatCompletion._BASE_RETURN_NAMES
+        ChatCompletion.node_configs.clear()
 
     _reset()
     yield
