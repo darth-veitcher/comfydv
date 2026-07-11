@@ -52,7 +52,7 @@ class TestRequirementsTxt:
     def test_requirements_txt_packages_in_pyproject_dependencies(self):
         req_lines = _requirements_lines()
         runtime_deps = [
-            d.split(">=")[0].split("==")[0].split("!=")[0].lower()
+            d.split(">=")[0].split("==")[0].split("!=")[0].split("[")[0].lower()
             for d in _pyproject_runtime_deps()
         ]
         for line in req_lines:

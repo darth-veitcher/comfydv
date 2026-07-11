@@ -12,7 +12,7 @@ BDD coverage:
 """
 
 from comfydv._llm.ollama_provider import OllamaProvider
-from comfydv._llm.provider import LLMProvider, Message, ModelInfo, ModelStatus
+from comfydv._llm.provider import Message, ModelInfo, ModelStatus
 
 
 def test_ollama_provider_captures_connection_state():
