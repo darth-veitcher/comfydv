@@ -55,11 +55,27 @@ class LlamaCppProvider:
 
         try:
             data = await _get_json(f"{self.host}/models", headers=self.headers)
-        except Exception as exc:
+        except OSError as exc:
+            # Genuinely unreachable (connection refused, DNS failure, timed
+            # out — aiohttp's connection-level exceptions are all OSError
+            # subclasses) — degrade gracefully like OllamaProvider does, so
+            # a not-yet-started server just shows an empty dropdown rather
+            # than a hard error.
             logger.warning(
                 "Could not fetch llama.cpp models from %s: %s", self.host, exc
             )
             return []
+        except RuntimeError as exc:
+            # The server answered but with an HTTP error status — GET
+            # /models only exists in router mode, so this is almost always
+            # a llama-server launched without --models-dir/--models-preset.
+            # Surfacing this distinctly (FR-006) matters: silently returning
+            # [] here would be indistinguishable from "no models installed".
+            raise RuntimeError(
+                f"llama-server at {self.host} did not return a model list from "
+                f"GET {self.host}/models — is it running in router mode "
+                f"(--models-dir or --models-preset)? Underlying error: {exc}"
+            ) from exc
 
         models = []
         for m in data.get("data", []):

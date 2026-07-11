@@ -149,3 +149,28 @@ Unlike the prerequisite epic, **this decomposition genuinely holds** —
 there is no shared "output type" migration forcing an atomic cutover, because
 `LlamaCppClient` is new, not a change to an existing node. Each phase really
 can land independently.
+
+---
+
+## Post-implementation review finding (fixed)
+
+A `beacon-reviewer` pass ahead of PR open found `LlamaCppProvider.list_models()`
+caught *every* exception and returned `[]`, silently indistinguishable from
+"no models installed" — violating FR-006 and `contracts/llamacpp_provider_conformance.md`'s
+explicit requirement that a non-router-mode `llama-server` (unreachable
+endpoints → HTTP error on `GET /models`) surface a clear, specific error.
+
+Fixed: `_get_json` (shared with `OllamaProvider`, in `ollama_provider.py`) now
+raises `RuntimeError` on an HTTP error status, matching `_post_json`'s
+existing behavior — its docstring already claimed this, it just didn't do it.
+`LlamaCppProvider.list_models()` now distinguishes `OSError` (genuinely
+unreachable — connection refused, DNS failure, timeout; all aiohttp
+connection-level exceptions are `OSError` subclasses) from `RuntimeError`
+(server responded, but with an error): the former still degrades gracefully
+to `[]` (consistent with `OllamaProvider`'s existing UX), the latter is
+re-raised naming router mode as the likely cause. Regression test added:
+`test_list_models_non_router_mode_raises_clear_error` in
+`tests/test_llamacpp_provider.py`. `OllamaProvider`'s own `list_models()`/
+`_fetch_models()` still catch broadly and degrade to `[]` unchanged — no
+spec requirement asks Ollama to make this distinction, and this fix doesn't
+force it to.

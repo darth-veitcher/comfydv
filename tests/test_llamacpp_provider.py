@@ -103,6 +103,22 @@ def test_list_models_unreachable_returns_empty(monkeypatch):
     assert models == []
 
 
+def test_list_models_non_router_mode_raises_clear_error(monkeypatch):
+    """FR-006: a llama-server that IS reachable but wasn't launched with
+    --models-dir/--models-preset answers GET /models with an HTTP error
+    (the endpoint doesn't exist outside router mode). That must surface as
+    a specific, actionable error — not silently degrade to an empty list,
+    which would be indistinguishable from "server has no models"."""
+
+    async def fake_get(url, *, timeout=5.0, headers=None):
+        raise RuntimeError("Server returned HTTP 404 for http://x/models: not found")
+
+    monkeypatch.setattr(provider_mod, "_get_json", fake_get)
+
+    with pytest.raises(RuntimeError, match="router mode"):
+        _run_async(LlamaCppProvider("http://localhost:8080").list_models())
+
+
 def test_list_models_cached_second_call(monkeypatch):
     calls = {"n": 0}
 
