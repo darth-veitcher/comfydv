@@ -77,6 +77,18 @@ from ADR-006's `## Decision` section is preserved exactly by the
 `pydantic-ai` reimplementation, and that `OllamaProvider`'s REST calls are a
 faithful port of the current `_post_json`/`_fetch_models` logic.
 
+**2026-07-11 — mid-build correction, tracked in [issue #16](https://github.com/darth-veitcher/comfydv/issues/16):**
+the Foundational layer (`LLMProvider` protocol + `OllamaProvider` skeleton)
+shipped safely, but the planned per-user-story incremental cutover doesn't
+hold — `OllamaClient` is a single shared producer for every downstream
+Ollama node, so the node-layer rename/cutover (`tasks.md`'s US1 + US3) must
+land as one atomic change, not four independent ones. Confirmed by
+independent product + engineering review. Re-scoped as its own dedicated
+follow-up BUILD session — see `specs/007-llm-provider-abstraction/tasks.md`'s
+correction note for full detail. Open question for the next session: does
+this take priority over `ux-and-install` (active, 1/4 specs shipped), since
+llama.cpp (issue #15) has no deadline.
+
 `pydantic-ai`'s `StructuredDict` (raw-JSON-Schema output, no Python class)
 was considered as a lighter-weight alternative to `create_model()` during
 research and rejected: it performs no pydantic validation at all, which

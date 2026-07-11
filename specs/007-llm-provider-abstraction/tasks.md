@@ -22,8 +22,8 @@ Single project: `src/comfydv/`, `tests/` at repository root (per plan.md's Proje
 
 ## Phase 1: Setup
 
-- [ ] T001 Add `pydantic-ai` and `openai` to `pyproject.toml` dependencies; curate the addition into `requirements.txt` per [ADR-003](../../project-management/ADRs/ADR-003-requirements-txt-authoring-policy.md)
-- [ ] T002 [P] Create `src/comfydv/_llm/__init__.py` (empty package init)
+- [x] T001 Add `pydantic-ai` and `openai` to `pyproject.toml` dependencies; curate the addition into `requirements.txt` per [ADR-003](../../project-management/ADRs/ADR-003-requirements-txt-authoring-policy.md)
+- [x] T002 [P] Create `src/comfydv/_llm/__init__.py` (empty package init)
 
 ---
 
@@ -31,10 +31,10 @@ Single project: `src/comfydv/`, `tests/` at repository root (per plan.md's Proje
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T003 [P] Define `Message`, `ModelStatus`, `ModelInfo` in `src/comfydv/_llm/provider.py` per `data-model.md`
-- [ ] T004 Define the `LLMProvider` `Protocol` in `src/comfydv/_llm/provider.py` per `contracts/llm_provider_protocol.md` (depends on T003)
-- [ ] T005 [P] Add the `LLM_CLIENT` custom ComfyUI socket type constant in `src/comfydv/ollama.py`, alongside the existing `OLLAMA_CLIENT` declaration
-- [ ] T006 Scaffold `OllamaProvider.__init__(self, host, headers)` in `src/comfydv/_llm/ollama_provider.py`, porting the existing module-level `_post_json`/`_fetch_models` helpers from `ollama.py` into it as private methods — behavior-preserving port, not a rewrite (depends on T004)
+- [x] T003 [P] Define `Message`, `ModelStatus`, `ModelInfo` in `src/comfydv/_llm/provider.py` per `data-model.md`
+- [x] T004 Define the `LLMProvider` `Protocol` in `src/comfydv/_llm/provider.py` per `contracts/llm_provider_protocol.md` (depends on T003)
+- [x] T005 [P] `LLM_CLIENT` is introduced as part of T007-I (`OllamaClient`'s output type) rather than as a standalone constant — ComfyUI socket types are plain string literals, not declared objects; folded in, not skipped
+- [x] T006 Scaffold `OllamaProvider.__init__(self, host, headers)` in `src/comfydv/_llm/ollama_provider.py`, porting the existing module-level `_post_json`/`_fetch_models`/`_run_async`/`_TTLLRUCache` helpers from `ollama.py` into it — behavior-preserving port, not a rewrite (depends on T004)
 
 **Checkpoint**: protocol + provider skeleton exist; user story work can begin.
 
@@ -157,3 +157,49 @@ Single project: `src/comfydv/`, `tests/` at repository root (per plan.md's Proje
 6. Polish.
 
 Each story adds value without breaking the previous one — this mirrors the epic's own framing: US1+US2 together are the risky "prove the migration is behavior-preserving" core; US3 and US4 round out parity and upgrade experience.
+
+---
+
+## ⚠️ Correction (2026-07-11) — US1/US3 independence claim was wrong
+
+**Discovered mid-implementation, confirmed by independent product + engineering
+review (agent-trio deliberation, aligned verdicts):** the "US1 has no
+dependency on other stories" and "US3 is independent of US1/US2" claims above
+are **false**. `OllamaClient` is a single shared producer node — every
+downstream node (`OllamaModelSelector`, `OllamaLoadModel`,
+`OllamaUnloadModel`, `OllamaChatCompletion`) consumes its output via
+`f"{client}/api/..."` string interpolation (10 call sites in `ollama.py`).
+Changing `OllamaClient` to emit an `OllamaProvider` object instead of the
+current string-like `OllamaClientType` breaks **all four** consumers
+simultaneously — there is no way to migrate just `ChatCompletion` (US1)
+while leaving `OllamaModelSelector`/`OllamaLoadModel`/`OllamaUnloadModel`
+(US3) on the old string-based access pattern. Separately, renaming these
+classes breaks `tests/test_ollama.py`'s imports atomically (125 references
+across the file) — a class rename fails test *collection* for the whole
+file at once, not test-by-test.
+
+**Rejected fix:** making `OllamaProvider` also subclass `str` (mirroring
+`OllamaClientType`'s trick) to preserve incremental per-node migration.
+Both reviewers rejected this — it reintroduces the exact hack ADR-007
+exists to eliminate into the new clean boundary, and would silently mask an
+incomplete cutover (un-migrated consumers keep working via the string
+trick, so T020's regression pass would go green for the wrong reason).
+
+**Decision:** T007–T010 (US1) and T015–T018 (US3)'s *node-layer* work
+(everything that touches `OllamaClient`'s output type or renames a node
+class) must land as **one atomic cutover** — one coordinated change across
+`ollama.py` and `tests/test_ollama.py`, verified green as a whole, not as
+separable per-story TDD pairs. This is sized beyond a single 2–4h tracer
+bullet and is explicitly re-scoped as its own dedicated BUILD session
+(tracked in GitHub issue — see epic Notes for the link once filed), not
+attempted in the same session as the Foundational layer (T001–T006, already
+shipped safely — see git log). The *provider-layer* work that doesn't touch
+`ollama.py` (e.g. `OllamaProvider.chat()`/`list_models()`/`load_model()`/
+`unload_model()` method bodies, and the `pydantic-ai`-backed
+`chat_structured()` helper) remains genuinely independent and safe to build
+ahead of the cutover — only the ComfyUI node-layer rename is atomic.
+
+ADR-007's own decision (breaking rename, no deprecated aliases) is
+**unaffected** — that call was about user-facing blast radius (small,
+Ollama integration shipped 2026-07-04), which this finding doesn't change.
+What's re-scoped is delivery sequencing, not the design decision.
