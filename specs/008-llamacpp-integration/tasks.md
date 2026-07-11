@@ -208,3 +208,17 @@ before `LOADED`. This matches `ModelStatus`'s documented vocabulary (`loading`
 is a real, intended state) and how a real UI would behave — fire the request,
 poll `list_models()` for the transition. No protocol change; noted here so
 it's not mistaken for a future bug report.
+
+**`chat_structured()` live-verified separately** (T007/T008's mocked coverage
+only ever exercised the call-shape, never the real network path): ran a
+second live smoke test — `load_model()` → `chat_structured()` with a real
+`pydantic.BaseModel` schema — against the same router-mode server. Result
+validated correctly (`Color(name='Red', hex_code='#FF0000')`), confirming
+pydantic-ai's `Agent`/`OpenAIProvider(base_url=f"{host}/v1")` mechanism
+genuinely works against llama-server's OpenAI-compatible endpoint, not just
+Ollama's (which was the only one live-verified in the prerequisite epic).
+No gap found here — recorded as verification evidence, not a fix.
+
+**Net result**: every `LlamaCppProvider` method (`list_models`, `load_model`,
+`unload_model`, `chat`, `chat_structured`) has now been exercised against a
+real router-mode `llama-server`, not just mocks. T017 is genuinely done.

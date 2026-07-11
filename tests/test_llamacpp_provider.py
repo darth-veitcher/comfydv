@@ -174,8 +174,10 @@ def test_load_model_already_running_is_idempotent(monkeypatch):
     wire level — it 400s "model is already running" rather than returning
     {"success": true}. The LLMProvider protocol requires load_model() to be
     idempotent, so LlamaCppProvider must absorb this itself."""
+    calls = []
 
     async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        calls.append((url, payload))
         raise RuntimeError(
             "Server returned HTTP 400 for "
             f'{url}: {{"error":{{"code":400,"message":"model is already '
@@ -184,6 +186,11 @@ def test_load_model_already_running_is_idempotent(monkeypatch):
 
     monkeypatch.setattr(provider_mod, "_post_json", fake_post)
     _run_async(LlamaCppProvider("http://localhost:8080").load_model("gemma-3-4b"))
+
+    # The absence of a raised exception is only meaningful if the request
+    # actually happened and hit the "already running" branch — assert that
+    # directly rather than trusting silence alone.
+    assert calls == [("http://localhost:8080/models/load", {"model": "gemma-3-4b"})]
 
 
 def test_load_model_other_http_error_still_raises(monkeypatch):
@@ -198,8 +205,10 @@ def test_load_model_other_http_error_still_raises(monkeypatch):
 def test_unload_model_not_running_is_idempotent(monkeypatch):
     """Mirror of the load_model case, confirmed live: /models/unload 400s
     "model is not running" on an already-unloaded model."""
+    calls = []
 
     async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        calls.append((url, payload))
         raise RuntimeError(
             "Server returned HTTP 400 for "
             f'{url}: {{"error":{{"code":400,"message":"model is not '
@@ -208,6 +217,8 @@ def test_unload_model_not_running_is_idempotent(monkeypatch):
 
     monkeypatch.setattr(provider_mod, "_post_json", fake_post)
     _run_async(LlamaCppProvider("http://localhost:8080").unload_model("gemma-3-4b"))
+
+    assert calls == [("http://localhost:8080/models/unload", {"model": "gemma-3-4b"})]
 
 
 def test_unload_model_other_http_error_still_raises(monkeypatch):
