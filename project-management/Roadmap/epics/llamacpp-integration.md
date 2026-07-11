@@ -1,7 +1,7 @@
 # Epic: llama.cpp Model Integration
 
 ## Status
-Planning — started 2026-07-11
+Active — spec 008-llamacpp-integration complete, ready to finish once merged
 
 ## Why now
 
