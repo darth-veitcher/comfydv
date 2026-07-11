@@ -138,17 +138,17 @@ class rename fails test *collection* for the whole file at once). Each
 T-CUT step is still verified incrementally during implementation; the
 suite only needs to be green as a whole at T-CUT-10, not after every step.
 
-- [ ] T-CUT-01 [P] `ollama.py`: import HTTP/cache infra from `comfydv._llm.ollama_provider` instead of duplicating it; repoint `_load_default_models()`/`/dv/ollama/models` route (plan D1)
+- [x] T-CUT-01 [P] `ollama.py`: import HTTP/cache infra from `comfydv._llm.ollama_provider` instead of duplicating it; repoint `_load_default_models()`/`/dv/ollama/models` route (plan D1)
 - [x] T-CUT-02 `ollama_provider.py`: implement `OllamaProvider.list_models()`/`load_model()`/`unload_model()`/`chat()`/`chat_structured()` method bodies (ports existing inline logic; `chat_structured()` delegates to `_llm/chat.py`; `list_models()` also queries `/api/ps` to distinguish loaded/unloaded, a genuinely new capability the old `OllamaModelSelector` never had)
 - [x] T-CUT-03 `tests/test_ollama_provider.py` (new file): tests for T-CUT-02, mocking at the `ollama_provider` seam (plan D4/D5)
-- [ ] T-CUT-04 `ollama.py`: `OllamaClient.RETURN_TYPES` → `("LLM_CLIENT",)`, `create_client()` returns `OllamaProvider(host, headers)` (plan D2)
-- [ ] T-CUT-05 `ollama.py`: rename the 4 classes, `"OLLAMA_CLIENT"`→`"LLM_CLIENT"` on every consumer, rewrite the 3 delegating method bodies, delete `_client_headers` (plan D6)
-- [ ] T-CUT-06 `src/comfydv/__init__.py`: update imports and `NODE_CLASS_MAPPINGS`/`NODE_DISPLAY_NAME_MAPPINGS`
-- [ ] T-CUT-07 `tests/conftest.py`: repoint `_clear_ollama_caches` and `first_generative_model`'s `_fetch_models` import (plan D8)
+- [x] T-CUT-04 `ollama.py`: `OllamaClient.RETURN_TYPES` → `("LLM_CLIENT",)`, `create_client()` returns `OllamaProvider(host, headers)` (plan D2)
+- [x] T-CUT-05 `ollama.py`: rename the 4 classes, `"OLLAMA_CLIENT"`→`"LLM_CLIENT"` on every consumer, rewrite the 3 delegating method bodies, delete `_client_headers` (plan D6)
+- [x] T-CUT-06 `src/comfydv/__init__.py`: update imports and `NODE_CLASS_MAPPINGS`/`NODE_DISPLAY_NAME_MAPPINGS`
+- [x] T-CUT-07 `tests/conftest.py`: repoint `_clear_ollama_caches` and `first_generative_model`'s `_fetch_models` import (plan D8) — `first_generative_model`'s import needed no change (still re-exported from `comfydv.ollama`)
 - [ ] T-CUT-08 `tests/test_ollama.py`: import block, `_FakeProvider` double, convert `_post_json`-monkeypatched tests, replace bare-string `client=` usages, rewrite the 2 `client == "<string>"` assertions, delete `test_plain_string_client_has_no_headers` + `test_structured_output_true_sends_tool_call_payload`, collapse the 15 retry-count tests, update `TestNodeContracts` (plan D3/D4/D5)
 - [x] T-CUT-09 [P] `contracts/llm_provider_protocol.md`: `timeout_secs` fix (commit `ef2464a`)
 - [ ] T-CUT-10 Full suite green (`pytest -m "not integration and not system"`), `ruff check --fix && ruff format`, `ty check`, `beacon doctor --strict`
-- [ ] T-CUT-11 [P] `tasks.md`/`ollama.py`: migration mapping constant (FR-009)
+- [x] T-CUT-11 [P] `tasks.md`/`ollama.py`: migration mapping constant (FR-009) — `MIGRATION_MAP` dict, `ollama.py`
 - [ ] T-CUT-12 [P] Manual smoke test against a live local Ollama server per `quickstart.md`; update its migration section if the mapping shifted
 
 **Checkpoint**: T-CUT-10 green = all four user stories functional on the generic nodes; T-CUT-11/12 close out US4.
