@@ -331,19 +331,29 @@ def test_chat_structured_caches_after_successful_validation(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# _run_async — live-verified critical bug (found running the real
-# docker-compose ComfyUI harness, not caught by any prior test): ComfyUI's
-# actual async execution engine runs node functions synchronously *inside*
-# an already-running event loop. The old implementation tried
-# `asyncio.get_running_loop()` first and only spun up an isolated worker
-# thread if that succeeded — under real ComfyUI (Python 3.13), that check
-# sometimes raised anyway, falling through to a direct `asyncio.run(coro)`
-# call on the *current* thread — the one thread guaranteed to already have
-# a loop running — reproducing "asyncio.run() cannot be called from a
-# running event loop" exactly, every time chat_structured() was called.
-# Every existing test called _run_async from a plain synchronous pytest
-# function (no ambient loop), which never exercised this path — pytest
-# alone could not have caught this.
+# _run_async — regression coverage for a bug found running the real
+# docker-compose ComfyUI harness (not caught by any prior test, and not
+# reproducible under pytest — see below). ComfyUI's actual async execution
+# engine runs node functions synchronously *inside* an already-running event
+# loop. The old implementation tried `asyncio.get_running_loop()` first and
+# only spun up an isolated worker thread if that succeeded — under real
+# ComfyUI (Python 3.13), that check sometimes raised anyway, falling through
+# to a direct `asyncio.run(coro)` call on the *current* thread — the one
+# thread guaranteed to already have a loop running — reproducing "asyncio.run()
+# cannot be called from a running event loop" exactly, every time
+# chat_structured() was called.
+#
+# Honest caveat (raised by beacon-reviewer, confirmed by reconstructing the
+# old code and running it against these tests): under CPython/pytest,
+# asyncio.get_running_loop() inside asyncio.run(outer()) never spuriously
+# raises, so the *old, buggy* implementation also takes the safe
+# worker-thread branch here and these tests pass against it too. They do not
+# reproduce the actual reported bug — only the live end-to-end run against
+# real ComfyUI did that. What these tests do lock in: the documented
+# contract ("calling _run_async from within a running loop must work and
+# must propagate exceptions"), so a regression to a naive
+# `asyncio.run(coro)`-with-no-thread implementation (which *does* fail here)
+# gets caught immediately.
 # ---------------------------------------------------------------------------
 
 
