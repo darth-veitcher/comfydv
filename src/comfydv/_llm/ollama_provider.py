@@ -88,17 +88,29 @@ _CHAT_RESPONSE_CACHE = _TTLLRUCache(maxsize=64, ttl_seconds=None)
 
 
 def _run_async(coro):
-    """Run an async coroutine synchronously, safe inside a running event loop."""
-    try:
-        asyncio.get_running_loop()
-        # Called from within a running loop (e.g. ComfyUI's async executor).
-        # Spin up a worker thread with its own loop to avoid "loop already running".
-        import concurrent.futures
+    """Run an async coroutine synchronously in an isolated worker thread.
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            return pool.submit(asyncio.run, coro).result()
-    except RuntimeError:
-        return asyncio.run(coro)
+    Always spins up a fresh thread rather than conditionally checking
+    asyncio.get_running_loop() first: live-verified against a real running
+    ComfyUI instance (its execution engine runs its own event loop, in
+    Python 3.13, on the same process) that the conditional version — try
+    get_running_loop(), spin up a thread only if it succeeds, otherwise
+    call asyncio.run(coro) directly — is unreliable there. Under real
+    ComfyUI, get_running_loop() sometimes raised inside that try block
+    (unlike under pytest or a standalone script, where it never does),
+    which routed straight into `asyncio.run(coro)` on the *current* thread
+    — the one thread guaranteed to already have ComfyUI's own loop running
+    — reproducing exactly the "asyncio.run() cannot be called from a
+    running event loop" crash this function exists to prevent. Always
+    using a dedicated thread sidesteps the detection entirely: a freshly
+    spawned thread never has an ambient loop, so asyncio.run() is safe
+    there unconditionally, regardless of what the calling thread's loop
+    state actually is.
+    """
+    import concurrent.futures
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
 
 
 async def _post_json(
