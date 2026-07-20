@@ -245,6 +245,148 @@ def test_chat_timeout_forwarded(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# chat — retry-on-blank-output (live-verified: a freshly-loaded model's first
+# response is sometimes blank on a fresh runpod, then normal afterwards)
+# ---------------------------------------------------------------------------
+
+
+async def _fake_sleep(_secs):
+    """No-op stand-in for asyncio.sleep — keeps retry tests instant."""
+
+
+def test_chat_retries_on_blank_response_and_returns_second_attempt(monkeypatch):
+    calls = []
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        calls.append(payload)
+        if len(calls) == 1:
+            return {"message": {"content": ""}}
+        return {"message": {"content": "real answer"}}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    monkeypatch.setattr(provider_mod.asyncio, "sleep", _fake_sleep)
+
+    result = _run_async(
+        OllamaProvider("http://localhost:11434").chat(
+            "llama3", [Message(role="user", content="hi")]
+        )
+    )
+
+    assert result == "real answer"
+    assert len(calls) == 2
+
+
+def test_chat_retry_injects_incrementing_seed_when_none_pinned(monkeypatch):
+    calls = []
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        calls.append(payload)
+        if len(calls) < 3:
+            return {"message": {"content": ""}}
+        return {"message": {"content": "ok"}}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    monkeypatch.setattr(provider_mod.asyncio, "sleep", _fake_sleep)
+
+    _run_async(
+        OllamaProvider("http://localhost:11434").chat(
+            "llama3", [Message(role="user", content="hi")], max_retries=2
+        )
+    )
+
+    assert "seed" not in calls[0].get("options", {})
+    assert calls[1]["options"]["seed"] == 1
+    assert calls[2]["options"]["seed"] == 2
+
+
+def test_chat_retry_seed_starts_from_pinned_base(monkeypatch):
+    calls = []
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        calls.append(payload)
+        if len(calls) == 1:
+            return {"message": {"content": ""}}
+        return {"message": {"content": "ok"}}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    monkeypatch.setattr(provider_mod.asyncio, "sleep", _fake_sleep)
+
+    _run_async(
+        OllamaProvider("http://localhost:11434").chat(
+            "llama3",
+            [Message(role="user", content="hi")],
+            options={"seed": 42},
+        )
+    )
+
+    assert calls[0]["options"]["seed"] == 42  # attempt 1 untouched
+    assert calls[1]["options"]["seed"] == 43  # attempt 2 = base + 1
+
+
+def test_chat_exhausted_retries_returns_blank_without_raising(monkeypatch):
+    calls = []
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        calls.append(payload)
+        return {"message": {"content": ""}}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    monkeypatch.setattr(provider_mod.asyncio, "sleep", _fake_sleep)
+
+    result = _run_async(
+        OllamaProvider("http://localhost:11434").chat(
+            "llama3", [Message(role="user", content="hi")], max_retries=2
+        )
+    )
+
+    assert result == ""
+    assert len(calls) == 3  # original + 2 retries, per max_retries=2
+
+
+def test_chat_blank_response_is_not_cached(monkeypatch):
+    """A blank final result must not poison the cache — the next queue run
+    should try the real backend again, not replay the blank forever (the
+    cache has no TTL)."""
+    calls = {"n": 0}
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        calls["n"] += 1
+        return {"message": {"content": ""}}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    monkeypatch.setattr(provider_mod.asyncio, "sleep", _fake_sleep)
+
+    provider = OllamaProvider("http://localhost:11434")
+    messages = [Message(role="user", content="hi")]
+    _run_async(provider.chat(model="llama3", messages=messages, max_retries=0))
+    calls_after_first_run = calls["n"]
+    _run_async(provider.chat(model="llama3", messages=messages, max_retries=0))
+
+    assert calls["n"] > calls_after_first_run  # second run hit the network again
+
+
+def test_chat_no_retry_needed_does_not_sleep(monkeypatch):
+    sleep_calls = []
+
+    async def fake_sleep(secs):
+        sleep_calls.append(secs)
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        return {"message": {"content": "first try works"}}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    monkeypatch.setattr(provider_mod.asyncio, "sleep", fake_sleep)
+
+    _run_async(
+        OllamaProvider("http://localhost:11434").chat(
+            "llama3", [Message(role="user", content="hi")]
+        )
+    )
+
+    assert sleep_calls == []
+
+
+# ---------------------------------------------------------------------------
 # chat_structured
 # ---------------------------------------------------------------------------
 

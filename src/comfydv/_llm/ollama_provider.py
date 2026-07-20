@@ -19,6 +19,7 @@ import time
 from pydantic import BaseModel
 
 from .provider import Message, ModelInfo, ModelStatus
+from .retry import RETRY_BACKOFF_SECS, next_seed
 
 logger = logging.getLogger(__name__)
 
@@ -274,29 +275,54 @@ class OllamaProvider:
         messages: list[Message],
         options: dict | None = None,
         timeout_secs: float = 300.0,
+        max_retries: int = 2,
     ) -> str:
         payload_messages = [m.model_dump() for m in messages]
-        payload: dict = {"model": model, "messages": payload_messages, "stream": False}
-        if options:
-            payload["options"] = options
+        total_attempts = max(0, min(int(max_retries), 5)) + 1
+        response_text = ""
 
-        cache_key = _cache_key(
-            "chat",
-            self.host,
-            self.headers or {},
-            model,
-            payload_messages,
-            options or {},
-        )
-        cached, hit = _CHAT_RESPONSE_CACHE.get(cache_key)
-        if hit:
-            return cached
+        for attempt in range(1, total_attempts + 1):
+            attempt_options = dict(options) if options else {}
+            if attempt > 1:
+                attempt_options["seed"] = next_seed(options, attempt)
 
-        result = await _post_json(
-            f"{self.host}/api/chat", payload, timeout=timeout_secs, headers=self.headers
-        )
-        response_text = result.get("message", {}).get("content", "")
-        _CHAT_RESPONSE_CACHE.set(cache_key, response_text)
+            payload: dict = {
+                "model": model,
+                "messages": payload_messages,
+                "stream": False,
+            }
+            if attempt_options:
+                payload["options"] = attempt_options
+
+            cache_key = _cache_key(
+                "chat",
+                self.host,
+                self.headers or {},
+                model,
+                payload_messages,
+                attempt_options,
+            )
+            cached, hit = _CHAT_RESPONSE_CACHE.get(cache_key)
+            if hit:
+                return cached
+
+            result = await _post_json(
+                f"{self.host}/api/chat",
+                payload,
+                timeout=timeout_secs,
+                headers=self.headers,
+            )
+            response_text = result.get("message", {}).get("content", "")
+            if response_text.strip():
+                _CHAT_RESPONSE_CACHE.set(cache_key, response_text)
+                return response_text
+
+            if attempt < total_attempts:
+                await asyncio.sleep(RETRY_BACKOFF_SECS)
+
+        # Every attempt came back blank — never raises here (chat() has
+        # never validated its output, unlike chat_structured()); return the
+        # last (blank) attempt uncached so the next queue run tries fresh.
         return response_text
 
     async def chat_structured(
