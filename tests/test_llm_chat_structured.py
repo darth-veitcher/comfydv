@@ -244,7 +244,33 @@ def test_chat_structured_retry_seed_starts_from_pinned_base(monkeypatch):
 
     assert fake.calls[0][2] == {"extra_body": {"options": {"seed": 42}}}
     assert fake.calls[1][2]["seed"] == 43  # base(42) + (attempt 2 - 1)
-    assert fake.calls[1][2]["extra_body"] == {"options": {"seed": 42}}
+    # The nested Ollama-native options.seed must track the same retry seed as
+    # the top-level one — a backend that honors the nested field over the
+    # top-level OpenAI "seed" must not keep seeing the stale pinned value.
+    assert fake.calls[1][2]["extra_body"] == {"options": {"seed": 43}}
+
+
+def test_chat_structured_retry_does_not_mutate_callers_options_dict(monkeypatch):
+    """Regression guard for the fix above: syncing the nested seed must copy,
+    not mutate, the caller's options dict — otherwise a second call reusing
+    the same options object would start from the wrong base seed."""
+    bad = ValidationError.from_exception_data("Widget", [])
+    fake = _FakeAgent([bad, _Widget(name="c", count=3)])
+    monkeypatch.setattr(chat_mod, "_build_agent", lambda **kw: fake)
+
+    caller_options = {"seed": 42}
+    _run_async(
+        chat_mod.chat_structured(
+            base_url="http://localhost:11434/v1",
+            model="llama3",
+            messages=_messages(),
+            schema=_Widget,
+            options=caller_options,
+            max_retries=2,
+        )
+    )
+
+    assert caller_options == {"seed": 42}
 
 
 def test_chat_structured_retry_sleeps_between_attempts(monkeypatch):

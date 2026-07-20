@@ -136,7 +136,26 @@ async def chat_structured(
             # top-level "seed" param, which works against both Ollama's and
             # llama-server's OpenAI-compatible endpoints) and give it a beat
             # via RETRY_BACKOFF_SECS in case it's still finishing loading.
-            attempt_settings["seed"] = next_seed(options, attempt)
+            seed = next_seed(options, attempt)
+            attempt_settings["seed"] = seed
+            if "extra_body" in attempt_settings:
+                # beacon-reviewer caught this: if a caller pinned options["seed"],
+                # it's also sitting in extra_body.options.seed (the Ollama-native
+                # passthrough). Left untouched, a backend that honors that nested
+                # field over the top-level OpenAI "seed" above would keep sending
+                # the same old seed on every retry — silently defeating this fix
+                # for exactly the pinned-seed case. Copy rather than mutate in
+                # place: extra_body/options here are the caller's own dicts,
+                # shared across every attempt (and possibly other calls).
+                # ModelSettings declares extra_body as `object` (it's an
+                # opaque passthrough field), so a plain dict() call on it
+                # doesn't type-check — cast first, this module always builds
+                # it as a dict (see model_settings above).
+                extra_body = dict(cast(dict, attempt_settings["extra_body"]))
+                nested_options = dict(extra_body.get("options") or {})
+                nested_options["seed"] = seed
+                extra_body["options"] = nested_options
+                attempt_settings["extra_body"] = extra_body
         try:
             result = await agent.run(
                 prompt,
