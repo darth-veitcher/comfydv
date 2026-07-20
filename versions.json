@@ -1,10 +1,15 @@
 [
   {
-    "version": "0.1.1.dev42+g92da4fc11",
-    "title": "0.1.1.dev42+g92da4fc11",
+    "version": "0.1.1.dev45+g87ec79be1",
+    "title": "0.1.1.dev45+g87ec79be1",
     "aliases": [
       "stable"
     ]
+  },
+  {
+    "version": "0.1.1.dev42+g92da4fc11",
+    "title": "0.1.1.dev42+g92da4fc11",
+    "aliases": []
   },
   {
     "version": "0.1.1.dev39+g834ae3e9e",
