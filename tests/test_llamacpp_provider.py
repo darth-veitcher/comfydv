@@ -276,7 +276,7 @@ def test_chat_no_choices_returns_empty_string(monkeypatch):
     monkeypatch.setattr(provider_mod, "_post_json", fake_post)
     result = _run_async(
         LlamaCppProvider("http://localhost:8080").chat(
-            "gemma-3-4b", [Message(role="user", content="hi")]
+            "gemma-3-4b", [Message(role="user", content="hi")], max_retries=0
         )
     )
 
@@ -299,6 +299,83 @@ def test_chat_second_identical_call_is_cached(monkeypatch):
 
     assert r1 == r2 == "cached"
     assert calls["n"] == 1
+
+
+# ---------------------------------------------------------------------------
+# chat — retry-on-blank-output. Mirrors test_ollama_provider.py's coverage;
+# the one llama.cpp-specific detail is that the retry seed must land in the
+# top-level OpenAI "seed" field, not nested under "options" (see chat()'s
+# comment on why the options passthrough doesn't reach llama-server at all).
+# ---------------------------------------------------------------------------
+
+
+async def _fake_sleep(_secs):
+    """No-op stand-in for asyncio.sleep — keeps retry tests instant."""
+
+
+def test_chat_retries_on_blank_response_and_returns_second_attempt(monkeypatch):
+    calls = []
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        calls.append(payload)
+        if len(calls) == 1:
+            return {"choices": [{"message": {"content": ""}}]}
+        return {"choices": [{"message": {"content": "real answer"}}]}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    monkeypatch.setattr(provider_mod.asyncio, "sleep", _fake_sleep)
+
+    result = _run_async(
+        LlamaCppProvider("http://localhost:8080").chat(
+            "gemma-3-4b", [Message(role="user", content="hi")]
+        )
+    )
+
+    assert result == "real answer"
+    assert len(calls) == 2
+
+
+def test_chat_retry_seed_is_top_level_not_nested_in_options(monkeypatch):
+    calls = []
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        calls.append(payload)
+        if len(calls) < 3:
+            return {"choices": [{"message": {"content": ""}}]}
+        return {"choices": [{"message": {"content": "ok"}}]}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    monkeypatch.setattr(provider_mod.asyncio, "sleep", _fake_sleep)
+
+    _run_async(
+        LlamaCppProvider("http://localhost:8080").chat(
+            "gemma-3-4b", [Message(role="user", content="hi")], max_retries=2
+        )
+    )
+
+    assert "seed" not in calls[0]
+    assert calls[1]["seed"] == 1
+    assert calls[2]["seed"] == 2
+
+
+def test_chat_exhausted_retries_returns_blank_without_raising(monkeypatch):
+    calls = {"n": 0}
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        calls["n"] += 1
+        return {"choices": [{"message": {"content": ""}}]}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    monkeypatch.setattr(provider_mod.asyncio, "sleep", _fake_sleep)
+
+    result = _run_async(
+        LlamaCppProvider("http://localhost:8080").chat(
+            "gemma-3-4b", [Message(role="user", content="hi")], max_retries=2
+        )
+    )
+
+    assert result == ""
+    assert calls["n"] == 3  # original + 2 retries, per max_retries=2
 
 
 # ---------------------------------------------------------------------------

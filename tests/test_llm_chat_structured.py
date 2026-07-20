@@ -23,6 +23,18 @@ from comfydv._llm.ollama_provider import _run_async
 from comfydv._llm.provider import Message
 
 
+@pytest.fixture(autouse=True)
+def _no_retry_backoff(monkeypatch):
+    """Keep the real RETRY_BACKOFF_SECS delay out of this suite's wall-clock
+    time for every test except the ones that specifically assert on it
+    (which re-monkeypatch locally, overriding this)."""
+
+    async def _instant_sleep(_secs):
+        pass
+
+    monkeypatch.setattr(chat_mod.asyncio, "sleep", _instant_sleep)
+
+
 class _Widget(BaseModel):
     name: str
     count: int
@@ -185,6 +197,79 @@ def test_chat_structured_requires_last_message_user_role():
                 schema=_Widget,
             )
         )
+
+
+# ---------------------------------------------------------------------------
+# retry-on-failure seed/backoff — live-verified: a freshly-loaded model's
+# first structured-output attempt can fail outright, then behave normally on
+# the very next call.
+# ---------------------------------------------------------------------------
+
+
+def test_chat_structured_retry_injects_incrementing_seed(monkeypatch):
+    bad = ValidationError.from_exception_data("Widget", [])
+    fake = _FakeAgent([bad, bad, _Widget(name="c", count=3)])
+    monkeypatch.setattr(chat_mod, "_build_agent", lambda **kw: fake)
+
+    _run_async(
+        chat_mod.chat_structured(
+            base_url="http://localhost:11434/v1",
+            model="llama3",
+            messages=_messages(),
+            schema=_Widget,
+            max_retries=2,
+        )
+    )
+
+    assert fake.calls[0][2] is None  # attempt 1 untouched — no options set
+    assert fake.calls[1][2]["seed"] == 1
+    assert fake.calls[2][2]["seed"] == 2
+
+
+def test_chat_structured_retry_seed_starts_from_pinned_base(monkeypatch):
+    bad = ValidationError.from_exception_data("Widget", [])
+    fake = _FakeAgent([bad, _Widget(name="c", count=3)])
+    monkeypatch.setattr(chat_mod, "_build_agent", lambda **kw: fake)
+
+    _run_async(
+        chat_mod.chat_structured(
+            base_url="http://localhost:11434/v1",
+            model="llama3",
+            messages=_messages(),
+            schema=_Widget,
+            options={"seed": 42},
+            max_retries=2,
+        )
+    )
+
+    assert fake.calls[0][2] == {"extra_body": {"options": {"seed": 42}}}
+    assert fake.calls[1][2]["seed"] == 43  # base(42) + (attempt 2 - 1)
+    assert fake.calls[1][2]["extra_body"] == {"options": {"seed": 42}}
+
+
+def test_chat_structured_retry_sleeps_between_attempts(monkeypatch):
+    sleep_calls = []
+
+    async def fake_sleep(secs):
+        sleep_calls.append(secs)
+
+    monkeypatch.setattr(chat_mod.asyncio, "sleep", fake_sleep)
+
+    bad = ValidationError.from_exception_data("Widget", [])
+    fake = _FakeAgent([bad, _Widget(name="c", count=3)])
+    monkeypatch.setattr(chat_mod, "_build_agent", lambda **kw: fake)
+
+    _run_async(
+        chat_mod.chat_structured(
+            base_url="http://localhost:11434/v1",
+            model="llama3",
+            messages=_messages(),
+            schema=_Widget,
+            max_retries=2,
+        )
+    )
+
+    assert sleep_calls == [chat_mod.RETRY_BACKOFF_SECS]
 
 
 def test_history_to_messages_preserves_order_and_roles():

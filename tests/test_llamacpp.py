@@ -39,7 +39,9 @@ class _FakeProvider:
     async def unload_model(self, model):
         self.calls.append(("unload_model", model))
 
-    async def chat(self, model, messages, options=None, timeout_secs=300.0):
+    async def chat(
+        self, model, messages, options=None, timeout_secs=300.0, max_retries=2
+    ):
         self.calls.append(("chat", model))
         return self.chat_response
 

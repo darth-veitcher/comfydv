@@ -71,8 +71,18 @@ class LLMProvider(Protocol):
         messages: list[Message],
         options: dict | None = None,
         timeout_secs: float = 300.0,
+        max_retries: int = 2,
     ) -> str:
-        """Free-text chat response."""
+        """Free-text chat response.
+
+        Retries up to ``max_retries`` times (clamped 0-5) with a new seed if
+        the response comes back blank — confirmed live on a freshly-loaded
+        model, whose first response is sometimes empty before it settles
+        into normal behavior. Still returns the (possibly blank) last
+        attempt's text rather than raising if every retry comes back blank —
+        this method has never validated its output, unlike
+        ``chat_structured()``.
+        """
         ...
 
     async def chat_structured(

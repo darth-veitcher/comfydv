@@ -13,6 +13,7 @@ drives its own retry loop so the error contract is comfydv's, not
 pydantic-ai's internal one.
 """
 
+import asyncio
 from typing import cast
 
 from pydantic import BaseModel, ValidationError
@@ -30,6 +31,7 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
 
 from .provider import Message
+from .retry import RETRY_BACKOFF_SECS, next_seed
 
 _STRUCTURED_OUTPUT_FAILURE_EXCEPTIONS = (
     UnexpectedModelBehavior,
@@ -122,10 +124,26 @@ async def chat_structured(
     total_attempts = max(0, min(int(max_retries), 5)) + 1
     last_error: Exception | None = None
     last_invalid_text = ""
-    for _attempt in range(1, total_attempts + 1):
+    for attempt in range(1, total_attempts + 1):
+        attempt_settings = dict(model_settings) if model_settings else {}
+        if attempt > 1:
+            # Confirmed live: a freshly-loaded model's first structured-output
+            # attempt can fail outright (no valid tool call at all) and then
+            # behave normally on the very next call. Retrying with the exact
+            # same request reproduces the same failure if the model is
+            # genuinely stuck rather than just unlucky, so force a new seed
+            # (pydantic-ai maps ModelSettings["seed"] to the OpenAI API's
+            # top-level "seed" param, which works against both Ollama's and
+            # llama-server's OpenAI-compatible endpoints) and give it a beat
+            # via RETRY_BACKOFF_SECS in case it's still finishing loading.
+            attempt_settings["seed"] = next_seed(options, attempt)
         try:
             result = await agent.run(
-                prompt, message_history=history, model_settings=model_settings
+                prompt,
+                message_history=history,
+                model_settings=cast(ModelSettings, attempt_settings)
+                if attempt_settings
+                else None,
             )
             # agent's output_type is the caller's `schema` (a runtime value,
             # not a static type parameter), so the checker can't narrow
@@ -135,6 +153,8 @@ async def chat_structured(
         except _STRUCTURED_OUTPUT_FAILURE_EXCEPTIONS as exc:
             last_error = exc
             last_invalid_text = str(exc)
+            if attempt < total_attempts:
+                await asyncio.sleep(RETRY_BACKOFF_SECS)
 
     raise RuntimeError(
         f"chat_structured: response failed validation against schema after "

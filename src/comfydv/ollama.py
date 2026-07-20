@@ -548,6 +548,7 @@ class ChatCompletion:
                     messages,
                     llm_options,
                     timeout_secs=float(timeout_secs),
+                    max_retries=max_retries,
                 )
             )
         else:
