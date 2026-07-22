@@ -63,8 +63,8 @@ handling lives only in the `comfy`-guarded `ollama.py`.
 
 **Independent Test**: Run the US1 workflow unchanged against a llama.cpp server (launched with `--mmproj`); swap the Ollama client node for the llama.cpp one with no other change and confirm the image is still described.
 
-- [ ] T006-T [P] [US2] Write FAILING test: `LlamaCppProvider.chat()` maps a message's images into OpenAI `content` parts (`{"type":"text",...}` + `{"type":"image_url","image_url":{"url":"data:image/png;base64,..."}}`) for `/v1/chat/completions`, and a text-only message keeps a **plain-string** `content` (regression), in `tests/test_llamacpp_provider.py` (contract T3; witnesses both `features/us2_both_backends.feature` scenarios)
-- [ ] T006-I [US2] Implement the images→content-parts mapping in `LlamaCppProvider.chat()` in `src/comfydv/_llm/llamacpp_provider.py`; leave text-only messages untouched — makes T006-T pass (depends on T002-I)
+- [x] T006-T [P] [US2] Write FAILING test: `LlamaCppProvider.chat()` maps a message's images into OpenAI `content` parts (`{"type":"text",...}` + `{"type":"image_url","image_url":{"url":"data:image/png;base64,..."}}`) for `/v1/chat/completions`, and a text-only message keeps a **plain-string** `content` (regression), in `tests/test_llamacpp_provider.py` (contract T3; witnesses both `features/us2_both_backends.feature` scenarios)
+- [x] T006-I [US2] Implement the images→content-parts mapping in `LlamaCppProvider.chat()` in `src/comfydv/_llm/llamacpp_provider.py`; leave text-only messages untouched — makes T006-T pass (depends on T002-I)
 
 **Checkpoint**: parity proven — the identical node/wiring describes an image on both backends; swapping the client node is the only change.
 
