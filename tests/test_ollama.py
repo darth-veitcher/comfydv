@@ -1142,3 +1142,68 @@ class TestUS1ImageEncode:
         from comfydv.ollama import _encode_image_tensor
 
         assert _encode_image_tensor(torch.zeros(0, 4, 8, 3)) == []
+
+
+class TestUS1ImageInputNode:
+    """ChatCompletion optional IMAGE input attaches to the current user turn."""
+
+    def _last_messages(self, fake):
+        # _FakeProvider records ("chat", model, messages, options, timeout, retries)
+        chat_calls = [c for c in fake.calls if c[0] == "chat"]
+        return chat_calls[-1][2]
+
+    def test_chat_completion_has_optional_image_input(self):
+        inputs = ChatCompletion.INPUT_TYPES()
+        assert "image" in inputs["optional"], (
+            "ChatCompletion must expose an optional IMAGE input for VLM use"
+        )
+        assert inputs["optional"]["image"][0] == "IMAGE"
+
+    def test_chat_completion_image_input_is_not_required(self):
+        inputs = ChatCompletion.INPUT_TYPES()
+        assert "image" not in inputs.get("required", {})
+
+    def test_return_positions_unchanged_by_image_input(self):
+        # Constitution VI: outputs untouched — only an optional input is added.
+        assert ChatCompletion.RETURN_TYPES[:2] == ("STRING", "OLLAMA_HISTORY")
+        assert ChatCompletion.RETURN_NAMES[:2] == ("response", "updated_history")
+
+    def test_wired_image_attaches_to_last_user_message(self):
+        import torch
+
+        fake = _FakeProvider(chat_response="a red square")
+        img = torch.zeros(1, 4, 8, 3)
+        img[0, :, :, 0] = 1.0
+
+        ChatCompletion().chat(client=fake, model="m", prompt="describe", image=img)
+
+        messages = self._last_messages(fake)
+        assert messages[-1].role == "user"
+        assert messages[-1].content == "describe"
+        assert messages[-1].images and len(messages[-1].images) == 1
+
+    def test_unwired_image_leaves_messages_text_only(self):
+        fake = _FakeProvider(chat_response="ok")
+        ChatCompletion().chat(client=fake, model="m", prompt="hi")
+        messages = self._last_messages(fake)
+        assert messages[-1].images is None
+
+    def test_image_not_added_to_history_turns(self):
+        import torch
+
+        fake = _FakeProvider(chat_response="ok")
+        img = torch.zeros(1, 2, 2, 3)
+        history = [
+            {"role": "user", "content": "earlier q"},
+            {"role": "assistant", "content": "earlier a"},
+        ]
+
+        ChatCompletion().chat(
+            client=fake, model="m", prompt="now", history=history, image=img
+        )
+
+        messages = self._last_messages(fake)
+        # Every turn except the final user turn must carry no image (FR-007).
+        assert all(m.images is None for m in messages[:-1])
+        assert messages[-1].content == "now"
+        assert messages[-1].images and len(messages[-1].images) == 1
