@@ -25,7 +25,7 @@ handling lives only in the `comfy`-guarded `ollama.py`.
 
 ## Phase 1: Setup
 
-- [ ] T001 Add `pillow` to `[dependency-groups].dev` in `pyproject.toml` — lets the node's tensor→PNG encoder be unit-tested without a live ComfyUI; runtime Pillow/numpy are ComfyUI-provided, so **no core runtime dependency is added** (research.md Decision 4)
+- [x] T001 Add `pillow` to `[dependency-groups].dev` in `pyproject.toml` — lets the node's tensor→PNG encoder be unit-tested without a live ComfyUI; runtime Pillow/numpy are ComfyUI-provided, so **no core runtime dependency is added** (research.md Decision 4)
 
 ---
 
