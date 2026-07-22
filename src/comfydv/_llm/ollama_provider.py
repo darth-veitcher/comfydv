@@ -277,7 +277,11 @@ class OllamaProvider:
         timeout_secs: float = 300.0,
         max_retries: int = 2,
     ) -> str:
-        payload_messages = [m.model_dump() for m in messages]
+        # exclude_none drops the images key for text-only turns so an
+        # image-less request is byte-identical to the pre-009 payload
+        # (FR-003); a turn with images keeps Ollama's native flat images
+        # array (ADR-008 — no transform needed for /api/chat).
+        payload_messages = [m.model_dump(exclude_none=True) for m in messages]
         total_attempts = max(0, min(int(max_retries), 5)) + 1
         response_text = ""
 
