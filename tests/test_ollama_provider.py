@@ -538,3 +538,49 @@ def test_run_async_propagates_exceptions_from_within_a_running_loop():
 
     with pytest.raises(ValueError, match="boom"):
         asyncio.run(outer())
+
+
+# ---------------------------------------------------------------------------
+# chat — image input (spec 009, US1; features/us1_describe_image.feature)
+# ---------------------------------------------------------------------------
+
+
+def test_chat_forwards_images_as_flat_array(monkeypatch):
+    """Ollama /api/chat takes images as a flat per-message base64 array."""
+    captured = {}
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        captured["payload"] = payload
+        return {"message": {"content": "a red square"}}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    _run_async(
+        OllamaProvider("http://localhost:11434").chat(
+            "m", [Message(role="user", content="describe", images=["QUJD"])]
+        )
+    )
+
+    assert captured["payload"]["messages"][-1] == {
+        "role": "user",
+        "content": "describe",
+        "images": ["QUJD"],
+    }
+
+
+def test_chat_text_only_payload_omits_images_key(monkeypatch):
+    """FR-003/SC-004: an image-less request must be byte-identical to today —
+    no stray images key in the /api/chat payload."""
+    captured = {}
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        captured["payload"] = payload
+        return {"message": {"content": "ok"}}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    _run_async(
+        OllamaProvider("http://localhost:11434").chat(
+            "m", [Message(role="user", content="hi")]
+        )
+    )
+
+    assert captured["payload"]["messages"] == [{"role": "user", "content": "hi"}]
