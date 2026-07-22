@@ -114,6 +114,15 @@ A complete graph looks like this:
 
 ![Full LLM workflow](docs/assets/ollama_workflow.png)
 
+### Describing images (vision)
+
+**Chat Completion** has an optional **image** input. Wire any `IMAGE` into it and, with a vision-capable model loaded, the model can describe or reason about the picture — captioning, visual Q&A, reading text in an image, whatever the model supports.
+
+- **Ollama** — use a multimodal model (e.g. a llava-class model).
+- **llama.cpp** — launch `llama-server` with a multimodal projector: `--mmproj <projector.gguf>` alongside the model.
+
+Image input works the same on both backends — same node, same wiring — and composes with everything else: structured output (schema-validated fields pulled straight from the image), multi-turn history, and the option nodes. A batch of images is sent as multiple images on the turn. Leave the input unwired and Chat Completion behaves exactly as before, text only.
+
 ### Manual memory management
 
 Single-GPU and memory-constrained setups need explicit control over what's resident in VRAM. **LLM Load Model** pins a model into memory; **LLM Unload Model** evicts it immediately, freeing room for the next model or the rest of your image pipeline.

@@ -85,7 +85,7 @@ handling lives only in the `comfy`-guarded `ollama.py`.
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T008 [P] Document image input on `ChatCompletion` in `README.md` and add a `CHANGELOG.md` Unreleased entry — note the vision-model / llama.cpp `--mmproj` prerequisite (quickstart.md)
+- [x] T008 [P] Document image input on `ChatCompletion` in `README.md` and add a `CHANGELOG.md` Unreleased entry — note the vision-model / llama.cpp `--mmproj` prerequisite (quickstart.md)
 - [ ] T009 Run the full quality gate green: `uv run ruff check --fix && uv run ruff format && uv run ty check && uv run pytest && beacon doctor --strict`
 - [-] T010 End-to-end `quickstart.md` validation against a live vision backend (Ollama multimodal model and `llama-server --mmproj`) _Deferred — requires a live vision-capable backend not available in CI/this environment; validate manually before release._
 
