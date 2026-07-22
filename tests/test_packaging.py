@@ -210,8 +210,8 @@ class TestDockerCompose:
             "docker/Dockerfile not found — run T041-I to create it"
         )
 
-    def test_dockerfile_uses_python_311_base(self):
+    def test_dockerfile_uses_python_313_base(self):
         text = DOCKERFILE.read_text()
-        assert "FROM python:3.11" in text, (
-            "Dockerfile must use python:3.11 base image (CPU-only, no CUDA)"
+        assert "FROM python:3.13" in text, (
+            "Dockerfile must use python:3.13 base image (CPU-only, no CUDA)"
         )
