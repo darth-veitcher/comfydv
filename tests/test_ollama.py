@@ -1089,3 +1089,56 @@ class TestNodeContracts:
         types = node_cls.INPUT_TYPES()
         assert isinstance(types, dict)
         assert "required" in types or "optional" in types
+
+
+# ---------------------------------------------------------------------------
+# US1 (spec 009) — Image input on ChatCompletion
+#   features/us1_describe_image.feature
+# ---------------------------------------------------------------------------
+
+
+class TestUS1ImageEncode:
+    """_encode_image_tensor(): ComfyUI IMAGE tensor -> base64 PNG(s)."""
+
+    def test_encode_single_image_returns_decodable_png(self):
+        import base64
+        import io
+
+        import torch
+        from PIL import Image
+
+        from comfydv.ollama import _encode_image_tensor
+
+        # ComfyUI IMAGE: [B, H, W, C] float 0..1
+        img = torch.zeros(1, 4, 8, 3)
+        img[0, :, :, 0] = 1.0  # solid red
+
+        out = _encode_image_tensor(img)
+
+        assert isinstance(out, list)
+        assert len(out) == 1
+        pil = Image.open(io.BytesIO(base64.b64decode(out[0])))
+        assert pil.format == "PNG"
+        assert pil.size == (8, 4)  # PIL size is (W, H)
+        assert pil.convert("RGB").getpixel((0, 0)) == (255, 0, 0)
+
+    def test_encode_batch_returns_one_base64_per_frame(self):
+        import torch
+
+        from comfydv.ollama import _encode_image_tensor
+
+        img = torch.zeros(3, 4, 8, 3)
+        out = _encode_image_tensor(img)
+        assert len(out) == 3
+
+    def test_encode_none_returns_empty_list(self):
+        from comfydv.ollama import _encode_image_tensor
+
+        assert _encode_image_tensor(None) == []
+
+    def test_encode_empty_batch_returns_empty_list(self):
+        import torch
+
+        from comfydv.ollama import _encode_image_tensor
+
+        assert _encode_image_tensor(torch.zeros(0, 4, 8, 3)) == []
