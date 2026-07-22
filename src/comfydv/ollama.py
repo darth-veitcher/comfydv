@@ -502,6 +502,18 @@ class ChatCompletion:
                 "system": ("STRING", {"multiline": True, "default": ""}),
                 "history": ("OLLAMA_HISTORY",),
                 "options": ("OLLAMA_OPTIONS",),
+                "image": (
+                    "IMAGE",
+                    {
+                        "tooltip": (
+                            "Optional image(s) for a vision-capable model. "
+                            "Requires a multimodal model on the connected "
+                            "server (Ollama multimodal model, or llama.cpp "
+                            "launched with --mmproj). A batch is sent as "
+                            "multiple images on the turn."
+                        )
+                    },
+                ),
                 "timeout_secs": ("INT", {"default": 300, "min": 30, "max": 3600}),
                 "structured_output": ("BOOLEAN", {"default": False}),
                 "output_schema": (
@@ -550,6 +562,7 @@ class ChatCompletion:
         system="",
         history=None,
         options=None,
+        image=None,
         timeout_secs=300,
         structured_output=False,
         output_schema=_DEFAULT_OUTPUT_SCHEMA,
@@ -576,6 +589,12 @@ class ChatCompletion:
             message_dicts = [{"role": "system", "content": system}] + message_dicts
         message_dicts.append({"role": "user", "content": prompt})
         messages = [Message(**m) for m in message_dicts]
+        # Attach any wired image(s) to the current user turn only (FR-007) —
+        # history turns are left untouched. Encoding lives in the node
+        # (comfy-guarded); providers see only base64 strings on the Message.
+        user_images = _encode_image_tensor(image)
+        if user_images:
+            messages[-1].images = user_images
         llm_options = dict(options) if options else None
 
         # Provider owns transport, caching, and — for structured_output — the
