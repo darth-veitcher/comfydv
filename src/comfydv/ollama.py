@@ -27,6 +27,47 @@ from ._llm.provider import Message
 logger = logging.getLogger(__name__)
 
 
+def _encode_image_tensor(image) -> list[str]:
+    """Convert a ComfyUI ``IMAGE`` into base64-encoded PNG string(s).
+
+    ComfyUI passes images as a float tensor shaped ``[B, H, W, C]`` in the
+    ``0..1`` range. Each frame in the batch becomes one base64 PNG in the
+    returned list (spec 009 / ADR-008: a batch is carried as multiple images
+    on the turn). ``None`` or an empty tensor yields ``[]`` so callers can
+    treat "no image wired" uniformly.
+
+    ``numpy``/``PIL`` are imported lazily here — they are provided by the
+    ComfyUI runtime, not a comfydv core dependency, and importing them at
+    module scope would break loading outside ComfyUI (Constitution IV). The
+    ``_llm`` layer never touches tensors or Pillow; only this node does.
+    """
+    if image is None:
+        return []
+
+    import base64
+    from io import BytesIO
+
+    import numpy as np
+    from PIL import Image
+
+    arr = image
+    if hasattr(arr, "detach"):  # torch tensor
+        arr = arr.detach().cpu().numpy()
+    arr = np.asarray(arr)
+    if arr.size == 0:
+        return []
+    if arr.ndim == 3:  # a bare [H, W, C] — treat as a batch of one
+        arr = arr[None, ...]
+
+    encoded: list[str] = []
+    for frame in arr:
+        frame_u8 = np.clip(frame * 255.0 + 0.5, 0, 255).astype(np.uint8)
+        buffer = BytesIO()
+        Image.fromarray(frame_u8).save(buffer, format="PNG")
+        encoded.append(base64.b64encode(buffer.getvalue()).decode("ascii"))
+    return encoded
+
+
 # ---------------------------------------------------------------------------
 # Migration mapping (ADR-007) — old Ollama-specific node/socket names to
 # their generic replacements, for anyone reconnecting a pre-upgrade
