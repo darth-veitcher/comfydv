@@ -33,8 +33,8 @@ handling lives only in the `comfy`-guarded `ollama.py`.
 
 **Purpose**: the image carrier every path depends on. **⚠️ No user story work can begin until this is complete.**
 
-- [ ] T002-T Write FAILING test: `Message.images` defaults to `None`, round-trips a base64 list, and a text-only message's transport dump **omits** the `images` key (byte-identical to today), in `tests/test_llm_provider.py` (contract T1)
-- [ ] T002-I Add `images: list[str] | None = None` to `Message` in `src/comfydv/_llm/provider.py` — makes T002-T pass
+- [x] T002-T Write FAILING test: `Message.images` defaults to `None`, round-trips a base64 list, and a text-only message's transport dump **omits** the `images` key (byte-identical to today), in `tests/test_llm_provider.py` (contract T1)
+- [x] T002-I Add `images: list[str] | None = None` to `Message` in `src/comfydv/_llm/provider.py` — makes T002-T pass
 
 **Checkpoint**: carrier ready — user stories can begin.
 
