@@ -76,8 +76,8 @@ handling lives only in the `comfy`-guarded `ollama.py`.
 
 **Independent Test**: Enable structured output with a schema, wire an image, run against a vision model, confirm each field is populated from the image with no required field blank; a first-invalid response retries then fails clearly.
 
-- [ ] T007-T [US3] Write FAILING test: `chat_structured()` attaches a message's images as `BinaryContent(data=b64decode(img), media_type="image/png")` onto the run's `user_prompt` (last turn) and onto history `UserPromptPart`s, a text-only structured call is unchanged, and the retry/validation contract is intact, in `tests/test_llm_chat_structured.py` (contract T4; witnesses both `features/us3_structured_image.feature` scenarios) — mock at the `Agent.run`/`_build_agent` seam per the established convention
-- [ ] T007-I [US3] Implement image→`BinaryContent` handling in `chat_structured()` and `_history_to_messages()` in `src/comfydv/_llm/chat.py` — makes T007-T pass (depends on T002-I)
+- [x] T007-T [US3] Write FAILING test: `chat_structured()` attaches a message's images as `BinaryContent(data=b64decode(img), media_type="image/png")` onto the run's `user_prompt` (last turn) and onto history `UserPromptPart`s, a text-only structured call is unchanged, and the retry/validation contract is intact, in `tests/test_llm_chat_structured.py` (contract T4; witnesses both `features/us3_structured_image.feature` scenarios) — mock at the `Agent.run`/`_build_agent` seam per the established convention
+- [x] T007-I [US3] Implement image→`BinaryContent` handling in `chat_structured()` and `_history_to_messages()` in `src/comfydv/_llm/chat.py` — makes T007-T pass (depends on T002-I)
 
 **Checkpoint**: structured image output works on both backends via the one shared helper; all prior stories remain green.
 
