@@ -20,6 +20,7 @@ from pydantic import BaseModel, ValidationError
 from pydantic_ai import Agent
 from pydantic_ai.exceptions import ModelRetry, UnexpectedModelBehavior
 from pydantic_ai.messages import (
+    BinaryContent,
     ModelRequest,
     ModelResponse,
     SystemPromptPart,
@@ -60,6 +61,28 @@ def _build_agent(
     return Agent(chat_model, output_type=schema, retries=0)
 
 
+def _user_prompt_content(msg: Message):
+    """Render a user turn as pydantic-ai user-prompt content.
+
+    Text-only ``msg`` → the plain ``content`` string, byte-identical to the
+    pre-009 path (FR-003). A turn carrying images → ``[content, *images]``
+    where each image is a ``BinaryContent`` PNG (ADR-008 / research.md
+    Decision 1); ``OpenAIChatModel`` renders these as OpenAI ``image_url``
+    parts, so both backends reach the same multimodal request through one
+    shared code path.
+    """
+    if not msg.images:
+        return msg.content
+    import base64
+
+    content: list = [msg.content]
+    for image in msg.images:
+        content.append(
+            BinaryContent(data=base64.b64decode(image), media_type="image/png")
+        )
+    return content
+
+
 def _history_to_messages(messages: list[Message]) -> list:
     """Convert all but the last message into pydantic-ai's typed history.
 
@@ -73,7 +96,9 @@ def _history_to_messages(messages: list[Message]) -> list:
         elif msg.role == "system":
             history.append(ModelRequest(parts=[SystemPromptPart(msg.content)]))
         else:
-            history.append(ModelRequest(parts=[UserPromptPart(msg.content)]))
+            history.append(
+                ModelRequest(parts=[UserPromptPart(_user_prompt_content(msg))])
+            )
     return history
 
 
@@ -116,7 +141,7 @@ async def chat_structured(
         timeout_secs=timeout_secs,
     )
     history = _history_to_messages(messages)
-    prompt = messages[-1].content
+    prompt = _user_prompt_content(messages[-1])
     model_settings: ModelSettings | None = (
         {"extra_body": {"options": options}} if options else None
     )

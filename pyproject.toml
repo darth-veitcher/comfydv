@@ -27,6 +27,7 @@ source = "vcs"
 
 [dependency-groups]
 dev = [
+    "pillow>=10.0.0",
     "playwright>=1.60.0",
     "pytest>=8.4.2",
     "pytest-cov>=6.0.0",

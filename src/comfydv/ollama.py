@@ -27,6 +27,47 @@ from ._llm.provider import Message
 logger = logging.getLogger(__name__)
 
 
+def _encode_image_tensor(image) -> list[str]:
+    """Convert a ComfyUI ``IMAGE`` into base64-encoded PNG string(s).
+
+    ComfyUI passes images as a float tensor shaped ``[B, H, W, C]`` in the
+    ``0..1`` range. Each frame in the batch becomes one base64 PNG in the
+    returned list (spec 009 / ADR-008: a batch is carried as multiple images
+    on the turn). ``None`` or an empty tensor yields ``[]`` so callers can
+    treat "no image wired" uniformly.
+
+    ``numpy``/``PIL`` are imported lazily here — they are provided by the
+    ComfyUI runtime, not a comfydv core dependency, and importing them at
+    module scope would break loading outside ComfyUI (Constitution IV). The
+    ``_llm`` layer never touches tensors or Pillow; only this node does.
+    """
+    if image is None:
+        return []
+
+    import base64
+    from io import BytesIO
+
+    import numpy as np
+    from PIL import Image
+
+    arr = image
+    if hasattr(arr, "detach"):  # torch tensor
+        arr = arr.detach().cpu().numpy()
+    arr = np.asarray(arr)
+    if arr.size == 0:
+        return []
+    if arr.ndim == 3:  # a bare [H, W, C] — treat as a batch of one
+        arr = arr[None, ...]
+
+    encoded: list[str] = []
+    for frame in arr:
+        frame_u8 = np.clip(frame * 255.0 + 0.5, 0, 255).astype(np.uint8)
+        buffer = BytesIO()
+        Image.fromarray(frame_u8).save(buffer, format="PNG")
+        encoded.append(base64.b64encode(buffer.getvalue()).decode("ascii"))
+    return encoded
+
+
 # ---------------------------------------------------------------------------
 # Migration mapping (ADR-007) — old Ollama-specific node/socket names to
 # their generic replacements, for anyone reconnecting a pre-upgrade
@@ -461,6 +502,18 @@ class ChatCompletion:
                 "system": ("STRING", {"multiline": True, "default": ""}),
                 "history": ("OLLAMA_HISTORY",),
                 "options": ("OLLAMA_OPTIONS",),
+                "image": (
+                    "IMAGE",
+                    {
+                        "tooltip": (
+                            "Optional image(s) for a vision-capable model. "
+                            "Requires a multimodal model on the connected "
+                            "server (Ollama multimodal model, or llama.cpp "
+                            "launched with --mmproj). A batch is sent as "
+                            "multiple images on the turn."
+                        )
+                    },
+                ),
                 "timeout_secs": ("INT", {"default": 300, "min": 30, "max": 3600}),
                 "structured_output": ("BOOLEAN", {"default": False}),
                 "output_schema": (
@@ -509,6 +562,7 @@ class ChatCompletion:
         system="",
         history=None,
         options=None,
+        image=None,
         timeout_secs=300,
         structured_output=False,
         output_schema=_DEFAULT_OUTPUT_SCHEMA,
@@ -535,6 +589,12 @@ class ChatCompletion:
             message_dicts = [{"role": "system", "content": system}] + message_dicts
         message_dicts.append({"role": "user", "content": prompt})
         messages = [Message(**m) for m in message_dicts]
+        # Attach any wired image(s) to the current user turn only (FR-007) —
+        # history turns are left untouched. Encoding lives in the node
+        # (comfy-guarded); providers see only base64 strings on the Message.
+        user_images = _encode_image_tensor(image)
+        if user_images:
+            messages[-1].images = user_images
         llm_options = dict(options) if options else None
 
         # Provider owns transport, caching, and — for structured_output — the

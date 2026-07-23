@@ -314,3 +314,84 @@ def test_history_to_messages_preserves_order_and_roles():
     assert isinstance(history[0], ModelRequest)  # system
     assert isinstance(history[1], ModelRequest)  # user
     assert isinstance(history[2], ModelResponse)  # assistant
+
+
+# ---------------------------------------------------------------------------
+# Image input (spec 009, US3; features/us3_structured_image.feature)
+# ---------------------------------------------------------------------------
+
+
+def test_chat_structured_attaches_image_to_user_prompt(monkeypatch):
+    """The current turn's image rides on Agent.run()'s user_prompt as a
+    pydantic-ai BinaryContent (ADR-008, research.md Decision 1)."""
+    import base64
+
+    from pydantic_ai.messages import BinaryContent
+
+    fake = _FakeAgent([_Widget(name="sq", count=1)])
+    monkeypatch.setattr(chat_mod, "_build_agent", lambda **kw: fake)
+    b64 = base64.b64encode(b"PNGDATA").decode()
+
+    _run_async(
+        chat_mod.chat_structured(
+            base_url="http://x/v1",
+            model="m",
+            schema=_Widget,
+            messages=[Message(role="user", content="describe", images=[b64])],
+        )
+    )
+
+    prompt = fake.calls[0][0]
+    assert isinstance(prompt, list)
+    assert prompt[0] == "describe"
+    assert isinstance(prompt[1], BinaryContent)
+    assert prompt[1].data == b"PNGDATA"
+    assert prompt[1].media_type == "image/png"
+
+
+def test_chat_structured_text_only_prompt_is_plain_string(monkeypatch):
+    """FR-003: an image-less structured call is unchanged — plain-string
+    user_prompt, exactly as before spec 009."""
+    fake = _FakeAgent([_Widget(name="a", count=1)])
+    monkeypatch.setattr(chat_mod, "_build_agent", lambda **kw: fake)
+
+    _run_async(
+        chat_mod.chat_structured(
+            base_url="http://x/v1",
+            model="m",
+            schema=_Widget,
+            messages=[Message(role="user", content="hi")],
+        )
+    )
+
+    assert fake.calls[0][0] == "hi"
+
+
+def test_chat_structured_attaches_image_to_history_user_turn(monkeypatch):
+    """A prior user turn that carried an image keeps it in message_history."""
+    import base64
+
+    from pydantic_ai.messages import BinaryContent, UserPromptPart
+
+    fake = _FakeAgent([_Widget(name="a", count=1)])
+    monkeypatch.setattr(chat_mod, "_build_agent", lambda **kw: fake)
+    b64 = base64.b64encode(b"IMG").decode()
+    msgs = [
+        Message(role="user", content="earlier", images=[b64]),
+        Message(role="assistant", content="ok"),
+        Message(role="user", content="now"),
+    ]
+
+    _run_async(
+        chat_mod.chat_structured(
+            base_url="http://x/v1", model="m", schema=_Widget, messages=msgs
+        )
+    )
+
+    history = fake.calls[0][1]
+    part = history[0].parts[0]
+    assert isinstance(part, UserPromptPart)
+    assert isinstance(part.content, list)
+    assert part.content[0] == "earlier"
+    assert isinstance(part.content[1], BinaryContent)
+    assert part.content[1].data == b"IMG"

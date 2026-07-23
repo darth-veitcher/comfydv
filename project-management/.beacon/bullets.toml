@@ -5,3 +5,9 @@
 # the bullet survives a fresh clone (`beacon doctor`'s active-bullet check then
 # works in CI) and no per-branch file is left behind on the trunk after a merge.
 # `git log -p` on this file is the audit trail of who started which bullet when.
+
+[bullets."claude/chatcompletion-image-input-7mm6q5"]
+title = "VLM image input for ChatCompletion"
+owner = "noreply@anthropic.com"
+started = "2026-07-22T19:11:08+00:00"
+epic = "vlm-image-input"

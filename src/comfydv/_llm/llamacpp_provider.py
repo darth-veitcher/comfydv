@@ -53,6 +53,30 @@ async def _fetch_models(host: str, headers: dict | None = None) -> list[str]:
     return [m.name for m in models]
 
 
+def _to_openai_message(message: Message) -> dict:
+    """Render a ``Message`` in llama.cpp's OpenAI-compatible shape.
+
+    A text-only turn stays ``{"role", "content": <str>}`` — byte-identical to
+    the pre-009 payload (FR-003). A turn carrying images becomes OpenAI
+    multimodal ``content`` parts: the text followed by one ``image_url`` part
+    per base64 image, as a ``data:`` URI (ADR-008). ``llama-server`` only
+    honours these parts when launched with a multimodal projector
+    (``--mmproj``); without it the server errors, surfaced to the caller
+    rather than crashed on (FR-006).
+    """
+    if not message.images:
+        return {"role": message.role, "content": message.content}
+    parts: list[dict] = [{"type": "text", "text": message.content}]
+    for image in message.images:
+        parts.append(
+            {
+                "type": "image_url",
+                "image_url": {"url": f"data:image/png;base64,{image}"},
+            }
+        )
+    return {"role": message.role, "content": parts}
+
+
 class LlamaCppProvider:
     """LLMProvider implementation backed by llama-server's router mode.
 
@@ -160,7 +184,7 @@ class LlamaCppProvider:
         timeout_secs: float = 300.0,
         max_retries: int = 2,
     ) -> str:
-        payload_messages = [m.model_dump() for m in messages]
+        payload_messages = [_to_openai_message(m) for m in messages]
         total_attempts = max(0, min(int(max_retries), 5)) + 1
         response_text = ""
 

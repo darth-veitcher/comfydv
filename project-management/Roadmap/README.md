@@ -28,6 +28,7 @@
 - **ComfyUI UX Polish & Manager Compatibility** — `epics/ux-and-install.md` — 🔄 ACTIVE — Fix installation, core UX bugs (debounce, connection drops, alert dialogs), correctness bugs (class-level mutation, IS_CHANGED, seed=0), and metadata drift
 - **LLM Provider Abstraction** — `epics/archive/llm-provider-abstraction.md` — ✅ DONE — shared `LLMProvider` protocol (list/load/unload/chat/structured-output) and generic ComfyUI nodes; Ollama integration migrated onto it (ADR-007, supersedes ADR-006); merged via PR #17
 - **llama.cpp Model Integration** — `epics/llamacpp-integration.md` — 🔄 ACTIVE — Add a `LlamaCppProvider` implementing the shared protocol via llama-server's router mode (GitHub issue #15); dependency on LLM Provider Abstraction now satisfied
+- **VLM Image Input for ChatCompletion** — `epics/vlm-image-input.md` — 📋 PLANNING — Wire a ComfyUI IMAGE into the existing generic ChatCompletion node so a vision-capable model can describe/understand images; images carried on the `Message` and translated per-provider (ADR-008 extends ADR-007)
 
 For the live rollup (specs per epic, % tasks complete, last-commit age):
 

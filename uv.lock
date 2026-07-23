@@ -273,6 +273,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "pillow" },
     { name = "playwright" },
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -301,6 +302,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "pillow", specifier = ">=10.0.0" },
     { name = "playwright", specifier = ">=1.60.0" },
     { name = "pytest", specifier = ">=8.4.2" },
     { name = "pytest-cov", specifier = ">=6.0.0" },

@@ -31,3 +31,4 @@ Superseded ADRs keep their file; update their status to `Superseded by ADR-###`.
 | ADR | Title | Status | Date |
 |-----|-------|--------|------|
 | [ADR-000](ADR-000-template.md) | Template | — | — |
+| [ADR-008](ADR-008-multimodal-image-input-across-llmprovider-boundary.md) | Multimodal image input across the LLMProvider boundary | Proposed | 2026-07-22 |

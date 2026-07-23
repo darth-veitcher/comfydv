@@ -39,10 +39,21 @@ class ModelInfo(BaseModel):
 
 
 class Message(BaseModel):
-    """One turn in a chat request."""
+    """One turn in a chat request.
+
+    ``images`` carries optional base64-encoded image payloads (no ``data:``
+    prefix) associated with this turn, for vision-capable models. ``None``
+    (the default) means a text-only turn that serializes byte-for-byte as
+    before — providers dump with ``exclude_none=True`` so no ``images`` key
+    reaches the wire for image-less turns. Each provider translates this
+    neutral carrier into its own native shape (ADR-008): Ollama's flat
+    per-message ``images`` array, llama.cpp's OpenAI ``image_url`` content
+    parts, and pydantic-ai ``BinaryContent`` on the structured path.
+    """
 
     role: Literal["system", "user", "assistant"]
     content: str
+    images: list[str] | None = None
 
 
 class LLMProvider(Protocol):

@@ -479,3 +479,55 @@ def test_fetch_models_degrades_to_empty_when_unreachable(monkeypatch):
     names = _run_async(_fetch_models("http://localhost:19999"))
 
     assert names == []
+
+
+# ---------------------------------------------------------------------------
+# chat — image input (spec 009, US2; features/us2_both_backends.feature)
+# ---------------------------------------------------------------------------
+
+
+def test_chat_maps_images_to_openai_content_parts(monkeypatch):
+    """llama.cpp's OpenAI-compatible endpoint takes images as image_url parts
+    inside content, not a flat images field (ADR-008)."""
+    captured = {}
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        captured["payload"] = payload
+        return {"choices": [{"message": {"content": "a red square"}}]}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    _run_async(
+        LlamaCppProvider("http://localhost:8080").chat(
+            "m", [Message(role="user", content="describe", images=["QUJD"])]
+        )
+    )
+
+    assert captured["payload"]["messages"][-1] == {
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "describe"},
+            {
+                "type": "image_url",
+                "image_url": {"url": "data:image/png;base64,QUJD"},
+            },
+        ],
+    }
+
+
+def test_chat_text_only_content_stays_plain_string(monkeypatch):
+    """FR-003/SC-004: an image-less message keeps a plain string content,
+    byte-identical to today (no content-parts, no images key)."""
+    captured = {}
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        captured["payload"] = payload
+        return {"choices": [{"message": {"content": "ok"}}]}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    _run_async(
+        LlamaCppProvider("http://localhost:8080").chat(
+            "m", [Message(role="user", content="hi")]
+        )
+    )
+
+    assert captured["payload"]["messages"] == [{"role": "user", "content": "hi"}]

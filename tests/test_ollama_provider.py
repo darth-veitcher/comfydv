@@ -25,9 +25,11 @@ from comfydv._llm.provider import Message, ModelStatus
 def _clear_provider_caches():
     provider_mod._MODEL_LIST_CACHE.clear()
     provider_mod._CHAT_RESPONSE_CACHE.clear()
+    provider_mod._CAPABILITY_CACHE.clear()
     yield
     provider_mod._MODEL_LIST_CACHE.clear()
     provider_mod._CHAT_RESPONSE_CACHE.clear()
+    provider_mod._CAPABILITY_CACHE.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -626,3 +628,146 @@ def test_run_async_propagates_exceptions_from_within_a_running_loop():
 
     with pytest.raises(ValueError, match="boom"):
         asyncio.run(outer())
+
+
+# ---------------------------------------------------------------------------
+# chat — image input (spec 009, US1; features/us1_describe_image.feature)
+# ---------------------------------------------------------------------------
+
+
+def test_chat_forwards_images_as_flat_array(monkeypatch):
+    """Ollama /api/chat takes images as a flat per-message base64 array."""
+    captured = {}
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        if url.endswith("/api/show"):
+            return {"capabilities": ["completion", "vision"]}
+        captured["payload"] = payload
+        return {"message": {"content": "a red square"}}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    _run_async(
+        OllamaProvider("http://localhost:11434").chat(
+            "m", [Message(role="user", content="describe", images=["QUJD"])]
+        )
+    )
+
+    assert captured["payload"]["messages"][-1] == {
+        "role": "user",
+        "content": "describe",
+        "images": ["QUJD"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# chat — non-vision model + image (spec 009 FR-006/SC-005)
+# ---------------------------------------------------------------------------
+#
+# Live-testing against a real Ollama server surfaced the gap these tests
+# lock in: /api/chat doesn't error for a non-vision model given an `images`
+# field — it answers HTTP 200 with a blank message, indistinguishable from
+# an ordinary blank generation and silently swallowed by chat()'s existing
+# blank-response retry. FR-006 requires a clear, specific error instead.
+
+
+def test_chat_raises_clear_error_for_non_vision_model_with_image(monkeypatch):
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        if url.endswith("/api/show"):
+            return {"capabilities": ["completion"]}
+        raise AssertionError(f"/api/chat must not be called: {url}")
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+
+    with pytest.raises(ValueError, match="does not support image input"):
+        _run_async(
+            OllamaProvider("http://localhost:11434").chat(
+                "text-only-model",
+                [Message(role="user", content="describe", images=["QUJD"])],
+            )
+        )
+
+
+def test_chat_skips_capability_check_when_no_image(monkeypatch):
+    """FR-003: a text-only request must not pay for (or trigger) the
+    capability lookup at all — /api/show is never called."""
+    calls = []
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        calls.append(url)
+        return {"message": {"content": "hi"}}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    _run_async(
+        OllamaProvider("http://localhost:11434").chat(
+            "m", [Message(role="user", content="hi")]
+        )
+    )
+
+    assert all(not url.endswith("/api/show") for url in calls)
+
+
+def test_chat_capability_check_fails_open_on_lookup_error(monkeypatch):
+    """A capability-lookup failure (older Ollama, network hiccup) must not
+    block a request that would otherwise have worked."""
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        if url.endswith("/api/show"):
+            raise RuntimeError("Ollama returned HTTP 404 for /api/show")
+        return {"message": {"content": "a red square"}}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    result = _run_async(
+        OllamaProvider("http://localhost:11434").chat(
+            "m", [Message(role="user", content="describe", images=["QUJD"])]
+        )
+    )
+
+    assert result == "a red square"
+
+
+def test_chat_structured_raises_clear_error_for_non_vision_model_with_image(
+    monkeypatch,
+):
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        if url.endswith("/api/show"):
+            return {"capabilities": ["completion"]}
+        raise AssertionError(f"unexpected _post_json call: {url}")
+
+    async def fail_if_called(**kwargs):
+        raise AssertionError("chat_structured must not be reached")
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    monkeypatch.setattr("comfydv._llm.chat.chat_structured", fail_if_called)
+
+    from pydantic import BaseModel
+
+    class Widget(BaseModel):
+        name: str
+
+    with pytest.raises(ValueError, match="does not support image input"):
+        _run_async(
+            OllamaProvider("http://localhost:11434").chat_structured(
+                "text-only-model",
+                [Message(role="user", content="describe", images=["QUJD"])],
+                Widget,
+            )
+        )
+
+
+def test_chat_text_only_payload_omits_images_key(monkeypatch):
+    """FR-003/SC-004: an image-less request must be byte-identical to today —
+    no stray images key in the /api/chat payload."""
+    captured = {}
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        captured["payload"] = payload
+        return {"message": {"content": "ok"}}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    _run_async(
+        OllamaProvider("http://localhost:11434").chat(
+            "m", [Message(role="user", content="hi")]
+        )
+    )
+
+    assert captured["payload"]["messages"] == [{"role": "user", "content": "hi"}]
