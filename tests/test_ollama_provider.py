@@ -387,6 +387,94 @@ def test_chat_no_retry_needed_does_not_sleep(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# chat — incomplete (done: false) response distinct from a genuine blank
+# generation (issue #27)
+# ---------------------------------------------------------------------------
+#
+# Live-observed against a real Ollama server under model-swap load: /api/chat
+# can answer HTTP 200 with a `done: false` stub — model/created_at/message
+# all blank — before the target model has actually finished loading. Unlike
+# a genuine blank generation, chat() must not fold this into a silent "".
+
+
+def test_chat_raises_when_every_attempt_is_an_incomplete_stub(monkeypatch):
+    calls = []
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        calls.append(payload)
+        return {
+            "model": "",
+            "created_at": "0001-01-01T00:00:00Z",
+            "message": {"role": "", "content": ""},
+            "done": False,
+        }
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    monkeypatch.setattr(provider_mod.asyncio, "sleep", _fake_sleep)
+
+    with pytest.raises(RuntimeError, match="incomplete response"):
+        _run_async(
+            OllamaProvider("http://localhost:11434").chat(
+                "llama3", [Message(role="user", content="hi")], max_retries=2
+            )
+        )
+
+    assert len(calls) == 3  # original + 2 retries, per max_retries=2
+
+
+def test_chat_recovers_after_incomplete_stub_then_real_response(monkeypatch):
+    calls = []
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        calls.append(payload)
+        if len(calls) == 1:
+            return {
+                "model": "",
+                "created_at": "0001-01-01T00:00:00Z",
+                "message": {"role": "", "content": ""},
+                "done": False,
+            }
+        return {"message": {"content": "real answer"}}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    monkeypatch.setattr(provider_mod.asyncio, "sleep", _fake_sleep)
+
+    result = _run_async(
+        OllamaProvider("http://localhost:11434").chat(
+            "llama3", [Message(role="user", content="hi")]
+        )
+    )
+
+    assert result == "real answer"
+    assert len(calls) == 2
+
+
+def test_chat_exhausted_retries_still_returns_blank_without_raising_when_done_true(
+    monkeypatch,
+):
+    """Regression guard: a genuine blank generation (done: true, or no
+    `done` field at all) must keep the pre-existing silent-return behavior —
+    only the explicit done: false stub escalates to a raised error."""
+    calls = []
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        calls.append(payload)
+        return {"message": {"content": ""}, "done": True}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    monkeypatch.setattr(provider_mod.asyncio, "sleep", _fake_sleep)
+
+    result = _run_async(
+        OllamaProvider("http://localhost:11434").chat(
+            "llama3", [Message(role="user", content="hi")], max_retries=2
+        )
+    )
+
+    assert result == ""
+    assert len(calls) == 3
+
+
+# ---------------------------------------------------------------------------
 # chat_structured
 # ---------------------------------------------------------------------------
 

@@ -280,6 +280,7 @@ class OllamaProvider:
         payload_messages = [m.model_dump() for m in messages]
         total_attempts = max(0, min(int(max_retries), 5)) + 1
         response_text = ""
+        incomplete = False
 
         for attempt in range(1, total_attempts + 1):
             attempt_options = dict(options) if options else {}
@@ -317,12 +318,30 @@ class OllamaProvider:
                 _CHAT_RESPONSE_CACHE.set(cache_key, response_text)
                 return response_text
 
+            # done: false alongside blank content is a distinct signal from
+            # an ordinary blank generation — it's Ollama answering before
+            # the model has actually finished loading/swapping in, observed
+            # live under model-swap load (issue #27), not the model having
+            # genuinely generated nothing. Tracked separately so it can be
+            # raised on below instead of silently returned like a real
+            # blank generation would be.
+            incomplete = result.get("done") is False
+
             if attempt < total_attempts:
                 await asyncio.sleep(RETRY_BACKOFF_SECS)
 
-        # Every attempt came back blank — never raises here (chat() has
-        # never validated its output, unlike chat_structured()); return the
-        # last (blank) attempt uncached so the next queue run tries fresh.
+        if incomplete:
+            raise RuntimeError(
+                f"Ollama returned an incomplete response after "
+                f"{total_attempts} attempt(s) for model '{model}' — it may "
+                "still be loading or swapping in memory. Try again in a "
+                "few seconds."
+            )
+
+        # Every attempt came back blank (and complete) — never raises here
+        # (chat() has never validated its output, unlike chat_structured());
+        # return the last (blank) attempt uncached so the next queue run
+        # tries fresh.
         return response_text
 
     async def chat_structured(
