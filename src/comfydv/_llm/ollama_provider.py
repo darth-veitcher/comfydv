@@ -81,6 +81,7 @@ def _cache_key(*parts) -> str:
 
 _MODEL_LIST_CACHE = _TTLLRUCache(maxsize=32, ttl_seconds=20.0)
 _CHAT_RESPONSE_CACHE = _TTLLRUCache(maxsize=64, ttl_seconds=None)
+_CAPABILITY_CACHE = _TTLLRUCache(maxsize=32, ttl_seconds=300.0)
 
 
 # ---------------------------------------------------------------------------
@@ -194,6 +195,49 @@ async def _fetch_models(host: str, headers: dict | None = None) -> list[str]:
     return models
 
 
+async def _require_vision_capability(
+    host: str, model: str, headers: dict | None
+) -> None:
+    """Raise a clear error if ``model`` lacks Ollama's ``vision`` capability.
+
+    Only called when a request carries at least one image (spec 009 FR-006):
+    Ollama's /api/chat silently accepts an unsupported ``images`` field and
+    answers with a blank/malformed HTTP 200 instead of an error — which
+    would otherwise be indistinguishable from an ordinary blank generation
+    and get swallowed by chat()'s existing blank-response retry. /api/show's
+    ``capabilities`` list is the only place Ollama states support explicitly,
+    so a request carrying an image is checked against it up front.
+
+    Fails open on any lookup problem (older Ollama without ``capabilities``,
+    unreachable host, unexpected shape) — a lookup failure must not block a
+    request that would otherwise have worked; the real request surfaces its
+    own clear error if the host is genuinely unreachable.
+    """
+    cache_key = _cache_key("capabilities", host, headers or {}, model)
+    cached, hit = _CAPABILITY_CACHE.get(cache_key)
+    if hit:
+        capabilities = cached
+    else:
+        try:
+            data = await _post_json(
+                f"{host}/api/show", {"model": model}, timeout=10.0, headers=headers
+            )
+        except Exception:
+            return
+        capabilities = data.get("capabilities")
+        if capabilities is None:
+            return
+        _CAPABILITY_CACHE.set(cache_key, capabilities)
+
+    if "vision" not in capabilities:
+        raise ValueError(
+            f"Model '{model}' does not support image input — Ollama reports "
+            f"capabilities {capabilities!r} for it, no 'vision'. Wire a "
+            "vision-capable model, or disconnect the image input for "
+            "text-only chat."
+        )
+
+
 class OllamaProvider:
     """LLMProvider implementation backed by Ollama's REST API.
 
@@ -277,6 +321,9 @@ class OllamaProvider:
         timeout_secs: float = 300.0,
         max_retries: int = 2,
     ) -> str:
+        if any(m.images for m in messages):
+            await _require_vision_capability(self.host, model, self.headers)
+
         # exclude_none drops the images key for text-only turns so an
         # image-less request is byte-identical to the pre-009 payload
         # (FR-003); a turn with images keeps Ollama's native flat images
@@ -338,6 +385,9 @@ class OllamaProvider:
         timeout_secs: float = 300.0,
         max_retries: int = 2,
     ) -> BaseModel:
+        if any(m.images for m in messages):
+            await _require_vision_capability(self.host, model, self.headers)
+
         from .chat import chat_structured as _chat_structured_impl
 
         payload_messages = [m.model_dump() for m in messages]
