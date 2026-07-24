@@ -35,9 +35,32 @@ class TestVariableExtraction:
     def test_extract_jinja2_with_multiple_filters(self, format_string_class):
         """Test extraction of variables with multiple Jinja2 filters."""
         keys = format_string_class._extract_keys("{{ name | upper | trim }}")
-        # Multiple chained filters may not extract - that's a limitation of the regex
-        # Just test that it doesn't crash
-        assert isinstance(keys, list)
+        assert keys == ["name"]
+
+    def test_extract_jinja2_for_loop_excludes_loop_variable(self, format_string_class):
+        """The for-loop target (e.g. `hint`) is bound by the template and must
+        not be treated as a required input; the iterable it draws from must be."""
+        keys = format_string_class._extract_keys(
+            "{% for hint in extraction_hints %}- {{ hint }}\n{% endfor %}"
+        )
+        assert keys == ["extraction_hints"]
+
+    def test_extract_jinja2_if_condition_variable(self, format_string_class):
+        """A variable referenced only in an {% if %} condition must still be
+        detected, even without a matching {{ }} expression elsewhere."""
+        keys = format_string_class._extract_keys(
+            "{% if extraction_hints is defined and extraction_hints %}yes{% endif %}"
+        )
+        assert keys == ["extraction_hints"]
+
+    def test_extract_jinja2_filter_with_arguments(self, format_string_class):
+        """A filter called with arguments (e.g. tojson(indent=2)) has parens
+        in the way of the old regex's anchor to the closing }} — the variable
+        must still be detected."""
+        keys = format_string_class._extract_keys(
+            "{{ scene_manifest | tojson(indent=2) }}"
+        )
+        assert keys == ["scene_manifest"]
 
     def test_extract_jinja2_multiple_variables(self, format_string_class):
         """Test extraction of multiple variables from Jinja2 template."""
@@ -199,10 +222,11 @@ class TestJinja2Formatting:
             unique_id="test9",
             value=sample_data["value"],
         )["result"]
-        # value is not extracted as a variable because it's used in an expression
-        assert len(result) == 2  # Just formatted_string, saved_file_path
+        # value is extracted even though it's used in an expression
+        assert len(result) == 3  # formatted_string, saved_file_path, value
         assert result[0] == "Result: 10"
         assert result[1] == ""
+        assert result[2] == str(sample_data["value"])
 
 
 class TestInlineDisplay:

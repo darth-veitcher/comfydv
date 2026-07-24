@@ -21,7 +21,7 @@ import sys
 from typing import Any, Dict, List
 
 from aiohttp import web
-from jinja2 import exceptions, sandbox
+from jinja2 import exceptions, meta, sandbox
 
 # Set up logger for this module
 logger = logging.getLogger(__name__)
@@ -252,38 +252,48 @@ class FormatString:
         >>> # Test with additional context (should be excluded)
         >>> keys = FormatString._extract_keys("Time: {{ datetime.now() }}")
         >>> assert keys == []
+        >>> # Test {% for %} control structures: the loop variable is bound by the
+        >>> # template itself and must not be treated as a required input, while the
+        >>> # iterable it draws from must be.
+        >>> keys = FormatString._extract_keys(
+        ...     "{% for hint in extraction_hints %}{{ hint }}{% endfor %}"
+        ... )
+        >>> assert keys == ['extraction_hints']
         -->
         """
         variables = []
         seen = set()
 
         def add_var(var):
-            var = var.split("|")[0].split(".")[0].strip()
             if var not in seen and var not in FormatString.additional_context:
                 seen.add(var)
                 variables.append(var)
 
-        # Extract variables from Jinja2 expressions {{ }}
-        for match in re.finditer(
-            r"\{\{\s*([\w.]+)(?:\s*\|[\w\s]+)?(?:\.[^\(\)]+\(\))?\s*\}\}", template
-        ):
-            add_var(match.group(1))
-
-        # Extract variables from f-string style { }
+        # Extract variables from Python str.format() style { }
         for match in re.finditer(r"\{(\w+)\}", template):
             add_var(match.group(1))
 
-        # Extract variables from Jinja2 control structures {% %}
-        for structure in re.finditer(r"\{%.*?%\}", template):
-            for var in re.findall(r"\b(\w+)\|\b", structure.group(0)):
-                if not var.startswith("end") and var not in {
-                    "if",
-                    "else",
-                    "elif",
-                    "for",
-                    "in",
-                }:
-                    add_var(var)
+        # Extract variables referenced anywhere in Jinja2 syntax ({{ }} expressions
+        # and {% %} control structures) by parsing the template with Jinja2 itself
+        # rather than approximating it with regexes. This is what correctly excludes
+        # names bound within the template (e.g. the `hint` loop variable in
+        # `{% for hint in extraction_hints %}`) while still surfacing names the
+        # template expects the caller to supply (e.g. `extraction_hints`).
+        try:
+            template_ast = FormatString.jinja_env.parse(template)
+        except exceptions.TemplateSyntaxError:
+            pass
+        else:
+            # find_undeclared_variables returns an unordered set; sort by first
+            # textual occurrence so extraction order is deterministic and matches
+            # the order the template reads left to right (callers rely on this
+            # for positional outputs, e.g. two {{ }} variables in sequence).
+            undeclared = sorted(
+                meta.find_undeclared_variables(template_ast),
+                key=lambda name: template.find(name),
+            )
+            for var in undeclared:
+                add_var(var)
 
         return variables
 

@@ -60,6 +60,15 @@ def pytest_configure(config):
 
     sys.modules["folder_paths"] = MockFolderPaths
 
+    # Force "comfydv" to resolve to src/comfydv and get cached in sys.modules now,
+    # while our sys.path.insert(0, ...) above is still the definitive answer. The
+    # repo root's own __init__.py (ComfyUI's custom-node entry point) is also a
+    # valid "comfydv" package from certain sys.path states pytest transiently
+    # constructs during fixture setup; without this, a later bare `import comfydv`
+    # (e.g. in the _clear_ollama_caches fixture) can resolve to that root package
+    # instead, which lacks the _llm submodule and fails with ModuleNotFoundError.
+    import comfydv  # noqa: F401
+
 
 # ---------------------------------------------------------------------------
 # Ollama fixtures (used by @pytest.mark.integration tests)
