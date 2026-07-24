@@ -75,6 +75,10 @@ class FormatString:
 
     # Create a sandboxed Jinja2 environment for security
     jinja_env = sandbox.SandboxedEnvironment()
+    # Jinja2 ships `tojson` but not its inverse; add one so STRING inputs
+    # carrying a JSON array/object (ComfyUI has no native list socket type)
+    # can be parsed back into real Python data, e.g. `{{ hints | fromjson }}`.
+    jinja_env.filters["fromjson"] = json.loads
 
     # Define additional context
     @staticmethod
