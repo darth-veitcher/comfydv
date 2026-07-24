@@ -201,6 +201,18 @@ class TestJinja2Formatting:
         assert result[2] == "John"
         assert result[3] == "Doe"
 
+    def test_jinja2_fromjson_filter_parses_array(self, format_string_class):
+        """ComfyUI has no native list socket, so a STRING input carrying a
+        JSON array must be parseable back into a real list for iteration."""
+        result = format_string_class.format_string(
+            template_type="Jinja2",
+            template="{% for hint in hints | fromjson %}- {{ hint }}\n{% endfor %}",
+            save_path="",
+            unique_id="test-fromjson",
+            hints='["motion", "camera pan"]',
+        )["result"]
+        assert result[0] == "- motion\n- camera pan\n"
+
     def test_jinja2_with_datetime(self, format_string_class):
         """Test Jinja2 formatting with datetime context."""
         result = format_string_class.format_string(
