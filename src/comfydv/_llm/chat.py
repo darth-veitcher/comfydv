@@ -1,9 +1,23 @@
 """Shared chat_structured() helper — pydantic-ai backed structured output.
 
-Used by every ``LLMProvider`` implementation's ``chat_structured()`` method
-(ADR-007) so Ollama and llama.cpp share one implementation of tool-calling/
-structured-output logic instead of each hand-rolling it, since both speak
-OpenAI-compatible ``/v1/chat/completions``.
+Used by ``LlamaCppProvider.chat_structured()`` (ADR-007) over llama-server's
+OpenAI-compatible ``/v1/chat/completions``. ``OllamaProvider`` no longer uses
+this module (ADR-009): Ollama's OpenAI-compatible endpoint was found to
+silently reload the model at its default context size on every call,
+discarding any ``options.num_ctx`` override even when included in that same
+request — a behavior specific to Ollama's compat layer, not llama-server's.
+``OllamaProvider.chat_structured()`` now hand-rolls its own structured-output
+call over Ollama's *native* ``/api/chat`` + ``"format"``, which doesn't have
+that problem.
+
+ADR-009: the Agent uses ``NativeOutput`` (``response_format``/JSON-schema
+constrained decoding), not pydantic-ai's default tool-calling. Live-tested
+against a "thinking"-capable model: tool-calling let the model spend its
+whole token budget on chain-of-thought reasoning and never emit the tool
+call; native output keeps reasoning in a separate response field and the
+constrained ``content`` always comes back as schema-valid JSON. This benefit
+still applies to llama.cpp, which is why this module (and its NativeOutput
+choice) is kept for that provider.
 
 Ports ADR-006's retry/validation contract exactly: bounded retries (0-5,
 clamped), and a ``RuntimeError`` naming the model, attempt count, and a
@@ -17,7 +31,7 @@ import asyncio
 from typing import cast
 
 from pydantic import BaseModel, ValidationError
-from pydantic_ai import Agent
+from pydantic_ai import Agent, NativeOutput
 from pydantic_ai.exceptions import ModelRetry, UnexpectedModelBehavior
 from pydantic_ai.messages import (
     BinaryContent,
@@ -58,7 +72,7 @@ def _build_agent(
         base_url=base_url, api_key="not-needed", http_client=http_client
     )
     chat_model = OpenAIChatModel(model, provider=provider)
-    return Agent(chat_model, output_type=schema, retries=0)
+    return Agent(chat_model, output_type=NativeOutput(schema), retries=0)
 
 
 def _user_prompt_content(msg: Message):

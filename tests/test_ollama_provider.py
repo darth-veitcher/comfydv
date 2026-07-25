@@ -481,7 +481,11 @@ def test_chat_exhausted_retries_still_returns_blank_without_raising_when_done_tr
 # ---------------------------------------------------------------------------
 
 
-def test_chat_structured_builds_v1_base_url_and_delegates(monkeypatch):
+def test_chat_structured_calls_native_api_chat_with_format(monkeypatch):
+    """ADR-009: chat_structured hand-rolls a call to Ollama's *native*
+    /api/chat with a "format" JSON schema — not the shared pydantic-ai
+    chat.py helper over the OpenAI-compat endpoint (that endpoint was found
+    to silently discard context-size options on every call)."""
     from pydantic import BaseModel
 
     class Widget(BaseModel):
@@ -489,14 +493,12 @@ def test_chat_structured_builds_v1_base_url_and_delegates(monkeypatch):
 
     captured = {}
 
-    async def fake_chat_structured(**kwargs):
-        captured.update(kwargs)
-        return Widget(name="x")
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        captured["url"] = url
+        captured["payload"] = payload
+        return {"message": {"content": '{"name": "x"}'}}
 
-    monkeypatch.setattr(
-        "comfydv._llm.chat.chat_structured",
-        fake_chat_structured,
-    )
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
 
     result = _run_async(
         OllamaProvider("http://localhost:11434").chat_structured(
@@ -505,14 +507,16 @@ def test_chat_structured_builds_v1_base_url_and_delegates(monkeypatch):
     )
 
     assert result == Widget(name="x")
-    assert captured["base_url"] == "http://localhost:11434/v1"
-    assert captured["model"] == "llama3"
+    assert captured["url"] == "http://localhost:11434/api/chat"
+    assert captured["payload"]["model"] == "llama3"
+    assert captured["payload"]["format"] == Widget.model_json_schema()
+    assert captured["payload"]["messages"] == [{"role": "user", "content": "hi"}]
 
 
 def test_chat_structured_forwards_options(monkeypatch):
-    """Regression guard: options must reach the shared chat_structured()
-    helper, not just the cache key — see specs/007-llm-provider-abstraction
-    beacon-reviewer finding."""
+    """Regression guard: options must reach the native /api/chat payload,
+    not just the cache key — see specs/007-llm-provider-abstraction
+    beacon-reviewer finding (original guard, still applicable post-ADR-009)."""
     from pydantic import BaseModel
 
     class Widget(BaseModel):
@@ -520,11 +524,11 @@ def test_chat_structured_forwards_options(monkeypatch):
 
     captured = {}
 
-    async def fake_chat_structured(**kwargs):
-        captured.update(kwargs)
-        return Widget(name="x")
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        captured.update(payload)
+        return {"message": {"content": '{"name": "x"}'}}
 
-    monkeypatch.setattr("comfydv._llm.chat.chat_structured", fake_chat_structured)
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
 
     _run_async(
         OllamaProvider("http://localhost:11434").chat_structured(
@@ -538,6 +542,63 @@ def test_chat_structured_forwards_options(monkeypatch):
     assert captured["options"] == {"temperature": 0.0, "seed": 42}
 
 
+def test_chat_structured_retries_on_invalid_json(monkeypatch):
+    from pydantic import BaseModel
+
+    class Widget(BaseModel):
+        name: str
+
+    responses = [
+        {"message": {"content": "not json"}},
+        {"message": {"content": '{"name": "b"}'}},
+    ]
+    calls = []
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        calls.append(payload)
+        return responses[len(calls) - 1]
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+
+    result = _run_async(
+        OllamaProvider("http://localhost:11434").chat_structured(
+            "llama3",
+            [Message(role="user", content="hi")],
+            Widget,
+            max_retries=2,
+        )
+    )
+
+    assert result == Widget(name="b")
+    assert len(calls) == 2
+
+
+def test_chat_structured_exhausted_retries_raises_runtime_error(monkeypatch):
+    from pydantic import BaseModel
+
+    class Widget(BaseModel):
+        name: str
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        return {"message": {"content": "not json"}}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        _run_async(
+            OllamaProvider("http://localhost:11434").chat_structured(
+                "llama3",
+                [Message(role="user", content="hi")],
+                Widget,
+                max_retries=2,
+            )
+        )
+
+    message = str(exc_info.value)
+    assert "llama3" in message
+    assert "3 attempt(s)" in message
+
+
 def test_chat_structured_caches_after_successful_validation(monkeypatch):
     from pydantic import BaseModel
 
@@ -546,11 +607,11 @@ def test_chat_structured_caches_after_successful_validation(monkeypatch):
 
     calls = {"n": 0}
 
-    async def fake_chat_structured(**kwargs):
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
         calls["n"] += 1
-        return Widget(name="cached")
+        return {"message": {"content": '{"name": "cached"}'}}
 
-    monkeypatch.setattr("comfydv._llm.chat.chat_structured", fake_chat_structured)
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
 
     provider = OllamaProvider("http://localhost:11434")
     messages = [Message(role="user", content="hi")]

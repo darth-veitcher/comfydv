@@ -87,6 +87,42 @@ def test_chat_structured_returns_validated_output(monkeypatch):
     assert fake.calls[0][0] == "describe a widget"
 
 
+def test_build_agent_uses_native_output_not_tool_calling(monkeypatch):
+    """ADR-009: the Agent must be built with NativeOutput (response_format /
+    JSON-schema constrained decoding), not pydantic-ai's tool-calling
+    default. Regression guard against reverting to a bare `output_type=schema`,
+    which let a thinking-capable model exhaust its token budget on reasoning
+    and never emit a tool call (confirmed live against a real Ollama server).
+
+    Spies on the real pydantic_ai.Agent constructor (only _build_agent's own
+    seam is mocked in every other test in this file) and asserts on its
+    output_type argument via the public NativeOutput marker class, rather
+    than pydantic-ai's private internal schema representation."""
+    from pydantic_ai import NativeOutput
+
+    captured = {}
+    real_agent_cls = chat_mod.Agent
+
+    class _SpyAgent(real_agent_cls):
+        def __init__(self, *args, **kwargs):
+            captured.update(kwargs)
+            super().__init__(*args, **kwargs)
+
+    monkeypatch.setattr(chat_mod, "Agent", _SpyAgent)
+
+    chat_mod._build_agent(
+        base_url="http://localhost:11434/v1",
+        model="llama3",
+        schema=_Widget,
+        headers=None,
+        timeout_secs=300.0,
+    )
+
+    output_type = captured["output_type"]
+    assert isinstance(output_type, NativeOutput)
+    assert output_type.outputs == _Widget
+
+
 def test_chat_structured_retries_on_validation_failure(monkeypatch):
     bad = ValidationError.from_exception_data("Widget", [])
     fake = _FakeAgent([bad, _Widget(name="b", count=2)])

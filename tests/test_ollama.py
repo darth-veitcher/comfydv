@@ -388,37 +388,48 @@ class TestUS4ChatCompletion:
         assert len(h2) == 4
 
     @pytest.mark.integration
-    def test_structured_output_retries_then_raises_against_live_server(
+    def test_structured_output_against_unreliable_model_stays_schema_valid(
         self, ollama_host, skip_if_no_ollama
     ):
-        """Scenario: structured_output's retry-then-raise fallback against a
-        real server, using an unreliable model that empirically cannot be
-        made to call the forced tool consistently.
+        """Scenario: structured_output against a real server, using a model
+        with a known-degenerate chat template/tokenizer (ADR-006) that
+        empirically cannot be made to call a forced tool consistently.
 
-        This intentionally does NOT assert a happy-path clean result — see
-        the original ADR-006 rationale. What IS worth proving against a live
-        server: the shared pydantic-ai mechanism (comfydv._llm.chat) makes
-        genuine repeated network calls and produces a well-formed,
-        diagnostic error rather than hanging, crashing uninformatively, or
-        silently returning bad data. The happy path is covered by
-        tests/test_llm_chat_structured.py's mocked suite.
+        ADR-006 originally hand-rolled tool-calling specifically because this
+        model silently ignored Ollama's native `format` field. ADR-009
+        switched the shared pydantic-ai mechanism to NativeOutput (the same
+        native `format`/`response_format` constrained decoding ADR-006
+        avoided) — re-verified live: this model's *output* is still
+        degenerate (garbled tokens, not the literal requested string), but
+        NativeOutput's schema-constrained decoding now forces it into valid
+        JSON shape regardless, so it no longer exhausts retries or hangs.
+        What's worth proving against a live server: the shared mechanism
+        (comfydv._llm.chat) makes a genuine network call and returns
+        well-formed, schema-valid data rather than hanging, crashing
+        uninformatively, or exhausting retries on a shape it can never
+        satisfy. The happy-path *and* retry-exhaustion mechanics are covered
+        deterministically by tests/test_llm_chat_structured.py's mocked
+        suite — this test only proves the live wiring holds up against a
+        genuinely unreliable model's *content*, not its shape.
         """
         (client,) = OllamaClient().create_client(ollama_host)
-        with pytest.raises(RuntimeError) as exc_info:
-            ChatCompletion().chat(
-                client=client,
-                model=_CHAT_MODEL,
-                prompt="Say exactly: pong",
-                options={"think": False},
-                structured_output=True,
-                output_schema=(
-                    '{"type":"object","properties":{"output":{"type":"string"}},'
-                    '"required":["output"]}'
-                ),
-                max_retries=1,
-                unique_id="smoke-test",
-            )
-        assert _CHAT_MODEL in str(exc_info.value)
+        result = ChatCompletion().chat(
+            client=client,
+            model=_CHAT_MODEL,
+            prompt="Say exactly: pong",
+            options={"think": False},
+            structured_output=True,
+            output_schema=(
+                '{"type":"object","properties":{"output":{"type":"string"}},'
+                '"required":["output"]}'
+            ),
+            max_retries=1,
+            unique_id="smoke-test",
+        )
+        response_text, _history, model_name, output = result["result"]
+        assert model_name == _CHAT_MODEL
+        assert json.loads(response_text) == {"output": output}
+        assert isinstance(output, str) and output.strip()
 
 
 # ---------------------------------------------------------------------------
@@ -441,6 +452,12 @@ _MULTI_FIELD_SCHEMA = (
     '"score": {"type": "integer"}, '
     '"is_positive": {"type": "boolean"}}, '
     '"required": ["summary", "score", "is_positive"]}'
+)
+_SCHEMA_WITH_OPTIONAL_NULLABLE_FIELD = (
+    '{"type": "object", "properties": {'
+    '"output": {"type": "string"}, '
+    '"duration_seconds": {"type": "number"}}, '
+    '"required": ["output"]}'
 )
 
 
@@ -527,6 +544,32 @@ class TestStructuredOutput:
         assert score == 9
         assert isinstance(score, int)
         assert is_positive is True
+
+    def test_optional_field_accepts_explicit_null(self):
+        """Regression guard: a non-required field must accept an *explicit*
+        null in the model's JSON, not just being omitted entirely. Models
+        routinely emit `"duration_seconds": null` rather than dropping the
+        key — `_build_structured_model` typed non-required fields as bare
+        `py_type` with a `None` default, which only covers omission; an
+        explicit `None` value failed pydantic's type check (`None` is not a
+        `float`) until the field was typed `py_type | None` instead. Found
+        live: this passed every mocked test (mocks never validate against
+        the real model) but broke the actual LTX pipeline the first time a
+        real model returned an explicit null for an optional field."""
+        fake = _FakeProvider(
+            structured_field_values={"output": "hi", "duration_seconds": None}
+        )
+        ret = ChatCompletion().chat(
+            client=fake,
+            model="m",
+            prompt="hi",
+            structured_output=True,
+            output_schema=_SCHEMA_WITH_OPTIONAL_NULLABLE_FIELD,
+            unique_id="n3b",
+        )
+        _, _, _, output, duration_seconds = ret["result"]
+        assert output == "hi"
+        assert duration_seconds is None  # FLOAT socket; only STRING coerces None to ""
 
     def test_array_object_property_json_dumped_into_string_slot(self):
         schema = (
