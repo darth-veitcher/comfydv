@@ -79,6 +79,29 @@ def _cache_key(*parts) -> str:
     return json.dumps(parts, sort_keys=True, default=str)
 
 
+def _pop_think(options: dict | None) -> tuple[dict | None, bool | None]:
+    """Split a ``"think"`` toggle out of a generic ``options`` dict.
+
+    ADR-010: ``OllamaOptionDisableThinking`` merges a ``"think": bool`` key
+    into the same composable ``OLLAMA_OPTIONS`` chain every other
+    ``OllamaOption*`` node feeds into ``ChatCompletion``'s ``options``
+    input — but unlike those (Ollama-native sampling params, passed through
+    verbatim), ``"think"`` needs real per-provider translation: neither
+    Ollama's native ``/api/chat`` nor llama-server's OpenAI-compatible
+    endpoint recognizes a literal ``"think"`` key nested inside their own
+    ``options``/sampling-params object, so every provider pops it out here
+    (or in ``LlamaCppProvider``'s own copy) before building its request.
+    Returns ``options`` with ``"think"`` removed (unchanged if absent, so a
+    falsy/empty result stays falsy) and the popped value, or ``None`` if the
+    caller didn't set it — never touches the caller's own dict in place.
+    """
+    if not options or "think" not in options:
+        return options, None
+    remaining = dict(options)
+    think = remaining.pop("think")
+    return (remaining or None), think
+
+
 _MODEL_LIST_CACHE = _TTLLRUCache(maxsize=32, ttl_seconds=20.0)
 _CHAT_RESPONSE_CACHE = _TTLLRUCache(maxsize=64, ttl_seconds=None)
 _CAPABILITY_CACHE = _TTLLRUCache(maxsize=32, ttl_seconds=300.0)
@@ -329,6 +352,7 @@ class OllamaProvider:
         # (FR-003); a turn with images keeps Ollama's native flat images
         # array (ADR-008 — no transform needed for /api/chat).
         payload_messages = [m.model_dump(exclude_none=True) for m in messages]
+        options, think = _pop_think(options)
         total_attempts = max(0, min(int(max_retries), 5)) + 1
         response_text = ""
         incomplete = False
@@ -345,6 +369,10 @@ class OllamaProvider:
             }
             if attempt_options:
                 payload["options"] = attempt_options
+            if think is not None:
+                # ADR-010: confirmed live this must be a top-level field —
+                # Ollama silently ignores "think" nested inside "options".
+                payload["think"] = think
 
             cache_key = _cache_key(
                 "chat",
@@ -353,6 +381,7 @@ class OllamaProvider:
                 model,
                 payload_messages,
                 attempt_options,
+                think,
             )
             cached, hit = _CHAT_RESPONSE_CACHE.get(cache_key)
             if hit:
@@ -427,6 +456,7 @@ class OllamaProvider:
 
         payload_messages = [m.model_dump(exclude_none=True) for m in messages]
         json_schema = schema.model_json_schema()
+        options, think = _pop_think(options)
         cache_key = _cache_key(
             "chat_structured",
             self.host,
@@ -435,6 +465,7 @@ class OllamaProvider:
             payload_messages,
             options or {},
             json_schema,
+            think,
         )
         cached, hit = _CHAT_RESPONSE_CACHE.get(cache_key)
         if hit:
@@ -457,6 +488,10 @@ class OllamaProvider:
             }
             if attempt_options:
                 payload["options"] = attempt_options
+            if think is not None:
+                # ADR-010: confirmed live this must be a top-level field —
+                # Ollama silently ignores "think" nested inside "options".
+                payload["think"] = think
 
             try:
                 result = await _post_json(

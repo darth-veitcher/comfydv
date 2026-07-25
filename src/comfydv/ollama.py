@@ -851,6 +851,52 @@ class OllamaOptionRepeatPenalty:
         return (_merge_option(options, "repeat_penalty", repeat_penalty),)
 
 
+class OllamaOptionDisableThinking:
+    """Turn off (or explicitly re-enable) a "thinking"-capable model's
+    chain-of-thought reasoning (ADR-010).
+
+    Rides the same composable ``OLLAMA_OPTIONS`` chain as every other
+    ``OllamaOption*`` node, but unlike those (Ollama-native sampling
+    params passed through verbatim), the ``"think"`` key this node emits is
+    a comfydv-level convention: every ``LLMProvider`` implementation pops
+    it out of the merged ``options`` dict and translates it to its own
+    wire shape — Ollama's native top-level ``think`` field (confirmed live:
+    silently ignored if left nested in ``options``), or llama-server's
+    ``chat_template_kwargs``/``reasoning_effort`` request-body fields
+    (per llama.cpp's server docs — not live-verified). Works for both
+    backends from the same node.
+    """
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "disable_thinking": (
+                    "BOOLEAN",
+                    {
+                        "default": True,
+                        "tooltip": (
+                            "On: skip chain-of-thought reasoning entirely "
+                            "— faster, and the model's whole token budget "
+                            "goes to the actual response. Off: explicitly "
+                            "re-enable thinking (only useful to override a "
+                            "server-side default)."
+                        ),
+                    },
+                ),
+            },
+            "optional": {"options": ("OLLAMA_OPTIONS",)},
+        }
+
+    RETURN_TYPES = ("OLLAMA_OPTIONS",)
+    RETURN_NAMES = ("options",)
+    FUNCTION = "set_disable_thinking"
+    CATEGORY = "dv/ollama/options"
+
+    def set_disable_thinking(self, disable_thinking, options=None):
+        return (_merge_option(options, "think", not disable_thinking),)
+
+
 class OllamaOptionExtraBody:
     @classmethod
     def INPUT_TYPES(s):

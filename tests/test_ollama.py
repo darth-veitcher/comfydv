@@ -47,6 +47,7 @@ from comfydv.ollama import (
     OllamaHeaderBearerToken,
     OllamaHeaderCustom,
     OllamaHistoryLength,
+    OllamaOptionDisableThinking,
     OllamaOptionExtraBody,
     OllamaOptionMaxTokens,
     OllamaOptionRepeatPenalty,
@@ -707,6 +708,29 @@ class TestUS5ComposableOptions:
     def test_repeat_penalty_sets_key(self):
         (opts,) = OllamaOptionRepeatPenalty().set_repeat_penalty(repeat_penalty=1.1)
         assert opts == {"repeat_penalty": 1.1}
+
+    def test_disable_thinking_default_sets_think_false(self):
+        """ADR-010: default True (disable thinking) merges think=False —
+        every LLMProvider.chat()/chat_structured() implementation pops this
+        key out of options and translates it to its own wire shape."""
+        (opts,) = OllamaOptionDisableThinking().set_disable_thinking(
+            disable_thinking=True
+        )
+        assert opts == {"think": False}
+
+    def test_disable_thinking_toggled_off_sets_think_true(self):
+        """Explicitly re-enabling thinking (e.g. to override a server-side
+        default) is the inverse: disable_thinking=False -> think=True."""
+        (opts,) = OllamaOptionDisableThinking().set_disable_thinking(
+            disable_thinking=False
+        )
+        assert opts == {"think": True}
+
+    def test_disable_thinking_merges_existing_options(self):
+        (opts,) = OllamaOptionDisableThinking().set_disable_thinking(
+            disable_thinking=True, options={"temperature": 0.5}
+        )
+        assert opts == {"temperature": 0.5, "think": False}
 
     def test_extra_body_merges_json(self):
         (opts,) = OllamaOptionExtraBody().set_extra_body(

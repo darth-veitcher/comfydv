@@ -18,7 +18,7 @@ import logging
 
 from pydantic import BaseModel
 
-from .ollama_provider import _TTLLRUCache, _cache_key, _get_json, _post_json
+from .ollama_provider import _TTLLRUCache, _cache_key, _get_json, _pop_think, _post_json
 from .provider import Message, ModelInfo, ModelStatus
 from .retry import RETRY_BACKOFF_SECS, next_seed
 
@@ -185,6 +185,7 @@ class LlamaCppProvider:
         max_retries: int = 2,
     ) -> str:
         payload_messages = [_to_openai_message(m) for m in messages]
+        options, think = _pop_think(options)
         total_attempts = max(0, min(int(max_retries), 5)) + 1
         response_text = ""
 
@@ -205,6 +206,13 @@ class LlamaCppProvider:
                 # handling consistent rather than silently special-casing
                 # one of them.
                 payload["options"] = options
+            if think is not None:
+                # ADR-010: llama-server's two documented reasoning toggles —
+                # sourced from server docs, not live-verified (no instance
+                # available at implementation time).
+                payload["chat_template_kwargs"] = {"enable_thinking": think}
+                if not think:
+                    payload["reasoning_effort"] = "none"
             if attempt > 1:
                 # Unlike the options-passthrough above, this IS the OpenAI
                 # spec's actual top-level "seed" field, so it takes effect
@@ -218,6 +226,7 @@ class LlamaCppProvider:
                 model,
                 payload_messages,
                 options or {},
+                think,
                 payload.get("seed"),
             )
             cached, hit = _CHAT_RESPONSE_CACHE.get(cache_key)
