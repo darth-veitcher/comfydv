@@ -12,8 +12,11 @@ LLMProvider adapter-pattern boundary shared with future backends. Chat,
 model listing, and load/unload nodes are generic (ChatCompletion,
 LLMModelSelector, LLMLoadModel, LLMUnloadModel) and delegate to whichever
 provider is wired in — see MIGRATION_MAP below for the old Ollama-specific
-names these replace. Structured output is now pydantic-ai backed
-(comfydv._llm.chat), superseding ADR-006's hand-rolled tool-calling.
+names these replace. Structured output mechanism is provider-specific as of
+ADR-009: LlamaCppProvider is pydantic-ai backed (comfydv._llm.chat, native
+JSON-schema output mode); OllamaProvider hand-rolls native Ollama
+``/api/chat`` + ``"format"`` directly, since Ollama's OpenAI-compatible
+endpoint was found to silently discard per-request context-size options.
 """
 
 import json
@@ -390,9 +393,10 @@ def _history_preview(messages: list[dict]) -> str:
 # ---------------------------------------------------------------------------
 # Structured output schema helpers — stay here (pure/local, no network
 # dependency), shared by ChatCompletion.chat() and the live-preview route.
-# The actual structured-output *mechanism* (tool-calling, retry, validation)
-# moved to comfydv._llm.chat / pydantic-ai as of ADR-007, superseding
-# ADR-006's hand-rolled approach.
+# The actual structured-output *mechanism* (retry, validation, request
+# shape) lives per-provider — comfydv._llm.chat (pydantic-ai) for
+# LlamaCppProvider, native Ollama /api/chat + "format" for OllamaProvider
+# (ADR-009, superseding ADR-007's shared-pydantic-ai-for-both approach).
 
 _JSON_SCHEMA_TO_PY_TYPE: dict = {
     "string": str,
@@ -454,6 +458,13 @@ def _build_structured_model(schema: dict):
     exactly the "blank output" problem this feature exists to eliminate. An
     empty required string now fails validation and triggers a retry like any
     other malformed response, rather than silently passing through.
+
+    Non-required fields are typed ``py_type | None``, not bare ``py_type``:
+    a bare type with a ``None`` default only covers the field being *omitted*
+    entirely — pydantic still rejects an explicitly present ``null`` value
+    against a non-Optional type. Models routinely emit explicit ``null``
+    (e.g. `"duration_seconds": null`) for genuinely-absent optional fields
+    rather than omitting the key, so the type must accept that.
     """
     from pydantic import Field, create_model
 
@@ -462,7 +473,7 @@ def _build_structured_model(schema: dict):
     for name, prop in schema["properties"].items():
         py_type = _JSON_SCHEMA_TO_PY_TYPE.get(prop.get("type"), str)
         if name not in required:
-            fields[name] = (py_type, None)
+            fields[name] = (py_type | None, None)
         elif py_type is str:
             fields[name] = (py_type, Field(..., min_length=1))
         else:

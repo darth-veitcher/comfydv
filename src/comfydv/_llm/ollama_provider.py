@@ -16,7 +16,7 @@ import logging
 import threading
 import time
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from .provider import Message, ModelInfo, ModelStatus
 from .retry import RETRY_BACKOFF_SECS, next_seed
@@ -404,12 +404,29 @@ class OllamaProvider:
         timeout_secs: float = 300.0,
         max_retries: int = 2,
     ) -> BaseModel:
+        """Native ``/api/chat`` + ``"format"`` (grammar-constrained JSON
+        decoding), not the shared pydantic-ai ``chat.py`` helper.
+
+        ADR-009 originally routed this through the OpenAI-compatible
+        ``/v1/chat/completions`` endpoint via pydantic-ai's ``NativeOutput``.
+        Confirmed live that endpoint silently *reloads the model at its
+        default context size on every call*, discarding any prior
+        ``options.num_ctx`` — even when the same ``options`` are included in
+        that very request. Priming with a separate native call first
+        (the original fix) didn't help: the very next OpenAI-compat call
+        undid it immediately. The native ``/api/chat`` endpoint doesn't
+        have this problem — confirmed live it preserves an already-primed
+        context, and it supports structured output directly via
+        ``"format"``, so ``options`` and structured output now apply
+        atomically in one request. ``LlamaCppProvider`` is unaffected — it
+        keeps using the shared pydantic-ai path, since llama-server's
+        context is fixed at process launch, not a per-request concern.
+        """
         if any(m.images for m in messages):
             await _require_vision_capability(self.host, model, self.headers)
 
-        from .chat import chat_structured as _chat_structured_impl
-
-        payload_messages = [m.model_dump() for m in messages]
+        payload_messages = [m.model_dump(exclude_none=True) for m in messages]
+        json_schema = schema.model_json_schema()
         cache_key = _cache_key(
             "chat_structured",
             self.host,
@@ -417,21 +434,59 @@ class OllamaProvider:
             model,
             payload_messages,
             options or {},
-            schema.model_json_schema(),
+            json_schema,
         )
         cached, hit = _CHAT_RESPONSE_CACHE.get(cache_key)
         if hit:
             return schema.model_validate(cached)
 
-        result = await _chat_structured_impl(
-            base_url=f"{self.host}/v1",
-            model=model,
-            messages=messages,
-            schema=schema,
-            headers=self.headers,
-            options=options,
-            max_retries=max_retries,
-            timeout_secs=timeout_secs,
+        total_attempts = max(0, min(int(max_retries), 5)) + 1
+        last_error: Exception | None = None
+        last_invalid_text = ""
+
+        for attempt in range(1, total_attempts + 1):
+            attempt_options = dict(options) if options else {}
+            if attempt > 1:
+                attempt_options["seed"] = next_seed(options, attempt)
+
+            payload: dict = {
+                "model": model,
+                "messages": payload_messages,
+                "format": json_schema,
+                "stream": False,
+            }
+            if attempt_options:
+                payload["options"] = attempt_options
+
+            try:
+                result = await _post_json(
+                    f"{self.host}/api/chat",
+                    payload,
+                    timeout=timeout_secs,
+                    headers=self.headers,
+                )
+            except RuntimeError as exc:
+                last_error = exc
+                last_invalid_text = str(exc)
+                if attempt < total_attempts:
+                    await asyncio.sleep(RETRY_BACKOFF_SECS)
+                continue
+
+            content = result.get("message", {}).get("content", "")
+            try:
+                parsed = schema.model_validate_json(content)
+            except ValidationError as exc:
+                last_error = exc
+                last_invalid_text = content
+                if attempt < total_attempts:
+                    await asyncio.sleep(RETRY_BACKOFF_SECS)
+                continue
+
+            _CHAT_RESPONSE_CACHE.set(cache_key, parsed.model_dump())
+            return parsed
+
+        raise RuntimeError(
+            f"chat_structured: response failed validation against schema after "
+            f"{total_attempts} attempt(s) (model={model!r}). Last error: "
+            f"{last_error}. Last response (truncated): {last_invalid_text[:300]!r}"
         )
-        _CHAT_RESPONSE_CACHE.set(cache_key, result.model_dump())
-        return result

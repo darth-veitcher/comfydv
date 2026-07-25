@@ -15,6 +15,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 - **Breaking:** `OllamaChatCompletion` → `ChatCompletion`, `OllamaModelSelector` → `LLMModelSelector`, `OllamaLoadModel` → `LLMLoadModel`, `OllamaUnloadModel` → `LLMUnloadModel`, and the `OLLAMA_CLIENT` socket type → `LLM_CLIENT` — these nodes are now backend-generic. `OllamaClient` is unchanged by name but now outputs an `OllamaProvider` rather than a plain string; existing saved workflows using the old node/socket names need reconnecting (see `comfydv.ollama.MIGRATION_MAP` for the full old→new mapping).
+- `ChatCompletion`'s `structured_output=True` path now routes Ollama through Ollama's native `/api/chat` + `"format"` instead of the shared `pydantic-ai` OpenAI-compat path — Ollama's OpenAI-compatible endpoint was found to silently reload the model at its default context size on every call, discarding any `options` (e.g. `num_ctx`) override. `LlamaCppProvider` is unaffected and keeps the shared path, switched to `pydantic-ai`'s `NativeOutput` mode (ADR-009).
+
+### Fixed
+- `structured_output=True` requests could fail validation ("token limit exceeded before any response was generated") against "thinking"-capable models, which spent their whole token budget on chain-of-thought reasoning before ever producing the structured response (ADR-009).
+- A non-required structured-output schema field rejected an explicit `null` value from the model (only an *omitted* field was tolerated), even though models routinely emit explicit `null` for absent optional fields.
 
 ## [0.1.0] — 2026-06-01
 
