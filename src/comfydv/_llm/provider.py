@@ -93,6 +93,14 @@ class LLMProvider(Protocol):
         attempt's text rather than raising if every retry comes back blank —
         this method has never validated its output, unlike
         ``chat_structured()``.
+
+        ADR-010: ``options`` may carry a ``"think"`` key (bool) to disable a
+        "thinking"-capable model's chain-of-thought reasoning — every
+        implementation pops it out of ``options`` and translates it to its
+        own wire shape (Ollama: a top-level ``think`` field; llama.cpp:
+        ``chat_template_kwargs``/``reasoning_effort`` in the request body),
+        since neither backend recognizes a literal ``"think"`` key nested
+        inside a generic options object.
         """
         ...
 
@@ -111,5 +119,8 @@ class LLMProvider(Protocol):
         truncated snippet of the last invalid response) if every retry is
         exhausted — never returns a value with a missing/blank required
         field.
+
+        ADR-010: see ``chat()`` — same ``options["think"]`` convention,
+        same per-provider translation.
         """
         ...

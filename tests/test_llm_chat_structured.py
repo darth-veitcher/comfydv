@@ -223,6 +223,53 @@ def test_chat_structured_no_options_means_no_model_settings(monkeypatch):
     assert fake.calls[0][2] is None
 
 
+def test_chat_structured_disable_thinking_sets_chat_template_kwargs(monkeypatch):
+    """ADR-010: llama-server's two documented reasoning toggles, applied via
+    extra_body the same way options is — "think" must not leak into the
+    nested options.extra_body.options object llama-server's native sampling
+    params live in."""
+    fake = _FakeAgent([_Widget(name="a", count=1)])
+    monkeypatch.setattr(chat_mod, "_build_agent", lambda **kw: fake)
+
+    _run_async(
+        chat_mod.chat_structured(
+            base_url="http://localhost:8080/v1",
+            model="gemma-3-4b",
+            messages=_messages(),
+            schema=_Widget,
+            options={"temperature": 0.0, "think": False},
+        )
+    )
+
+    assert fake.calls[0][2] == {
+        "extra_body": {
+            "options": {"temperature": 0.0},
+            "chat_template_kwargs": {"enable_thinking": False},
+            "reasoning_effort": "none",
+        }
+    }
+
+
+def test_chat_structured_enable_thinking_skips_reasoning_effort(monkeypatch):
+    fake = _FakeAgent([_Widget(name="a", count=1)])
+    monkeypatch.setattr(chat_mod, "_build_agent", lambda **kw: fake)
+
+    _run_async(
+        chat_mod.chat_structured(
+            base_url="http://localhost:8080/v1",
+            model="gemma-3-4b",
+            messages=_messages(),
+            schema=_Widget,
+            options={"think": True},
+        )
+    )
+
+    extra_body = fake.calls[0][2]["extra_body"]
+    assert extra_body["chat_template_kwargs"] == {"enable_thinking": True}
+    assert "reasoning_effort" not in extra_body
+    assert "options" not in extra_body  # only "think" was in options
+
+
 def test_chat_structured_requires_last_message_user_role():
     with pytest.raises(ValueError, match="role='user'"):
         _run_async(

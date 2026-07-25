@@ -358,6 +358,33 @@ def test_chat_retry_seed_is_top_level_not_nested_in_options(monkeypatch):
     assert calls[2]["seed"] == 2
 
 
+def test_chat_disable_thinking_sets_chat_template_kwargs_and_reasoning_effort(
+    monkeypatch,
+):
+    """ADR-010: llama-server doesn't recognize a "think" key nested inside
+    "options" (that's an Ollama-native convention) — it needs its own two
+    documented request-body toggles instead, and "think" must not leak into
+    the nested options object llama-server actually does understand."""
+    captured = {}
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        captured.update(payload)
+        return {"choices": [{"message": {"content": "ok"}}]}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    _run_async(
+        LlamaCppProvider("http://localhost:8080").chat(
+            "gemma-3-4b",
+            [Message(role="user", content="hi")],
+            options={"temperature": 0.5, "think": False},
+        )
+    )
+
+    assert captured["chat_template_kwargs"] == {"enable_thinking": False}
+    assert captured["reasoning_effort"] == "none"
+    assert captured["options"] == {"temperature": 0.5}  # "think" popped out
+
+
 def test_chat_exhausted_retries_returns_blank_without_raising(monkeypatch):
     calls = {"n": 0}
 

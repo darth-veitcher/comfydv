@@ -191,6 +191,72 @@ def test_chat_uses_api_chat_and_returns_content(monkeypatch):
     assert result == "hello there"
 
 
+def test_pop_think_splits_key_out_without_mutating_caller_dict():
+    """ADR-010: _pop_think must not mutate the caller's own options dict —
+    it's shared across retry attempts and possibly other calls."""
+    original = {"num_ctx": 4096, "think": False}
+    remaining, think = provider_mod._pop_think(original)
+
+    assert think is False
+    assert remaining == {"num_ctx": 4096}
+    assert original == {"num_ctx": 4096, "think": False}  # untouched
+
+
+def test_pop_think_absent_key_returns_none():
+    remaining, think = provider_mod._pop_think({"num_ctx": 4096})
+    assert think is None
+    assert remaining == {"num_ctx": 4096}
+
+
+def test_pop_think_only_key_present_returns_none_options():
+    remaining, think = provider_mod._pop_think({"think": True})
+    assert think is True
+    assert remaining is None
+
+
+def test_pop_think_none_input_returns_none_options_and_none_think():
+    assert provider_mod._pop_think(None) == (None, None)
+
+
+def test_chat_disable_thinking_sets_top_level_field_not_nested(monkeypatch):
+    """ADR-010: 'think' must be a top-level payload field, not nested inside
+    'options' — confirmed live that Ollama silently ignores it there."""
+    captured = {}
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        captured.update(payload)
+        return {"message": {"content": "pong"}}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    _run_async(
+        OllamaProvider("http://localhost:11434").chat(
+            "llama3",
+            [Message(role="user", content="hi")],
+            options={"num_ctx": 4096, "think": False},
+        )
+    )
+
+    assert captured["think"] is False
+    assert captured["options"] == {"num_ctx": 4096}  # "think" popped out
+
+
+def test_chat_no_think_key_omits_top_level_field(monkeypatch):
+    captured = {}
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        captured.update(payload)
+        return {"message": {"content": "pong"}}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    _run_async(
+        OllamaProvider("http://localhost:11434").chat(
+            "llama3", [Message(role="user", content="hi")]
+        )
+    )
+
+    assert "think" not in captured
+
+
 def test_chat_second_identical_call_is_cached(monkeypatch):
     calls = {"n": 0}
 
@@ -621,6 +687,32 @@ def test_chat_structured_caches_after_successful_validation(monkeypatch):
 
     assert r1 == r2 == Widget(name="cached")
     assert calls["n"] == 1
+
+
+def test_chat_structured_disable_thinking_sets_top_level_field(monkeypatch):
+    from pydantic import BaseModel
+
+    class Widget(BaseModel):
+        name: str
+
+    captured = {}
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        captured.update(payload)
+        return {"message": {"content": '{"name": "x"}'}}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    _run_async(
+        OllamaProvider("http://localhost:11434").chat_structured(
+            "llama3",
+            [Message(role="user", content="hi")],
+            Widget,
+            options={"num_ctx": 4096, "think": False},
+        )
+    )
+
+    assert captured["think"] is False
+    assert captured["options"] == {"num_ctx": 4096}
 
 
 # ---------------------------------------------------------------------------

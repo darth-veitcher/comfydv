@@ -138,6 +138,20 @@ async def chat_structured(
     lossily remapped onto pydantic-ai's own standardized ``ModelSettings``
     fields.
 
+    ADR-010: ``options`` may also carry a ``"think"`` key (bool), popped out
+    here rather than forwarded inside the nested ``options`` object —
+    llama-server's OpenAI-compatible endpoint doesn't recognize a literal
+    ``"think"`` key there. Translated to its own two documented
+    request-body toggles instead: ``chat_template_kwargs:
+    {"enable_thinking": ...}`` (Qwen3-style models) and, when disabling,
+    ``reasoning_effort: "none"`` (the more model-agnostic OpenAI convention
+    llama-server also honors) — both via ``extra_body`` the same way
+    ``options`` is. This provider only serves ``LlamaCppProvider`` — see
+    ``OllamaProvider``'s own hand-rolled ``chat_structured`` for why Ollama
+    needed a different mechanism entirely. Sourced from llama.cpp's server
+    docs, not live-verified against a running llama-server (no instance
+    available at implementation time) — verify against your own deployment.
+
     Retries up to ``max_retries`` times (clamped 0-5) on validation failure
     before raising ``RuntimeError``. Never returns a value that failed
     validation against ``schema``.
@@ -156,8 +170,20 @@ async def chat_structured(
     )
     history = _history_to_messages(messages)
     prompt = _user_prompt_content(messages[-1])
+    think = None
+    if options and "think" in options:
+        options = dict(options)
+        think = options.pop("think")
+        options = options or None
+    extra_body: dict = {}
+    if options:
+        extra_body["options"] = options
+    if think is not None:
+        extra_body["chat_template_kwargs"] = {"enable_thinking": think}
+        if not think:
+            extra_body["reasoning_effort"] = "none"
     model_settings: ModelSettings | None = (
-        {"extra_body": {"options": options}} if options else None
+        {"extra_body": extra_body} if extra_body else None
     )
 
     total_attempts = max(0, min(int(max_retries), 5)) + 1
