@@ -304,6 +304,18 @@ class LLMModelSelector:
             }
         }
 
+    @classmethod
+    def VALIDATE_INPUTS(cls, model):
+        """Bypass the frozen-at-startup combo list (see _load_default_models).
+
+        The JS Refresh button keeps the widget's dropdown live, but
+        ``_DEFAULT_MODELS`` is only ever populated once, at server start-up.
+        Without this, models pulled into Ollama afterward validate in the
+        UI but fail prompt validation with "value ... is not available"
+        until ComfyUI is restarted.
+        """
+        return True
+
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("model_name",)
     FUNCTION = "select_model"
@@ -327,6 +339,11 @@ class LLMLoadModel:
                 "model": (_DEFAULT_MODELS, {}),
             }
         }
+
+    @classmethod
+    def VALIDATE_INPUTS(cls, model):
+        """See LLMModelSelector.VALIDATE_INPUTS for why this bypass exists."""
+        return True
 
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("model_name",)
