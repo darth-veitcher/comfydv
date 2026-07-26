@@ -37,23 +37,28 @@ round-trips.
   chat template is degenerate enough that it returns valid-shaped but
   garbled content regardless of structured-output mechanism (see
   [ADR-009](../project-management/ADRs/ADR-009-native-structured-output-mode.md)).
-- **If your model has "thinking" capability** (most current instruct
-  models do), give it real headroom: nodes `16`/`17` set
-  `max_tokens=8192`/`num_ctx=32768` for exactly this reason — a thinking
-  model's chain-of-thought reasoning consumes real tokens before it ever
-  emits the structured JSON, and Ollama's default context (4096, with
+- **Thinking is off by default.** Node `18` (`OllamaOptionDisableThinking`,
+  `disable_thinking=True`) sits at the end of the options chain every
+  `ChatCompletion` node reads from. Without it, a thinking-capable model
+  routinely burns its whole `max_tokens` budget on chain-of-thought and
+  never emits the closing JSON — `chat_structured` then fails validation
+  against an empty string. Flip node `18`'s `disable_thinking` to `False`
+  if you deliberately want a model to reason before answering; if you do,
+  give it real headroom: nodes `16`/`17` set `max_tokens=8192`/`num_ctx=32768`
+  for exactly that case, and Ollama's default context (4096, with
   `--context-shift` silently evicting old context rather than stopping)
-  is nowhere near enough for these agents' long system prompts. Node `17`'s
-  `num_ctx` reaches Ollama correctly because `OllamaProvider.chat_structured()`
-  now calls Ollama's *native* `/api/chat` + `"format"` directly (ADR-009) —
-  an earlier version of this fix tried priming context via a separate call
-  before the real request and that didn't work, because Ollama's
-  OpenAI-compatible endpoint silently reloads the model at its default
-  context on every call, undoing any priming; the native endpoint doesn't
-  have that problem and applies `options` and structured output atomically
-  in one request. Every `ChatCompletion` node's `timeout_secs=600` for the
-  same headroom reason; lower it if your hardware is faster than the
-  machine this was tuned against.
+  is nowhere near enough for these agents' long system prompts on top of
+  reasoning tokens. Node `17`'s `num_ctx` reaches Ollama correctly because
+  `OllamaProvider.chat_structured()` calls Ollama's *native* `/api/chat` +
+  `"format"` directly (ADR-009) — an earlier version of this fix tried
+  priming context via a separate call before the real request and that
+  didn't work, because Ollama's OpenAI-compatible endpoint silently
+  reloads the model at its default context on every call, undoing any
+  priming; the native endpoint doesn't have that problem and applies
+  `options` and structured output atomically in one request. Every
+  `ChatCompletion` node's `timeout_secs=600` for the same headroom reason;
+  lower it if your hardware is faster than the machine this was tuned
+  against.
 - To use `LlamaCppClient` instead of `OllamaClient`, swap node `1`'s
   `class_type` and `host` — every `ChatCompletion` node keeps working
   unchanged, since both emit the same `LLM_CLIENT` type (ADR-007). Note
