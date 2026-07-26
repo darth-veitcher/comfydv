@@ -75,7 +75,7 @@
       "structured_output": true,
       "output_schema": "{\"type\": \"object\", \"properties\": {\"contract_version\": {\"type\": \"string\"}, \"original_user_intent\": {\"type\": \"string\"}, \"duration_seconds\": {\"type\": \"number\"}, \"subject_references\": {\"type\": \"array\"}, \"required_changes\": {\"type\": \"array\"}, \"required_emotions\": {\"type\": \"array\"}, \"required_camera\": {\"type\": \"object\"}, \"required_audio\": {\"type\": \"object\"}, \"introduced_entities\": {\"type\": \"array\"}, \"preservation_requirements\": {\"type\": \"array\"}, \"prohibitions\": {\"type\": \"array\"}, \"allow_partial_completion\": {\"type\": \"boolean\"}, \"ambiguities\": {\"type\": \"array\"}}, \"required\": [\"contract_version\", \"original_user_intent\", \"subject_references\", \"required_changes\", \"required_emotions\", \"required_camera\", \"required_audio\", \"introduced_entities\", \"preservation_requirements\", \"prohibitions\", \"allow_partial_completion\", \"ambiguities\"]}",
       "options": [
-        "17",
+        "18",
         0
       ],
       "timeout_secs": 1200,
@@ -117,7 +117,7 @@
       "structured_output": true,
       "output_schema": "{\"type\": \"object\", \"properties\": {\"manifest_version\": {\"type\": \"string\"}, \"audit_status\": {\"type\": \"string\"}, \"scene_summary\": {\"type\": \"object\"}, \"observed_entities\": {\"type\": \"array\"}, \"observed_relations\": {\"type\": \"array\"}, \"uncertain_elements\": {\"type\": \"array\"}, \"unverified_regions\": {\"type\": \"array\"}, \"continuity_locks\": {\"type\": \"object\"}, \"forbidden_unless_user_authorised\": {\"type\": \"array\"}}, \"required\": [\"manifest_version\", \"audit_status\", \"scene_summary\", \"observed_entities\", \"observed_relations\", \"uncertain_elements\", \"unverified_regions\", \"continuity_locks\", \"forbidden_unless_user_authorised\"]}",
       "options": [
-        "17",
+        "18",
         0
       ],
       "timeout_secs": 1200,
@@ -162,7 +162,7 @@
       "structured_output": true,
       "output_schema": "{\"type\": \"object\", \"properties\": {\"verification\": {\"type\": \"object\"}, \"audited_manifest\": {\"type\": \"object\"}}, \"required\": [\"verification\", \"audited_manifest\"]}",
       "options": [
-        "17",
+        "18",
         0
       ],
       "timeout_secs": 1200,
@@ -221,7 +221,7 @@
       "structured_output": true,
       "output_schema": "{\"type\": \"object\", \"properties\": {\"status\": {\"type\": \"string\"}, \"prompt\": {\"type\": \"string\"}, \"entity_resolution\": {\"type\": \"array\"}, \"intent_coverage\": {\"type\": \"array\"}, \"bridge_movements\": {\"type\": \"array\"}, \"referenced_entities\": {\"type\": \"array\"}, \"introduced_entities\": {\"type\": \"array\"}, \"preserved_entities\": {\"type\": \"array\"}, \"camera_delta\": {\"type\": \"object\"}, \"extra_changes\": {\"type\": \"array\"}, \"manifest_challenge\": {\"type\": \"object\"}, \"unsatisfiable_reason\": {\"type\": \"string\"}}, \"required\": [\"status\", \"entity_resolution\", \"intent_coverage\", \"bridge_movements\", \"referenced_entities\", \"introduced_entities\", \"preserved_entities\", \"camera_delta\", \"extra_changes\"]}",
       "options": [
-        "17",
+        "18",
         0
       ],
       "timeout_secs": 1200,
@@ -278,7 +278,7 @@
       "structured_output": true,
       "output_schema": "{\"type\": \"object\", \"properties\": {\"decision\": {\"type\": \"string\"}, \"confidence\": {\"type\": \"number\"}, \"intent_audit\": {\"type\": \"array\"}, \"entity_audit\": {\"type\": \"array\"}, \"violations\": {\"type\": \"array\"}, \"missing_requirements\": {\"type\": \"array\"}, \"preserve_clauses\": {\"type\": \"array\"}, \"refinement_instruction\": {\"type\": \"string\"}}, \"required\": [\"decision\", \"confidence\", \"intent_audit\", \"entity_audit\", \"violations\", \"missing_requirements\", \"preserve_clauses\"]}",
       "options": [
-        "17",
+        "18",
         0
       ],
       "timeout_secs": 1200,
@@ -335,7 +335,7 @@
       "structured_output": true,
       "output_schema": "{\"type\": \"object\", \"properties\": {\"status\": {\"type\": \"string\"}, \"prompt\": {\"type\": \"string\"}, \"applied_fixes\": {\"type\": \"array\"}, \"intent_coverage\": {\"type\": \"array\"}, \"remaining_known_issues\": {\"type\": \"array\"}, \"unresolvable_reason\": {\"type\": \"string\"}}, \"required\": [\"status\", \"applied_fixes\", \"intent_coverage\", \"remaining_known_issues\"]}",
       "options": [
-        "17",
+        "18",
         0
       ],
       "timeout_secs": 1200,
@@ -362,6 +362,19 @@
       "refined_prompt": [
         "14",
         4
+      ]
+    }
+  },
+  "18": {
+    "class_type": "OllamaOptionDisableThinking",
+    "_meta": {
+      "title": "Disable Thinking (default \u2014 avoids empty/truncated structured output on thinking models)"
+    },
+    "inputs": {
+      "disable_thinking": true,
+      "options": [
+        "17",
+        0
       ]
     }
   }
