@@ -558,3 +558,87 @@ def test_chat_text_only_content_stays_plain_string(monkeypatch):
     )
 
     assert captured["payload"]["messages"] == [{"role": "user", "content": "hi"}]
+
+
+# ---------------------------------------------------------------------------
+# refusal-retry — parity with test_ollama_provider.py's coverage (ADR: this
+# is a model-behavior concern, not a backend one — both providers wire the
+# same comfydv._llm.retry.is_refusal() into their own retry loop).
+# ---------------------------------------------------------------------------
+
+
+def test_chat_retries_on_lexical_refusal_and_returns_clean_second_attempt(
+    monkeypatch,
+):
+    calls = []
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        calls.append(payload)
+        if len(calls) == 1:
+            return {"choices": [{"message": {"content": "I cannot generate that."}}]}
+        return {"choices": [{"message": {"content": "a real, on-topic answer"}}]}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    monkeypatch.setattr(provider_mod.asyncio, "sleep", _fake_sleep)
+
+    result = _run_async(
+        LlamaCppProvider("http://localhost:8080").chat(
+            "gemma-3-4b",
+            [Message(role="user", content="hi")],
+            options={"refusal_retry": {"enabled": True, "embedding_model": ""}},
+        )
+    )
+
+    assert result == "a real, on-topic answer"
+    assert len(calls) == 2
+
+
+def test_chat_refusal_retry_disabled_returns_refusal_text_unchanged(monkeypatch):
+    calls = []
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        calls.append(payload)
+        return {"choices": [{"message": {"content": "I cannot generate that."}}]}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+
+    result = _run_async(
+        LlamaCppProvider("http://localhost:8080").chat(
+            "gemma-3-4b", [Message(role="user", content="hi")]
+        )
+    )
+
+    assert result == "I cannot generate that."
+    assert len(calls) == 1
+
+
+def test_embed_returns_vector_from_v1_embeddings(monkeypatch):
+    captured = {}
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        captured["url"] = url
+        captured["payload"] = payload
+        return {"data": [{"embedding": [0.4, 0.5, 0.6], "index": 0}]}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+
+    result = _run_async(
+        LlamaCppProvider("http://localhost:8080").embed("nomic-embed-text", "hello")
+    )
+
+    assert result == [0.4, 0.5, 0.6]
+    assert captured["url"] == "http://localhost:8080/v1/embeddings"
+    assert captured["payload"] == {"model": "nomic-embed-text", "input": "hello"}
+
+
+def test_embed_returns_none_when_no_embedding_model_configured(monkeypatch):
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        raise RuntimeError("llama-server returned HTTP 404 for /v1/embeddings")
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+
+    result = _run_async(
+        LlamaCppProvider("http://localhost:8080").embed("nomic-embed-text", "hello")
+    )
+
+    assert result is None

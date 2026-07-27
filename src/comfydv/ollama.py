@@ -914,6 +914,87 @@ class OllamaOptionDisableThinking:
         return (_merge_option(options, "think", not disable_thinking),)
 
 
+class OllamaOptionRefusalRetry:
+    """Retry with a bumped seed when a response looks like a soft
+    refusal/deflection rather than an actual error (see
+    ``_llm/retry.py``'s ``is_refusal()``).
+
+    Observed with an abliterated Qwen variant: it sometimes answers a
+    request it judges "politically sensitive" with hedging refusal
+    language instead of erroring or returning blank — neither of which the
+    existing blank-response or schema-validation retry triggers catch, so
+    without this the response just passes through as-is.
+
+    Rides the same composable ``OLLAMA_OPTIONS`` chain as every other
+    ``OllamaOption*`` node, but like ``OllamaOptionDisableThinking``, the
+    ``"refusal_retry"`` key this node emits is a comfydv-level convention,
+    not an Ollama-native sampling param: every ``LLMProvider``
+    implementation pops it out of ``options`` and drives its own retry
+    loop with it (ADR: refusal detection is a model-behavior concern, not
+    a backend one — see ``LLMProvider.embed()`` in ``_llm/provider.py``).
+    Works for both backends from the same node.
+    """
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "enabled": ("BOOLEAN", {"default": True}),
+                "embedding_model": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "tooltip": (
+                            "Name of a separate embedding-capable model "
+                            '(e.g. "nomic-embed-text") — NOT the chat '
+                            "model itself; most chat models can't produce "
+                            "usable embeddings. Leave blank to skip the "
+                            "embedding-similarity check and detect only "
+                            "blatant, literal refusal phrases (still "
+                            "useful, cheaper, catches less)."
+                        ),
+                    },
+                ),
+                "threshold": (
+                    "FLOAT",
+                    {
+                        "default": 0.82,
+                        "min": 0.0,
+                        "max": 1.0,
+                        "step": 0.01,
+                        "tooltip": (
+                            "Cosine-similarity threshold against canonical "
+                            "refusal exemplars, above which an ambiguous "
+                            "(short/hedge-y) response is treated as a "
+                            "refusal. Only consulted when embedding_model "
+                            "is set and the cheap lexical pass didn't "
+                            "already catch it."
+                        ),
+                    },
+                ),
+            },
+            "optional": {"options": ("OLLAMA_OPTIONS",)},
+        }
+
+    RETURN_TYPES = ("OLLAMA_OPTIONS",)
+    RETURN_NAMES = ("options",)
+    FUNCTION = "set_refusal_retry"
+    CATEGORY = "dv/ollama/options"
+
+    def set_refusal_retry(self, enabled, embedding_model, threshold, options=None):
+        return (
+            _merge_option(
+                options,
+                "refusal_retry",
+                {
+                    "enabled": enabled,
+                    "embedding_model": embedding_model.strip(),
+                    "threshold": threshold,
+                },
+            ),
+        )
+
+
 class OllamaOptionExtraBody:
     @classmethod
     def INPUT_TYPES(s):

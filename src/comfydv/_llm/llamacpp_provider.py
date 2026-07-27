@@ -18,9 +18,16 @@ import logging
 
 from pydantic import BaseModel
 
-from .ollama_provider import _TTLLRUCache, _cache_key, _get_json, _pop_think, _post_json
+from .ollama_provider import (
+    _TTLLRUCache,
+    _cache_key,
+    _get_json,
+    _pop_refusal_retry,
+    _pop_think,
+    _post_json,
+)
 from .provider import Message, ModelInfo, ModelStatus
-from .retry import RETRY_BACKOFF_SECS, next_seed
+from .retry import RETRY_BACKOFF_SECS, is_refusal, next_seed
 
 logger = logging.getLogger(__name__)
 
@@ -186,6 +193,15 @@ class LlamaCppProvider:
     ) -> str:
         payload_messages = [_to_openai_message(m) for m in messages]
         options, think = _pop_think(options)
+        options, refusal_cfg = _pop_refusal_retry(options)
+        embed_fn = None
+        if (
+            refusal_cfg
+            and refusal_cfg.get("enabled")
+            and refusal_cfg.get("embedding_model")
+        ):
+            embedding_model = refusal_cfg["embedding_model"]
+            embed_fn = lambda t: self.embed(embedding_model, t)  # noqa: E731
         total_attempts = max(0, min(int(max_retries), 5)) + 1
         response_text = ""
 
@@ -246,8 +262,17 @@ class LlamaCppProvider:
                 else ""
             )
             if response_text.strip():
-                _CHAT_RESPONSE_CACHE.set(cache_key, response_text)
-                return response_text
+                refused = False
+                if refusal_cfg and refusal_cfg.get("enabled"):
+                    refused = await is_refusal(
+                        response_text,
+                        embed_fn=embed_fn,
+                        embed_cache_key=refusal_cfg.get("embedding_model", ""),
+                        threshold=refusal_cfg.get("threshold", 0.82),
+                    )
+                if not refused:
+                    _CHAT_RESPONSE_CACHE.set(cache_key, response_text)
+                    return response_text
 
             if attempt < total_attempts:
                 await asyncio.sleep(RETRY_BACKOFF_SECS)
@@ -282,6 +307,16 @@ class LlamaCppProvider:
         if hit:
             return schema.model_validate(cached)
 
+        embed_fn = None
+        refusal_cfg = (options or {}).get("refusal_retry")
+        if (
+            refusal_cfg
+            and refusal_cfg.get("enabled")
+            and refusal_cfg.get("embedding_model")
+        ):
+            embedding_model = refusal_cfg["embedding_model"]
+            embed_fn = lambda t: self.embed(embedding_model, t)  # noqa: E731
+
         result = await _chat_structured_impl(
             base_url=f"{self.host}/v1",
             model=model,
@@ -291,6 +326,38 @@ class LlamaCppProvider:
             options=options,
             max_retries=max_retries,
             timeout_secs=timeout_secs,
+            embed_fn=embed_fn,
         )
         _CHAT_RESPONSE_CACHE.set(cache_key, result.model_dump())
         return result
+
+    async def embed(self, model: str, text: str) -> list[float] | None:
+        """POST {host}/v1/embeddings — llama-server's OpenAI-compatible
+        embeddings endpoint.
+
+        Requires an embedding-capable model to be loaded in the router
+        (typically a *different* model from whatever's answering chat
+        requests) — not live-verified against a running llama-server (no
+        instance available at implementation time), mirroring this
+        provider's other sourced-from-docs-not-verified caveats. Returns
+        ``None`` rather than raising on any failure, same contract as
+        ``OllamaProvider.embed()``.
+        """
+        if not model.strip() or not text.strip():
+            return None
+        try:
+            result = await _post_json(
+                f"{self.host}/v1/embeddings",
+                {"model": model, "input": text},
+                timeout=30.0,
+                headers=self.headers,
+            )
+        except Exception:
+            return None
+        data = result.get("data")
+        if not isinstance(data, list) or not data:
+            return None
+        vec = data[0].get("embedding")
+        if not isinstance(vec, list) or not vec:
+            return None
+        return vec

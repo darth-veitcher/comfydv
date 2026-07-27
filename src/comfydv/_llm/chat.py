@@ -46,7 +46,7 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
 
 from .provider import Message
-from .retry import RETRY_BACKOFF_SECS, next_seed
+from .retry import RETRY_BACKOFF_SECS, EmbedFn, is_refusal, next_seed
 
 _STRUCTURED_OUTPUT_FAILURE_EXCEPTIONS = (
     UnexpectedModelBehavior,
@@ -126,6 +126,7 @@ async def chat_structured(
     options: dict | None = None,
     max_retries: int = 2,
     timeout_secs: float = 300.0,
+    embed_fn: EmbedFn | None = None,
 ) -> BaseModel:
     """Call ``model`` at ``base_url`` (an OpenAI-compatible ``/v1`` root) and
     return a validated instance of ``schema``.
@@ -155,6 +156,15 @@ async def chat_structured(
     Retries up to ``max_retries`` times (clamped 0-5) on validation failure
     before raising ``RuntimeError``. Never returns a value that failed
     validation against ``schema``.
+
+    ``options`` may also carry a ``"refusal_retry"`` config dict (same
+    comfydv-level convention as ``"think"``, emitted by
+    ``OllamaOptionRefusalRetry``) — a detected refusal/deflection (see
+    ``_llm/retry.py``) is treated exactly like a validation failure: retried
+    with a bumped seed rather than returned to the caller. ``embed_fn`` is
+    ``LlamaCppProvider``'s own ``embed()``, bound to whatever embedding
+    model the config names — passed in rather than looked up here since
+    this module has no provider instance of its own to call.
     """
     if not messages or messages[-1].role != "user":
         raise ValueError(
@@ -174,6 +184,11 @@ async def chat_structured(
     if options and "think" in options:
         options = dict(options)
         think = options.pop("think")
+        options = options or None
+    refusal_cfg = None
+    if options and "refusal_retry" in options:
+        options = dict(options)
+        refusal_cfg = options.pop("refusal_retry")
         options = options or None
     extra_body: dict = {}
     if options:
@@ -233,7 +248,26 @@ async def chat_structured(
             # not a static type parameter), so the checker can't narrow
             # result.output past Agent's default `str` — cast to the
             # function's declared return type, which schema is a subtype of.
-            return cast(BaseModel, result.output)
+            output = cast(BaseModel, result.output)
+            if refusal_cfg and refusal_cfg.get("enabled"):
+                # Re-serialized, not the original wire text — pydantic-ai's
+                # NativeOutput doesn't expose that separately, and the
+                # regex/embedding check works the same either way (same
+                # textual content, just re-encoded).
+                content = output.model_dump_json()
+                refused = await is_refusal(
+                    content,
+                    embed_fn=embed_fn,
+                    embed_cache_key=refusal_cfg.get("embedding_model", ""),
+                    threshold=refusal_cfg.get("threshold", 0.82),
+                )
+                if refused:
+                    last_error = RuntimeError("refusal/deflection detected")
+                    last_invalid_text = content
+                    if attempt < total_attempts:
+                        await asyncio.sleep(RETRY_BACKOFF_SECS)
+                    continue
+            return output
         except _STRUCTURED_OUTPUT_FAILURE_EXCEPTIONS as exc:
             last_error = exc
             last_invalid_text = str(exc)

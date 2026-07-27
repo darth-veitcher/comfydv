@@ -381,6 +381,112 @@ def test_chat_structured_retry_sleeps_between_attempts(monkeypatch):
     assert sleep_calls == [chat_mod.RETRY_BACKOFF_SECS]
 
 
+# ---------------------------------------------------------------------------
+# refusal-retry — parity with test_ollama_provider.py's coverage (this
+# module serves LlamaCppProvider.chat_structured() — see
+# comfydv._llm.retry.is_refusal and OllamaOptionRefusalRetry).
+# ---------------------------------------------------------------------------
+
+
+def test_chat_structured_retries_on_refusal_and_returns_clean_second_attempt(
+    monkeypatch,
+):
+    refused = _Widget(name="I cannot generate that content.", count=1)
+    clean = _Widget(name="clean", count=2)
+    fake = _FakeAgent([refused, clean])
+    monkeypatch.setattr(chat_mod, "_build_agent", lambda **kw: fake)
+
+    result = _run_async(
+        chat_mod.chat_structured(
+            base_url="http://localhost:11434/v1",
+            model="llama3",
+            messages=_messages(),
+            schema=_Widget,
+            options={"refusal_retry": {"enabled": True, "embedding_model": ""}},
+            max_retries=2,
+        )
+    )
+
+    assert result == clean
+    assert len(fake.calls) == 2
+
+
+def test_chat_structured_refusal_retry_disabled_returns_refusal_unchanged(
+    monkeypatch,
+):
+    refused = _Widget(name="I cannot generate that content.", count=1)
+    fake = _FakeAgent([refused])
+    monkeypatch.setattr(chat_mod, "_build_agent", lambda **kw: fake)
+
+    result = _run_async(
+        chat_mod.chat_structured(
+            base_url="http://localhost:11434/v1",
+            model="llama3",
+            messages=_messages(),
+            schema=_Widget,
+        )
+    )
+
+    assert result == refused
+    assert len(fake.calls) == 1
+
+
+def test_chat_structured_refusal_retry_exhausted_raises(monkeypatch):
+    refused = _Widget(name="I cannot help with this.", count=1)
+    fake = _FakeAgent([refused, refused])
+    monkeypatch.setattr(chat_mod, "_build_agent", lambda **kw: fake)
+
+    with pytest.raises(RuntimeError, match="failed validation"):
+        _run_async(
+            chat_mod.chat_structured(
+                base_url="http://localhost:11434/v1",
+                model="llama3",
+                messages=_messages(),
+                schema=_Widget,
+                options={"refusal_retry": {"enabled": True, "embedding_model": ""}},
+                max_retries=1,
+            )
+        )
+
+
+def test_chat_structured_refusal_retry_uses_embed_fn(monkeypatch):
+    from comfydv._llm.retry import REFUSAL_EXEMPLARS
+
+    refused = _Widget(name="not today, sorry", count=1)
+    clean = _Widget(name="a clean value", count=2)
+    fake = _FakeAgent([refused, clean])
+    monkeypatch.setattr(chat_mod, "_build_agent", lambda **kw: fake)
+
+    embed_calls = []
+
+    async def fake_embed(text):
+        embed_calls.append(text)
+        if "not today" in text or text in REFUSAL_EXEMPLARS:
+            return [1.0, 0.0]
+        return [0.0, 1.0]
+
+    result = _run_async(
+        chat_mod.chat_structured(
+            base_url="http://localhost:11434/v1",
+            model="llama3",
+            messages=_messages(),
+            schema=_Widget,
+            options={
+                "refusal_retry": {
+                    "enabled": True,
+                    "embedding_model": "nomic-embed-text",
+                    "threshold": 0.5,
+                }
+            },
+            max_retries=2,
+            embed_fn=fake_embed,
+        )
+    )
+
+    assert result == clean
+    assert embed_calls  # embedding path was actually exercised
+
+
 def test_history_to_messages_preserves_order_and_roles():
     from pydantic_ai.messages import ModelRequest, ModelResponse
 
