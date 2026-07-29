@@ -8,6 +8,7 @@ project-management/ADRs/ADR-007-llm-provider-adapter-pattern.md and
 specs/007-llm-provider-abstraction/contracts/llm_provider_protocol.md.
 """
 
+from collections.abc import Callable
 from enum import Enum
 from typing import Literal, Protocol
 
@@ -84,6 +85,7 @@ class LLMProvider(Protocol):
         timeout_secs: float = 300.0,
         max_retries: int = 2,
         attempt_info: dict | None = None,
+        on_status: Callable[[str], None] | None = None,
     ) -> str:
         """Free-text chat response.
 
@@ -110,6 +112,12 @@ class LLMProvider(Protocol):
         count) via ``_llm/retry.py``'s ``record_attempt_info`` — an optional
         out-param, not a return-type change, so existing callers that don't
         pass it see no behavior change.
+
+        ``on_status``, if given, is called synchronously at each retry
+        boundary with a one-line human-readable status (see
+        ``_llm/retry.py``'s ``format_retry_status``/``format_recovered_status``)
+        — a live counterpart to ``attempt_info``, which only reports the
+        final outcome after the call returns.
         """
         ...
 
@@ -122,6 +130,7 @@ class LLMProvider(Protocol):
         timeout_secs: float = 300.0,
         max_retries: int = 2,
         attempt_info: dict | None = None,
+        on_status: Callable[[str], None] | None = None,
     ) -> BaseModel:
         """Schema-validated chat response.
 
@@ -132,7 +141,7 @@ class LLMProvider(Protocol):
 
         ADR-010: see ``chat()`` — same ``options["think"]`` convention,
         same per-provider translation, same escalating per-attempt timeout,
-        and the same ``attempt_info`` out-param convention.
+        and the same ``attempt_info``/``on_status`` conventions.
         """
         ...
 

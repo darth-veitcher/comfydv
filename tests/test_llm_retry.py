@@ -15,6 +15,8 @@ from comfydv._llm.ollama_provider import _run_async
 from comfydv._llm.retry import (
     REFUSAL_EXEMPLARS,
     cosine_similarity,
+    format_recovered_status,
+    format_retry_status,
     is_ambiguous,
     is_lexical_refusal,
     is_refusal,
@@ -79,6 +81,20 @@ class TestRecordAttemptInfo:
             "timeout_secs": 600.0,
             "refusals": 1,
         }
+
+
+class TestFormatStatus:
+    def test_retry_status_includes_reason_attempt_seed_and_timeout(self):
+        msg = format_retry_status("Blank response", 1, 3, seed=1, timeout_secs=200.0)
+        assert "Blank response" in msg
+        assert "attempt 1/3" in msg
+        assert "seed=1" in msg
+        assert "timeout=200s" in msg
+
+    def test_recovered_status_includes_attempt_and_seed(self):
+        msg = format_recovered_status(2, 3, seed=1)
+        assert "attempt 2/3" in msg
+        assert "seed=1" in msg
 
 
 # ---------------------------------------------------------------------------

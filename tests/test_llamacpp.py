@@ -47,6 +47,7 @@ class _FakeProvider:
         timeout_secs=300.0,
         max_retries=2,
         attempt_info=None,
+        on_status=None,
     ):
         self.calls.append(("chat", model))
         if attempt_info is not None:

@@ -453,6 +453,33 @@ def test_chat_attempt_info_populated_on_success(monkeypatch):
     }
 
 
+def test_chat_on_status_called_on_retry_and_recovery(monkeypatch):
+    calls = []
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        calls.append(payload)
+        if len(calls) == 1:
+            return {"choices": [{"message": {"content": "I cannot generate that."}}]}
+        return {"choices": [{"message": {"content": "a real, on-topic answer"}}]}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    monkeypatch.setattr(provider_mod.asyncio, "sleep", _fake_sleep)
+
+    statuses = []
+    _run_async(
+        LlamaCppProvider("http://localhost:8080").chat(
+            "gemma-3-4b",
+            [Message(role="user", content="hi")],
+            options={"refusal_retry": {"enabled": True, "embedding_model": ""}},
+            on_status=statuses.append,
+        )
+    )
+
+    assert len(statuses) == 2
+    assert "Refusal/deflection detected" in statuses[0]
+    assert "Recovered" in statuses[1]
+
+
 # ---------------------------------------------------------------------------
 # chat_structured — zero new logic, delegates to the shared helper unchanged
 # ---------------------------------------------------------------------------
@@ -536,6 +563,35 @@ def test_chat_structured_forwards_attempt_info(monkeypatch):
     # Same object passed straight through — the shared helper populates it,
     # this provider doesn't need to know its shape.
     assert captured["attempt_info"] is attempt_info
+
+
+def test_chat_structured_forwards_on_status(monkeypatch):
+    from pydantic import BaseModel
+
+    class Widget(BaseModel):
+        name: str
+
+    captured = {}
+
+    async def fake_chat_structured(**kwargs):
+        captured.update(kwargs)
+        return Widget(name="x")
+
+    monkeypatch.setattr("comfydv._llm.chat.chat_structured", fake_chat_structured)
+
+    def on_status(msg):
+        pass
+
+    _run_async(
+        LlamaCppProvider("http://localhost:8080").chat_structured(
+            "gemma-3-4b",
+            [Message(role="user", content="hi")],
+            Widget,
+            on_status=on_status,
+        )
+    )
+
+    assert captured["on_status"] is on_status
 
 
 # ---------------------------------------------------------------------------

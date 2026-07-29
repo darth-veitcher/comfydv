@@ -15,12 +15,15 @@ import json
 import logging
 import threading
 import time
+from collections.abc import Callable
 
 from pydantic import BaseModel, ValidationError
 
 from .provider import Message, ModelInfo, ModelStatus
 from .retry import (
     RETRY_BACKOFF_SECS,
+    format_recovered_status,
+    format_retry_status,
     is_refusal,
     next_seed,
     next_timeout_secs,
@@ -366,6 +369,7 @@ class OllamaProvider:
         timeout_secs: float = 300.0,
         max_retries: int = 2,
         attempt_info: dict | None = None,
+        on_status: Callable[[str], None] | None = None,
     ) -> str:
         if any(m.images for m in messages):
             await _require_vision_capability(self.host, model, self.headers)
@@ -437,6 +441,7 @@ class OllamaProvider:
                 headers=self.headers,
             )
             response_text = result.get("message", {}).get("content", "")
+            retry_reason: str | None = None
             if response_text.strip():
                 refused = False
                 if refusal_cfg and refusal_cfg.get("enabled"):
@@ -456,12 +461,19 @@ class OllamaProvider:
                         timeout_secs=attempt_timeout,
                         refusals=refusal_count,
                     )
+                    if on_status is not None and attempt > 1:
+                        on_status(
+                            format_recovered_status(
+                                attempt, total_attempts, attempt_seed
+                            )
+                        )
                     return response_text
                 # A detected refusal is handled exactly like a blank
                 # response below: fall through to the backoff/retry with a
                 # bumped seed (next_seed), rather than returning the refusal
                 # text to the caller.
                 refusal_count += 1
+                retry_reason = "Refusal/deflection detected"
 
             # done: false alongside blank content is a distinct signal from
             # an ordinary blank generation — it's Ollama answering before
@@ -471,8 +483,24 @@ class OllamaProvider:
             # raised on below instead of silently returned like a real
             # blank generation would be.
             incomplete = result.get("done") is False
+            if retry_reason is None and not response_text.strip():
+                retry_reason = (
+                    "Model still loading/swapping" if incomplete else "Blank response"
+                )
 
             if attempt < total_attempts:
+                if on_status is not None and retry_reason is not None:
+                    upcoming_seed = next_seed(options, attempt + 1)
+                    upcoming_timeout = next_timeout_secs(timeout_secs, attempt + 1)
+                    on_status(
+                        format_retry_status(
+                            retry_reason,
+                            attempt,
+                            total_attempts,
+                            upcoming_seed,
+                            upcoming_timeout,
+                        )
+                    )
                 await asyncio.sleep(RETRY_BACKOFF_SECS)
 
         record_attempt_info(
@@ -506,6 +534,7 @@ class OllamaProvider:
         timeout_secs: float = 300.0,
         max_retries: int = 2,
         attempt_info: dict | None = None,
+        on_status: Callable[[str], None] | None = None,
     ) -> BaseModel:
         """Native ``/api/chat`` + ``"format"`` (grammar-constrained JSON
         decoding), not the shared pydantic-ai ``chat.py`` helper.
@@ -567,6 +596,17 @@ class OllamaProvider:
         attempt_seed = 0
         attempt_timeout = timeout_secs
 
+        def _emit_retry_status(reason: str, attempt: int) -> None:
+            if on_status is None or attempt >= total_attempts:
+                return
+            upcoming_seed = next_seed(options, attempt + 1)
+            upcoming_timeout = next_timeout_secs(timeout_secs, attempt + 1)
+            on_status(
+                format_retry_status(
+                    reason, attempt, total_attempts, upcoming_seed, upcoming_timeout
+                )
+            )
+
         for attempt in range(1, total_attempts + 1):
             attempt_options = dict(options) if options else {}
             if attempt > 1:
@@ -597,6 +637,7 @@ class OllamaProvider:
             except RuntimeError as exc:
                 last_error = exc
                 last_invalid_text = str(exc)
+                _emit_retry_status("Request failed", attempt)
                 if attempt < total_attempts:
                     await asyncio.sleep(RETRY_BACKOFF_SECS)
                 continue
@@ -607,6 +648,7 @@ class OllamaProvider:
             except ValidationError as exc:
                 last_error = exc
                 last_invalid_text = content
+                _emit_retry_status("Schema validation failed", attempt)
                 if attempt < total_attempts:
                     await asyncio.sleep(RETRY_BACKOFF_SECS)
                 continue
@@ -628,6 +670,7 @@ class OllamaProvider:
                     refusal_count += 1
                     last_error = RuntimeError("refusal/deflection detected")
                     last_invalid_text = content
+                    _emit_retry_status("Refusal/deflection detected", attempt)
                     if attempt < total_attempts:
                         await asyncio.sleep(RETRY_BACKOFF_SECS)
                     continue
@@ -640,6 +683,10 @@ class OllamaProvider:
                 timeout_secs=attempt_timeout,
                 refusals=refusal_count,
             )
+            if on_status is not None and attempt > 1:
+                on_status(
+                    format_recovered_status(attempt, total_attempts, attempt_seed)
+                )
             return parsed
 
         record_attempt_info(

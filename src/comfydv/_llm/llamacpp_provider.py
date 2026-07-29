@@ -15,6 +15,7 @@ exist otherwise (spec.md FR-006).
 
 import asyncio
 import logging
+from collections.abc import Callable
 
 from pydantic import BaseModel
 
@@ -29,6 +30,8 @@ from .ollama_provider import (
 from .provider import Message, ModelInfo, ModelStatus
 from .retry import (
     RETRY_BACKOFF_SECS,
+    format_recovered_status,
+    format_retry_status,
     is_refusal,
     next_seed,
     next_timeout_secs,
@@ -197,6 +200,7 @@ class LlamaCppProvider:
         timeout_secs: float = 300.0,
         max_retries: int = 2,
         attempt_info: dict | None = None,
+        on_status: Callable[[str], None] | None = None,
     ) -> str:
         payload_messages = [_to_openai_message(m) for m in messages]
         options, think = _pop_think(options)
@@ -285,6 +289,7 @@ class LlamaCppProvider:
                 if choices
                 else ""
             )
+            retry_reason: str | None = None
             if response_text.strip():
                 refused = False
                 if refusal_cfg and refusal_cfg.get("enabled"):
@@ -304,10 +309,31 @@ class LlamaCppProvider:
                         timeout_secs=attempt_timeout,
                         refusals=refusal_count,
                     )
+                    if on_status is not None and attempt > 1:
+                        on_status(
+                            format_recovered_status(
+                                attempt, total_attempts, attempt_seed
+                            )
+                        )
                     return response_text
                 refusal_count += 1
+                retry_reason = "Refusal/deflection detected"
+            else:
+                retry_reason = "Blank response"
 
             if attempt < total_attempts:
+                if on_status is not None:
+                    upcoming_seed = next_seed(options, attempt + 1)
+                    upcoming_timeout = next_timeout_secs(timeout_secs, attempt + 1)
+                    on_status(
+                        format_retry_status(
+                            retry_reason,
+                            attempt,
+                            total_attempts,
+                            upcoming_seed,
+                            upcoming_timeout,
+                        )
+                    )
                 await asyncio.sleep(RETRY_BACKOFF_SECS)
 
         record_attempt_info(
@@ -331,6 +357,7 @@ class LlamaCppProvider:
         timeout_secs: float = 300.0,
         max_retries: int = 2,
         attempt_info: dict | None = None,
+        on_status: Callable[[str], None] | None = None,
     ) -> BaseModel:
         from .chat import chat_structured as _chat_structured_impl
 
@@ -376,6 +403,7 @@ class LlamaCppProvider:
             timeout_secs=timeout_secs,
             embed_fn=embed_fn,
             attempt_info=attempt_info,
+            on_status=on_status,
         )
         _CHAT_RESPONSE_CACHE.set(cache_key, result.model_dump())
         return result

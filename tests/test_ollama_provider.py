@@ -1007,6 +1007,56 @@ def test_chat_attempt_info_reflects_refusal_retry(monkeypatch):
     assert attempt_info["seed"] == 1  # next_seed(): attempt 2 -> seed 1
 
 
+def test_chat_on_status_called_on_retry_and_recovery(monkeypatch):
+    """Live counterpart to attempt_info: called mid-loop (not just at the
+    end) so a caller (ChatCompletion's PromptServer.send_progress_text
+    closure) can show retry progress while the node is still executing."""
+    calls = []
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        calls.append(payload)
+        if len(calls) == 1:
+            return {"message": {"content": "I cannot generate that for you."}}
+        return {"message": {"content": "a real, on-topic answer"}}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    monkeypatch.setattr(provider_mod.asyncio, "sleep", _fake_sleep)
+
+    statuses = []
+    _run_async(
+        OllamaProvider("http://localhost:11434").chat(
+            "llama3",
+            [Message(role="user", content="hi")],
+            options={"refusal_retry": {"enabled": True, "embedding_model": ""}},
+            on_status=statuses.append,
+        )
+    )
+
+    assert len(statuses) == 2
+    assert "Refusal/deflection detected" in statuses[0]
+    assert "attempt 1/3" in statuses[0]
+    assert "Recovered" in statuses[1]
+    assert "attempt 2/3" in statuses[1]
+
+
+def test_chat_on_status_not_called_when_first_attempt_succeeds(monkeypatch):
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        return {"message": {"content": "ok"}}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+
+    statuses = []
+    _run_async(
+        OllamaProvider("http://localhost:11434").chat(
+            "llama3",
+            [Message(role="user", content="hi")],
+            on_status=statuses.append,
+        )
+    )
+
+    assert statuses == []
+
+
 # ---------------------------------------------------------------------------
 # refusal-retry — comfydv-level "refusal_retry" options convention (see
 # OllamaOptionRefusalRetry / comfydv._llm.retry.is_refusal)

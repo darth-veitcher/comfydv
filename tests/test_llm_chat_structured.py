@@ -212,6 +212,30 @@ def test_chat_structured_attempt_info_populated_on_exhaustion(monkeypatch):
     assert attempt_info["attempts"] == 2
 
 
+def test_chat_structured_on_status_called_on_retry_and_recovery(monkeypatch):
+    bad = ValidationError.from_exception_data("Widget", [])
+    fake = _FakeAgent([bad, _Widget(name="b", count=2)])
+    monkeypatch.setattr(chat_mod, "_build_agent", lambda **kw: fake)
+
+    statuses = []
+    _run_async(
+        chat_mod.chat_structured(
+            base_url="http://localhost:11434/v1",
+            model="llama3",
+            messages=_messages(),
+            schema=_Widget,
+            max_retries=2,
+            on_status=statuses.append,
+        )
+    )
+
+    assert len(statuses) == 2
+    assert "Structured output failed" in statuses[0]
+    assert "attempt 1/3" in statuses[0]
+    assert "Recovered" in statuses[1]
+    assert "attempt 2/3" in statuses[1]
+
+
 def test_chat_structured_exhausted_retries_raises_runtime_error(monkeypatch):
     bad = ValidationError.from_exception_data("Widget", [])
     fake = _FakeAgent([bad, bad, bad])  # max_retries=2 -> 3 total attempts
@@ -479,6 +503,30 @@ def test_chat_structured_retries_on_refusal_and_returns_clean_second_attempt(
 
     assert result == clean
     assert len(fake.calls) == 2
+
+
+def test_chat_structured_on_status_reports_refusal_reason(monkeypatch):
+    refused = _Widget(name="I cannot generate that content.", count=1)
+    clean = _Widget(name="clean", count=2)
+    fake = _FakeAgent([refused, clean])
+    monkeypatch.setattr(chat_mod, "_build_agent", lambda **kw: fake)
+
+    statuses = []
+    _run_async(
+        chat_mod.chat_structured(
+            base_url="http://localhost:11434/v1",
+            model="llama3",
+            messages=_messages(),
+            schema=_Widget,
+            options={"refusal_retry": {"enabled": True, "embedding_model": ""}},
+            max_retries=2,
+            on_status=statuses.append,
+        )
+    )
+
+    assert len(statuses) == 2
+    assert "Refusal/deflection detected" in statuses[0]
+    assert "Recovered" in statuses[1]
 
 
 def test_chat_structured_refusal_retry_disabled_returns_refusal_unchanged(

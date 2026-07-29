@@ -28,6 +28,7 @@ pydantic-ai's internal one.
 """
 
 import asyncio
+from collections.abc import Callable
 from typing import cast
 
 from pydantic import BaseModel, ValidationError
@@ -49,6 +50,8 @@ from .provider import Message
 from .retry import (
     RETRY_BACKOFF_SECS,
     EmbedFn,
+    format_recovered_status,
+    format_retry_status,
     is_refusal,
     next_seed,
     next_timeout_secs,
@@ -135,6 +138,7 @@ async def chat_structured(
     timeout_secs: float = 300.0,
     embed_fn: EmbedFn | None = None,
     attempt_info: dict | None = None,
+    on_status: Callable[[str], None] | None = None,
 ) -> BaseModel:
     """Call ``model`` at ``base_url`` (an OpenAI-compatible ``/v1`` root) and
     return a validated instance of ``schema``.
@@ -208,6 +212,18 @@ async def chat_structured(
     refusal_count = 0
     attempt_seed = (options or {}).get("seed", 0) if isinstance(options, dict) else 0
     attempt_timeout = timeout_secs
+
+    def _emit_retry_status(reason: str, attempt: int) -> None:
+        if on_status is None or attempt >= total_attempts:
+            return
+        upcoming_seed = next_seed(options, attempt + 1)
+        upcoming_timeout = next_timeout_secs(timeout_secs, attempt + 1)
+        on_status(
+            format_retry_status(
+                reason, attempt, total_attempts, upcoming_seed, upcoming_timeout
+            )
+        )
+
     for attempt in range(1, total_attempts + 1):
         attempt_timeout = next_timeout_secs(timeout_secs, attempt)
         # Rebuilt each attempt so the escalated timeout actually takes
@@ -282,6 +298,7 @@ async def chat_structured(
                     refusal_count += 1
                     last_error = RuntimeError("refusal/deflection detected")
                     last_invalid_text = content
+                    _emit_retry_status("Refusal/deflection detected", attempt)
                     if attempt < total_attempts:
                         await asyncio.sleep(RETRY_BACKOFF_SECS)
                     continue
@@ -292,10 +309,15 @@ async def chat_structured(
                 timeout_secs=attempt_timeout,
                 refusals=refusal_count,
             )
+            if on_status is not None and attempt > 1:
+                on_status(
+                    format_recovered_status(attempt, total_attempts, attempt_seed)
+                )
             return output
         except _STRUCTURED_OUTPUT_FAILURE_EXCEPTIONS as exc:
             last_error = exc
             last_invalid_text = str(exc)
+            _emit_retry_status("Structured output failed", attempt)
             if attempt < total_attempts:
                 await asyncio.sleep(RETRY_BACKOFF_SECS)
 

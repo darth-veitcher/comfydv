@@ -649,6 +649,27 @@ class ChatCompletion:
         # concrete provider ``client`` is.
         attempt_info: dict = {}
 
+        # Live counterpart to attempt_info: ComfyUI's own send_progress_text
+        # mechanism (already used by core nodes like PreviewAny/gaussian
+        # splat count) shows this text on the node WHILE it's still
+        # executing, via a "progressText" widget the frontend creates
+        # automatically — no custom JS needed on our side. Best-effort:
+        # a failure here must never take down the actual chat call.
+        on_status = None
+        if unique_id and "comfy" in sys.modules:
+
+            def on_status(message: str) -> None:
+                try:
+                    from server import PromptServer
+
+                    PromptServer.instance.send_progress_text(message, unique_id)
+                except Exception:
+                    logger.debug(
+                        "Failed to send live retry status for node %s",
+                        unique_id,
+                        exc_info=True,
+                    )
+
         # Provider owns transport, caching, and — for structured_output — the
         # tool-calling/retry/validation mechanism (pydantic-ai, ADR-007).
         # ChatCompletion never branches on which concrete provider it got.
@@ -662,6 +683,7 @@ class ChatCompletion:
                     timeout_secs=float(timeout_secs),
                     max_retries=max_retries,
                     attempt_info=attempt_info,
+                    on_status=on_status,
                 )
             )
         else:
@@ -677,6 +699,7 @@ class ChatCompletion:
                     timeout_secs=float(timeout_secs),
                     max_retries=max_retries,
                     attempt_info=attempt_info,
+                    on_status=on_status,
                 )
             )
             response_text = parsed.model_dump_json()

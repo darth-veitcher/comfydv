@@ -89,6 +89,36 @@ def record_attempt_info(
     )
 
 
+OnStatus = Callable[[str], None]
+"""A caller-supplied, synchronous, best-effort progress callback — see
+``format_retry_status``/``format_recovered_status``. Not async: providers
+call it inline mid-retry-loop, and the one real implementation
+(``ChatCompletion``'s closure over ``PromptServer.send_progress_text``) is
+itself synchronous, so there's nothing to await."""
+
+
+def format_retry_status(
+    reason: str, attempt: int, total_attempts: int, seed: int, timeout_secs: float
+) -> str:
+    """One-line, human-readable status for ``on_status()`` callers — shown
+    live on the node via ComfyUI's ``PromptServer.send_progress_text``
+    (see ``ChatCompletion.chat()``). Centralized so every provider's retry
+    loop describes a retry the same way rather than each inventing its own
+    wording.
+    """
+    return (
+        f"⚠ {reason} on attempt {attempt}/{total_attempts} — "
+        f"retrying with seed={seed}, timeout={timeout_secs:.0f}s"
+    )
+
+
+def format_recovered_status(attempt: int, total_attempts: int, seed: int) -> str:
+    """Final status shown once a retry loop succeeds after >1 attempt —
+    lets a live status left over from ``format_retry_status`` resolve to
+    something other than a stale "retrying..." message."""
+    return f"✅ Recovered on attempt {attempt}/{total_attempts} (seed={seed})"
+
+
 # ---------------------------------------------------------------------------
 # Refusal/deflection detection
 # ---------------------------------------------------------------------------
