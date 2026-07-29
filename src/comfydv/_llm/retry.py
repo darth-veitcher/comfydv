@@ -60,7 +60,7 @@ def next_seed(options: dict | None, attempt: int) -> int:
 REFUSAL_LEXICAL_PATTERNS: tuple[re.Pattern, ...] = tuple(
     re.compile(p, re.IGNORECASE)
     for p in (
-        r"\bI\s*(?:'m|\s+am)?\s*(?:cannot|can't|won't|will not)\b[^.]{0,60}?\b"
+        r"\b(?:I\s*(?:'m|\s+am)?\s*)?(?:cannot|can't|won't|will not)\b[^.]{0,60}?\b"
         r"(?:generate|create|produce|write|provide|help|assist|describe|depict|continue)\b",
         r"\bI(?:'m|\s+am) (?:not able|unable) to\b",
         r"\bI don't feel comfortable\b",
