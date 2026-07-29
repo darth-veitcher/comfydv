@@ -19,6 +19,7 @@ import pytest
 import comfydv._llm.ollama_provider as provider_mod
 from comfydv._llm.ollama_provider import OllamaProvider, _run_async
 from comfydv._llm.provider import Message, ModelStatus
+from comfydv._llm.retry import REFUSAL_EXEMPLARS
 
 
 @pytest.fixture(autouse=True)
@@ -924,3 +925,253 @@ def test_chat_text_only_payload_omits_images_key(monkeypatch):
     )
 
     assert captured["payload"]["messages"] == [{"role": "user", "content": "hi"}]
+
+
+# ---------------------------------------------------------------------------
+# refusal-retry — comfydv-level "refusal_retry" options convention (see
+# OllamaOptionRefusalRetry / comfydv._llm.retry.is_refusal)
+# ---------------------------------------------------------------------------
+
+
+def test_chat_retries_on_lexical_refusal_and_returns_clean_second_attempt(
+    monkeypatch,
+):
+    calls = []
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        calls.append(payload)
+        if len(calls) == 1:
+            return {"message": {"content": "I cannot generate that for you."}}
+        return {"message": {"content": "a real, on-topic answer"}}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    monkeypatch.setattr(provider_mod.asyncio, "sleep", _fake_sleep)
+
+    result = _run_async(
+        OllamaProvider("http://localhost:11434").chat(
+            "llama3",
+            [Message(role="user", content="hi")],
+            options={"refusal_retry": {"enabled": True, "embedding_model": ""}},
+        )
+    )
+
+    assert result == "a real, on-topic answer"
+    assert len(calls) == 2
+    # next_seed(): attempt 2 gets a bumped seed, not a repeat of attempt 1
+    assert calls[1]["options"]["seed"] == 1
+
+
+def test_chat_refusal_retry_disabled_returns_refusal_text_unchanged(monkeypatch):
+    calls = []
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        calls.append(payload)
+        return {"message": {"content": "I cannot generate that for you."}}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+
+    result = _run_async(
+        OllamaProvider("http://localhost:11434").chat(
+            "llama3", [Message(role="user", content="hi")]
+        )
+    )
+
+    assert result == "I cannot generate that for you."
+    assert len(calls) == 1
+
+
+def test_chat_refused_response_is_never_cached(monkeypatch):
+    """A refused attempt must not poison the cache the way a genuine success
+    does — otherwise every subsequent identical request would replay the
+    refusal forever (the exact bug the disable-thinking fix worked around
+    for a different failure mode)."""
+    calls = []
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        calls.append(payload)
+        return {"message": {"content": "I cannot generate that for you."}}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    monkeypatch.setattr(provider_mod.asyncio, "sleep", _fake_sleep)
+
+    messages = [Message(role="user", content="hi")]
+    options = {"refusal_retry": {"enabled": True, "embedding_model": ""}}
+    _run_async(
+        OllamaProvider("http://localhost:11434").chat(
+            "llama3", messages, options=options, max_retries=0
+        )
+    )
+    _run_async(
+        OllamaProvider("http://localhost:11434").chat(
+            "llama3", messages, options=options, max_retries=0
+        )
+    )
+
+    # Every attempt actually hit the network — nothing was ever cached.
+    assert len(calls) == 2
+
+
+def test_chat_structured_retries_on_refusal_embedded_in_json_field(monkeypatch):
+    from pydantic import BaseModel
+
+    class Widget(BaseModel):
+        name: str
+
+    responses = [
+        {"message": {"content": '{"name": "I cannot generate that content."}'}},
+        {"message": {"content": '{"name": "a clean value"}'}},
+    ]
+    calls = []
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        calls.append(payload)
+        return responses[len(calls) - 1]
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    monkeypatch.setattr(provider_mod.asyncio, "sleep", _fake_sleep)
+
+    result = _run_async(
+        OllamaProvider("http://localhost:11434").chat_structured(
+            "llama3",
+            [Message(role="user", content="hi")],
+            Widget,
+            options={"refusal_retry": {"enabled": True, "embedding_model": ""}},
+            max_retries=2,
+        )
+    )
+
+    assert result == Widget(name="a clean value")
+    assert len(calls) == 2
+
+
+def test_chat_structured_refusal_retry_exhausted_raises(monkeypatch):
+    from pydantic import BaseModel
+
+    class Widget(BaseModel):
+        name: str
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        return {"message": {"content": '{"name": "I cannot help with this."}'}}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    monkeypatch.setattr(provider_mod.asyncio, "sleep", _fake_sleep)
+
+    with pytest.raises(RuntimeError, match="failed validation"):
+        _run_async(
+            OllamaProvider("http://localhost:11434").chat_structured(
+                "llama3",
+                [Message(role="user", content="hi")],
+                Widget,
+                options={"refusal_retry": {"enabled": True, "embedding_model": ""}},
+                max_retries=1,
+            )
+        )
+
+
+def test_chat_structured_refusal_retry_uses_embedding_fallback(monkeypatch):
+    """embedding_model set -> embed() is actually consulted for an ambiguous
+    (non-lexical-match) response, not just the free regex pass."""
+    from pydantic import BaseModel
+
+    class Widget(BaseModel):
+        name: str
+
+    responses = [
+        {"message": {"content": '{"name": "not today, sorry"}'}},
+        {"message": {"content": '{"name": "a clean value"}'}},
+    ]
+    calls = []
+    embed_calls = []
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        calls.append(payload)
+        return responses[len(calls) - 1]
+
+    async def fake_embed(self, model, text):
+        embed_calls.append((model, text))
+        # Exemplars and the refusal-flavored response land in the same
+        # direction (high cosine sim); the clean response is orthogonal.
+        if "not today" in text or text in REFUSAL_EXEMPLARS:
+            return [1.0, 0.0]
+        return [0.0, 1.0]
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    monkeypatch.setattr(provider_mod.asyncio, "sleep", _fake_sleep)
+    monkeypatch.setattr(OllamaProvider, "embed", fake_embed)
+
+    result = _run_async(
+        OllamaProvider("http://localhost:11434").chat_structured(
+            "llama3",
+            [Message(role="user", content="hi")],
+            Widget,
+            options={
+                "refusal_retry": {
+                    "enabled": True,
+                    "embedding_model": "nomic-embed-text",
+                    "threshold": 0.5,
+                }
+            },
+            max_retries=2,
+        )
+    )
+
+    assert result == Widget(name="a clean value")
+    assert len(calls) == 2
+    assert embed_calls  # embedding path was actually exercised
+    assert all(model == "nomic-embed-text" for model, _ in embed_calls)
+
+
+# ---------------------------------------------------------------------------
+# embed()
+# ---------------------------------------------------------------------------
+
+
+def test_embed_returns_vector_from_api_embed(monkeypatch):
+    captured = {}
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        captured["url"] = url
+        captured["payload"] = payload
+        return {"embeddings": [[0.1, 0.2, 0.3]]}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+
+    result = _run_async(
+        OllamaProvider("http://localhost:11434").embed("nomic-embed-text", "hello")
+    )
+
+    assert result == [0.1, 0.2, 0.3]
+    assert captured["url"] == "http://localhost:11434/api/embed"
+    assert captured["payload"] == {"model": "nomic-embed-text", "input": "hello"}
+
+
+def test_embed_returns_none_on_unreachable_server(monkeypatch):
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        raise RuntimeError("Cannot reach Ollama at ...")
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+
+    result = _run_async(
+        OllamaProvider("http://localhost:11434").embed("nomic-embed-text", "hello")
+    )
+
+    assert result is None
+
+
+def test_embed_returns_none_for_malformed_response(monkeypatch):
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        return {"unexpected": "shape"}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+
+    result = _run_async(
+        OllamaProvider("http://localhost:11434").embed("nomic-embed-text", "hello")
+    )
+
+    assert result is None
+
+
+def test_embed_returns_none_for_empty_model_or_text():
+    provider = OllamaProvider("http://localhost:11434")
+    assert _run_async(provider.embed("", "hello")) is None
+    assert _run_async(provider.embed("nomic-embed-text", "")) is None

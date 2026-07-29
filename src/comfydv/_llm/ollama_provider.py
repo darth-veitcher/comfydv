@@ -19,7 +19,7 @@ import time
 from pydantic import BaseModel, ValidationError
 
 from .provider import Message, ModelInfo, ModelStatus
-from .retry import RETRY_BACKOFF_SECS, next_seed
+from .retry import RETRY_BACKOFF_SECS, is_refusal, next_seed
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +100,22 @@ def _pop_think(options: dict | None) -> tuple[dict | None, bool | None]:
     remaining = dict(options)
     think = remaining.pop("think")
     return (remaining or None), think
+
+
+def _pop_refusal_retry(options: dict | None) -> tuple[dict | None, dict | None]:
+    """Split a ``"refusal_retry"`` config dict out of a generic ``options``
+    dict — same convention as ``_pop_think``: ``OllamaOptionRefusalRetry``
+    merges ``{"refusal_retry": {"enabled", "embedding_model", "threshold"}}``
+    into the same composable ``OLLAMA_OPTIONS`` chain every other
+    ``OllamaOption*`` node feeds into ``ChatCompletion``'s ``options``
+    input, and neither Ollama's nor llama.cpp's own API recognizes this key,
+    so every provider pops it out here before building its request.
+    """
+    if not options or "refusal_retry" not in options:
+        return options, None
+    remaining = dict(options)
+    cfg = remaining.pop("refusal_retry")
+    return (remaining or None), cfg
 
 
 _MODEL_LIST_CACHE = _TTLLRUCache(maxsize=32, ttl_seconds=20.0)
@@ -353,6 +369,15 @@ class OllamaProvider:
         # array (ADR-008 — no transform needed for /api/chat).
         payload_messages = [m.model_dump(exclude_none=True) for m in messages]
         options, think = _pop_think(options)
+        options, refusal_cfg = _pop_refusal_retry(options)
+        embed_fn = None
+        if (
+            refusal_cfg
+            and refusal_cfg.get("enabled")
+            and refusal_cfg.get("embedding_model")
+        ):
+            embedding_model = refusal_cfg["embedding_model"]
+            embed_fn = lambda t: self.embed(embedding_model, t)  # noqa: E731
         total_attempts = max(0, min(int(max_retries), 5)) + 1
         response_text = ""
         incomplete = False
@@ -395,8 +420,21 @@ class OllamaProvider:
             )
             response_text = result.get("message", {}).get("content", "")
             if response_text.strip():
-                _CHAT_RESPONSE_CACHE.set(cache_key, response_text)
-                return response_text
+                refused = False
+                if refusal_cfg and refusal_cfg.get("enabled"):
+                    refused = await is_refusal(
+                        response_text,
+                        embed_fn=embed_fn,
+                        embed_cache_key=refusal_cfg.get("embedding_model", ""),
+                        threshold=refusal_cfg.get("threshold", 0.82),
+                    )
+                if not refused:
+                    _CHAT_RESPONSE_CACHE.set(cache_key, response_text)
+                    return response_text
+                # A detected refusal is handled exactly like a blank
+                # response below: fall through to the backoff/retry with a
+                # bumped seed (next_seed), rather than returning the refusal
+                # text to the caller.
 
             # done: false alongside blank content is a distinct signal from
             # an ordinary blank generation — it's Ollama answering before
@@ -457,6 +495,15 @@ class OllamaProvider:
         payload_messages = [m.model_dump(exclude_none=True) for m in messages]
         json_schema = schema.model_json_schema()
         options, think = _pop_think(options)
+        options, refusal_cfg = _pop_refusal_retry(options)
+        embed_fn = None
+        if (
+            refusal_cfg
+            and refusal_cfg.get("enabled")
+            and refusal_cfg.get("embedding_model")
+        ):
+            embedding_model = refusal_cfg["embedding_model"]
+            embed_fn = lambda t: self.embed(embedding_model, t)  # noqa: E731
         cache_key = _cache_key(
             "chat_structured",
             self.host,
@@ -517,6 +564,25 @@ class OllamaProvider:
                     await asyncio.sleep(RETRY_BACKOFF_SECS)
                 continue
 
+            if refusal_cfg and refusal_cfg.get("enabled"):
+                # Checked against the raw JSON text, not a specific parsed
+                # field: ChatCompletion's schema is caller-defined and this
+                # provider has no idea which field would carry refusal
+                # language — the regex/embedding check still matches text
+                # sitting inside a JSON string value either way.
+                refused = await is_refusal(
+                    content,
+                    embed_fn=embed_fn,
+                    embed_cache_key=refusal_cfg.get("embedding_model", ""),
+                    threshold=refusal_cfg.get("threshold", 0.82),
+                )
+                if refused:
+                    last_error = RuntimeError("refusal/deflection detected")
+                    last_invalid_text = content
+                    if attempt < total_attempts:
+                        await asyncio.sleep(RETRY_BACKOFF_SECS)
+                    continue
+
             _CHAT_RESPONSE_CACHE.set(cache_key, parsed.model_dump())
             return parsed
 
@@ -525,3 +591,31 @@ class OllamaProvider:
             f"{total_attempts} attempt(s) (model={model!r}). Last error: "
             f"{last_error}. Last response (truncated): {last_invalid_text[:300]!r}"
         )
+
+    async def embed(self, model: str, text: str) -> list[float] | None:
+        """POST {host}/api/embed — Ollama's native embeddings endpoint.
+
+        Returns ``None`` rather than raising on any failure (wrong/missing
+        embedding model, unreachable server, malformed response) — this is
+        a best-effort capability per the ``LLMProvider`` protocol, and its
+        one current caller (refusal-retry detection) already treats
+        ``None`` as "skip the embedding check", not an error.
+        """
+        if not model.strip() or not text.strip():
+            return None
+        try:
+            result = await _post_json(
+                f"{self.host}/api/embed",
+                {"model": model, "input": text},
+                timeout=30.0,
+                headers=self.headers,
+            )
+        except Exception:
+            return None
+        embeddings = result.get("embeddings")
+        if not isinstance(embeddings, list) or not embeddings:
+            return None
+        vec = embeddings[0]
+        if not isinstance(vec, list) or not vec:
+            return None
+        return vec

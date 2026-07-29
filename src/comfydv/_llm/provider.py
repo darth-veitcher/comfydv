@@ -124,3 +124,18 @@ class LLMProvider(Protocol):
         same per-provider translation.
         """
         ...
+
+    async def embed(self, model: str, text: str) -> list[float] | None:
+        """Embedding vector for ``text``, or ``None`` if unavailable.
+
+        Best-effort, not a core capability every deployment has configured:
+        ``model`` must itself be embedding-capable, which is typically a
+        *different* model from whatever's answering chat requests (e.g.
+        ``nomic-embed-text``, not the model passed to ``chat()``). Returns
+        ``None`` rather than raising when embeddings aren't usable right now
+        (wrong/missing model, unreachable server) — the one current caller,
+        refusal-retry detection (see ``_llm/retry.py``), degrades gracefully
+        to lexical-only detection when this returns ``None``, so a provider
+        with no embedding model configured is never a hard failure.
+        """
+        ...

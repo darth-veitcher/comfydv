@@ -50,6 +50,7 @@ from comfydv.ollama import (
     OllamaOptionDisableThinking,
     OllamaOptionExtraBody,
     OllamaOptionMaxTokens,
+    OllamaOptionRefusalRetry,
     OllamaOptionRepeatPenalty,
     OllamaOptionSeed,
     OllamaOptionTemperature,
@@ -731,6 +732,34 @@ class TestUS5ComposableOptions:
             disable_thinking=True, options={"temperature": 0.5}
         )
         assert opts == {"temperature": 0.5, "think": False}
+
+    def test_refusal_retry_default_merges_config_dict(self):
+        (opts,) = OllamaOptionRefusalRetry().set_refusal_retry(
+            enabled=True, embedding_model="", threshold=0.82
+        )
+        assert opts == {
+            "refusal_retry": {
+                "enabled": True,
+                "embedding_model": "",
+                "threshold": 0.82,
+            }
+        }
+
+    def test_refusal_retry_strips_embedding_model_whitespace(self):
+        (opts,) = OllamaOptionRefusalRetry().set_refusal_retry(
+            enabled=True, embedding_model="  nomic-embed-text  ", threshold=0.9
+        )
+        assert opts["refusal_retry"]["embedding_model"] == "nomic-embed-text"
+
+    def test_refusal_retry_merges_existing_options(self):
+        (opts,) = OllamaOptionRefusalRetry().set_refusal_retry(
+            enabled=False,
+            embedding_model="",
+            threshold=0.82,
+            options={"temperature": 0.5},
+        )
+        assert opts["temperature"] == 0.5
+        assert opts["refusal_retry"]["enabled"] is False
 
     def test_extra_body_merges_json(self):
         (opts,) = OllamaOptionExtraBody().set_extra_body(
