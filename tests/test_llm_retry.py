@@ -125,17 +125,24 @@ class TestIsRefusalHybrid:
         assert result is True
         assert calls == []  # never reached the embedding step
 
-    def test_long_clean_response_skips_embedding_and_is_not_refusal(self):
+    def test_long_clean_response_is_still_embedding_checked_but_not_a_refusal(self):
+        # embed_fn present means the caller opted in to the embedding check
+        # regardless of length/hedge-keywords (is_ambiguous no longer gates
+        # this) — a long, on-topic response should still be embedding-
+        # checked, it just shouldn't score as similar to the refusal
+        # exemplars.
         calls = []
 
         async def embed_fn(text):
             calls.append(text)
-            return [1.0, 0.0]
+            if text == long_text:
+                return [0.0, 1.0]  # orthogonal to the exemplar vector below
+            return [1.0, 0.0]  # exemplars
 
         long_text = "The subject rotates smoothly toward the lens. " * 20
         result = _run_async(is_refusal(long_text, embed_fn=embed_fn))
         assert result is False
-        assert calls == []  # not ambiguous -> never reaches the embedding step
+        assert long_text in calls  # embedding check DID run, just scored low
 
     def test_no_embed_fn_degrades_to_lexical_only(self):
         # Ambiguous (short), no lexical match, no embed_fn -> can't check further
@@ -174,6 +181,36 @@ class TestIsRefusalHybrid:
             )
         )
         assert result is False
+
+    def test_long_json_shaped_soft_refusal_without_hedge_keywords_is_caught(self):
+        # Regression case: a structured-output-shaped response (>600 chars
+        # once you count JSON braces/field names) whose deflection doesn't
+        # use any of the canned hedge keywords used to be invisible to the
+        # embedding check entirely, because is_ambiguous gated on length
+        # and keywords. embed_fn now runs unconditionally once configured.
+        soft_refusal = (
+            '{"prompt": "'
+            + "Let's take this in a different creative direction that everyone can enjoy. "
+            * 8
+            + '"}'
+        )
+        assert len(soft_refusal) >= 600
+        assert not is_lexical_refusal(soft_refusal)
+
+        async def embed_fn(text):
+            if text == soft_refusal:
+                return [1.0, 0.0]
+            return [0.97, 0.24]  # exemplars: cos-sim with [1,0] is ~0.97
+
+        result = _run_async(
+            is_refusal(
+                soft_refusal,
+                embed_fn=embed_fn,
+                embed_cache_key="regression-model",
+                threshold=0.8,
+            )
+        )
+        assert result is True
 
     def test_exemplar_embeddings_cached_across_calls(self):
         exemplar_calls = {"n": 0}

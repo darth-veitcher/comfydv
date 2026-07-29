@@ -81,16 +81,31 @@ _SOFT_HEDGE_KEYWORDS: tuple[str, ...] = (
     "guideline",
     "responsible ai",
     "not appropriate",
+    "inappropriate",
     "instead, i",
     "i'd rather",
     "i would rather",
+    "controversial",
+    "harmful",
+    "offensive",
+    "disturbing",
+    "explicit content",
+    "nsfw",
+    "consider an alternative",
 )
 
-_AMBIGUOUS_LENGTH_THRESHOLD = 400
+_AMBIGUOUS_LENGTH_THRESHOLD = 600
 """Below this many characters, a response is short enough that a soft
 refusal is plausible and worth the extra embedding check — chosen well
 under this pipeline's normal structured-JSON response sizes (typically
-1000+ characters), not a tuned/validated threshold."""
+1000+ characters), not a tuned/validated threshold.
+
+Note: ``is_refusal`` no longer applies this gate when the caller supplies
+``embed_fn`` (see below) — an explicitly configured embedding model always
+runs the check regardless of length/keywords. ``is_ambiguous`` is kept as a
+standalone, independently tested heuristic for other callers (e.g. logging
+"why was this worth embedding-checking") rather than wired into the hybrid
+detector itself."""
 
 REFUSAL_EXEMPLARS: tuple[str, ...] = (
     "I cannot generate an image or description involving this topic.",
@@ -172,23 +187,34 @@ async def is_refusal(
     threshold: float = 0.82,
 ) -> bool:
     """Hybrid refusal/deflection detector: free lexical pass first, then an
-    optional embedding-similarity fallback only for ambiguous responses.
+    embedding-similarity fallback whenever the caller has configured one.
 
     ``embed_fn`` is supplied by the caller's own ``LLMProvider.embed()`` —
     this function has no idea which backend or model produced ``text``, by
     design (ADR: refusal detection is a model-behavior concern, not a
     backend one). ``embed_fn=None`` (no embedding model configured) degrades
-    to lexical-only detection rather than erroring. Any failure while
-    embedding (unreachable server, no embedding-capable model loaded) is
-    swallowed the same way — an optional enhancement failing shouldn't take
-    down the retry loop it's assisting.
+    to lexical-only detection rather than erroring; ``embed_fn`` present
+    means the caller already opted in to the extra cost, so every non-blank,
+    non-lexically-caught response gets checked — no further length/keyword
+    gating. Any failure while embedding (unreachable server, no
+    embedding-capable model loaded) is swallowed the same way — an optional
+    enhancement failing shouldn't take down the retry loop it's assisting.
     """
     if not text or not text.strip():
         return False  # blank responses are the *other* retry trigger, not this one
     if is_lexical_refusal(text):
         return True
-    if embed_fn is None or not is_ambiguous(text):
+    if embed_fn is None:
         return False
+    # embed_fn only exists when the caller explicitly configured an
+    # embedding_model — that's an opt-in to pay for the check, so run it on
+    # every non-blank, non-lexically-caught response rather than gating
+    # further on is_ambiguous. The length/keyword heuristic exists to avoid
+    # *unwanted* embedding calls when no embedding model is configured (see
+    # the embed_fn is None branch above); it has no reason to also suppress
+    # calls once the caller has already asked for them, and doing so was
+    # exactly what let the subtle/on-topic-looking deflections this feature
+    # targets slip through undetected.
     try:
         exemplar_vecs = await _exemplar_embeddings(embed_fn, embed_cache_key)
         if not exemplar_vecs:
