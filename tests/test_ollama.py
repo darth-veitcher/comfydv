@@ -742,6 +742,7 @@ class TestUS5ComposableOptions:
                 "enabled": True,
                 "embedding_model": "",
                 "threshold": 0.82,
+                "custom_phrases": (),
             }
         }
 
@@ -760,6 +761,26 @@ class TestUS5ComposableOptions:
         )
         assert opts["temperature"] == 0.5
         assert opts["refusal_retry"]["enabled"] is False
+
+    def test_refusal_retry_parses_custom_phrases_csv(self):
+        # Whitespace around each phrase is trimmed and empty entries (from
+        # blank items / trailing commas) are dropped.
+        (opts,) = OllamaOptionRefusalRetry().set_refusal_retry(
+            enabled=True,
+            embedding_model="",
+            threshold=0.82,
+            custom_phrases=" I am restricted from , not permitted to help,,",
+        )
+        assert opts["refusal_retry"]["custom_phrases"] == (
+            "I am restricted from",
+            "not permitted to help",
+        )
+
+    def test_refusal_retry_custom_phrases_defaults_empty(self):
+        (opts,) = OllamaOptionRefusalRetry().set_refusal_retry(
+            enabled=True, embedding_model="", threshold=0.82
+        )
+        assert opts["refusal_retry"]["custom_phrases"] == ()
 
     def test_extra_body_merges_json(self):
         (opts,) = OllamaOptionExtraBody().set_extra_body(

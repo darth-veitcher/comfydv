@@ -933,6 +933,11 @@ class OllamaOptionRefusalRetry:
     loop with it (ADR: refusal detection is a model-behavior concern, not
     a backend one — see ``LLMProvider.embed()`` in ``_llm/provider.py``).
     Works for both backends from the same node.
+
+    ``custom_phrases`` (comma-separated) lets you add your own trigger
+    phrases at runtime, without a code change/release — useful for a new
+    deflection phrasing a specific model uses that the shipped patterns in
+    ``REFUSAL_LEXICAL_PATTERNS``/``REFUSAL_EXEMPLARS`` don't cover yet.
     """
 
     @classmethod
@@ -972,6 +977,22 @@ class OllamaOptionRefusalRetry:
                         ),
                     },
                 ),
+                "custom_phrases": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "tooltip": (
+                            "Comma-separated phrases you want treated as "
+                            'refusals too, e.g. "I am restricted from, as an '
+                            'AI model, I must avoid". Checked as free, exact '
+                            "case-insensitive substrings (no embedding model "
+                            "needed) and, when embedding_model is set, also "
+                            "folded in as extra exemplars for the similarity "
+                            "check — lets you extend detection at runtime "
+                            "without waiting on a shipped pattern update."
+                        ),
+                    },
+                ),
             },
             "optional": {"options": ("OLLAMA_OPTIONS",)},
         }
@@ -981,7 +1002,10 @@ class OllamaOptionRefusalRetry:
     FUNCTION = "set_refusal_retry"
     CATEGORY = "dv/ollama/options"
 
-    def set_refusal_retry(self, enabled, embedding_model, threshold, options=None):
+    def set_refusal_retry(
+        self, enabled, embedding_model, threshold, custom_phrases="", options=None
+    ):
+        phrases = tuple(p.strip() for p in custom_phrases.split(",") if p and p.strip())
         return (
             _merge_option(
                 options,
@@ -990,6 +1014,7 @@ class OllamaOptionRefusalRetry:
                     "enabled": enabled,
                     "embedding_model": embedding_model.strip(),
                     "threshold": threshold,
+                    "custom_phrases": phrases,
                 },
             ),
         )

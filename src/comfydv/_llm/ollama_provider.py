@@ -371,13 +371,12 @@ class OllamaProvider:
         options, think = _pop_think(options)
         options, refusal_cfg = _pop_refusal_retry(options)
         embed_fn = None
-        if (
-            refusal_cfg
-            and refusal_cfg.get("enabled")
-            and refusal_cfg.get("embedding_model")
-        ):
-            embedding_model = refusal_cfg["embedding_model"]
-            embed_fn = lambda t: self.embed(embedding_model, t)  # noqa: E731
+        custom_phrases: tuple[str, ...] = ()
+        if refusal_cfg and refusal_cfg.get("enabled"):
+            custom_phrases = tuple(refusal_cfg.get("custom_phrases") or ())
+            if refusal_cfg.get("embedding_model"):
+                embedding_model = refusal_cfg["embedding_model"]
+                embed_fn = lambda t: self.embed(embedding_model, t)  # noqa: E731
         total_attempts = max(0, min(int(max_retries), 5)) + 1
         response_text = ""
         incomplete = False
@@ -427,6 +426,7 @@ class OllamaProvider:
                         embed_fn=embed_fn,
                         embed_cache_key=refusal_cfg.get("embedding_model", ""),
                         threshold=refusal_cfg.get("threshold", 0.82),
+                        custom_phrases=custom_phrases,
                     )
                 if not refused:
                     _CHAT_RESPONSE_CACHE.set(cache_key, response_text)
@@ -497,13 +497,12 @@ class OllamaProvider:
         options, think = _pop_think(options)
         options, refusal_cfg = _pop_refusal_retry(options)
         embed_fn = None
-        if (
-            refusal_cfg
-            and refusal_cfg.get("enabled")
-            and refusal_cfg.get("embedding_model")
-        ):
-            embedding_model = refusal_cfg["embedding_model"]
-            embed_fn = lambda t: self.embed(embedding_model, t)  # noqa: E731
+        custom_phrases: tuple[str, ...] = ()
+        if refusal_cfg and refusal_cfg.get("enabled"):
+            custom_phrases = tuple(refusal_cfg.get("custom_phrases") or ())
+            if refusal_cfg.get("embedding_model"):
+                embedding_model = refusal_cfg["embedding_model"]
+                embed_fn = lambda t: self.embed(embedding_model, t)  # noqa: E731
         cache_key = _cache_key(
             "chat_structured",
             self.host,
@@ -575,6 +574,7 @@ class OllamaProvider:
                     embed_fn=embed_fn,
                     embed_cache_key=refusal_cfg.get("embedding_model", ""),
                     threshold=refusal_cfg.get("threshold", 0.82),
+                    custom_phrases=custom_phrases,
                 )
                 if refused:
                     last_error = RuntimeError("refusal/deflection detected")

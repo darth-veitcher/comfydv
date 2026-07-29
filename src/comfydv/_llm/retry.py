@@ -62,7 +62,7 @@ REFUSAL_LEXICAL_PATTERNS: tuple[re.Pattern, ...] = tuple(
     for p in (
         r"\b(?:I\s*(?:'m|\s+am)?\s*)?(?:cannot|can't|won't|will not)\b[^.]{0,60}?\b"
         r"(?:generate|create|produce|write|provide|help|assist|describe|depict|continue)\b",
-        r"\bI(?:'m|\s+am) (?:not able|unable) to\b",
+        r"\bI(?:'m|\s+am) (?:(?:not able|unable) to|restricted from)\b",
         r"\bI don't feel comfortable\b",
         r"\bI'm sorry,?\s*(?:but\s+)?I\s*(?:can't|cannot)\b",
         r"\bas an AI\b[^.]{0,60}?\b(?:cannot|can't|unable|not able)\b",
@@ -157,16 +157,19 @@ EmbedFn = Callable[[str], Awaitable[list[float] | None]]
 _exemplar_embedding_cache: dict[str, list[list[float]]] = {}
 
 
-async def _exemplar_embeddings(embed_fn: EmbedFn, cache_key: str) -> list[list[float]]:
-    """Embed ``REFUSAL_EXEMPLARS`` once per ``cache_key`` (an embedding-model
-    identifier) and reuse — the exemplars never change, only the embedding
-    space (i.e. which model produced the vectors) does.
+async def _exemplar_embeddings(
+    embed_fn: EmbedFn, cache_key: str, exemplars: tuple[str, ...] = REFUSAL_EXEMPLARS
+) -> list[list[float]]:
+    """Embed ``exemplars`` once per ``cache_key`` and reuse — the exemplar
+    set only changes if the caller's custom phrases change (folded into
+    ``cache_key`` by the caller), or the embedding space (i.e. which model
+    produced the vectors) does.
     """
     cached = _exemplar_embedding_cache.get(cache_key)
     if cached is not None:
         return cached
     embeddings = []
-    for exemplar in REFUSAL_EXEMPLARS:
+    for exemplar in exemplars:
         vec = await embed_fn(exemplar)
         if not vec:
             # An embedding call failing for one exemplar almost certainly
@@ -179,12 +182,21 @@ async def _exemplar_embeddings(embed_fn: EmbedFn, cache_key: str) -> list[list[f
     return embeddings
 
 
+def _matches_custom_phrase(text: str, custom_phrases: tuple[str, ...]) -> bool:
+    """Case-insensitive substring match against user-supplied phrases."""
+    if not custom_phrases:
+        return False
+    lowered = text.lower()
+    return any(phrase.lower() in lowered for phrase in custom_phrases)
+
+
 async def is_refusal(
     text: str,
     *,
     embed_fn: EmbedFn | None = None,
     embed_cache_key: str = "",
     threshold: float = 0.82,
+    custom_phrases: tuple[str, ...] = (),
 ) -> bool:
     """Hybrid refusal/deflection detector: free lexical pass first, then an
     embedding-similarity fallback whenever the caller has configured one.
@@ -199,10 +211,22 @@ async def is_refusal(
     gating. Any failure while embedding (unreachable server, no
     embedding-capable model loaded) is swallowed the same way — an optional
     enhancement failing shouldn't take down the retry loop it's assisting.
+
+    ``custom_phrases`` lets a caller extend detection at runtime — e.g. a
+    ComfyUI node field the user edits directly — without touching the
+    shipped patterns/exemplars. Each phrase is checked two ways: a free
+    case-insensitive substring match (same cost tier as the lexical pass,
+    so it runs even with no ``embed_fn`` configured), and, when ``embed_fn``
+    is present, folded in as additional exemplars for the similarity check
+    so near-matches (not just exact substrings) of the user's phrases count
+    too.
     """
     if not text or not text.strip():
         return False  # blank responses are the *other* retry trigger, not this one
     if is_lexical_refusal(text):
+        return True
+    custom_phrases = tuple(p.strip() for p in custom_phrases if p and p.strip())
+    if _matches_custom_phrase(text, custom_phrases):
         return True
     if embed_fn is None:
         return False
@@ -215,8 +239,18 @@ async def is_refusal(
     # calls once the caller has already asked for them, and doing so was
     # exactly what let the subtle/on-topic-looking deflections this feature
     # targets slip through undetected.
+    exemplars = (
+        REFUSAL_EXEMPLARS + custom_phrases if custom_phrases else REFUSAL_EXEMPLARS
+    )
+    exemplar_cache_key = (
+        f"{embed_cache_key}|custom:{','.join(custom_phrases)}"
+        if custom_phrases
+        else embed_cache_key
+    )
     try:
-        exemplar_vecs = await _exemplar_embeddings(embed_fn, embed_cache_key)
+        exemplar_vecs = await _exemplar_embeddings(
+            embed_fn, exemplar_cache_key, exemplars
+        )
         if not exemplar_vecs:
             return False
         text_vec = await embed_fn(text)

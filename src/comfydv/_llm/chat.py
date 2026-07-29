@@ -260,6 +260,7 @@ async def chat_structured(
                     embed_fn=embed_fn,
                     embed_cache_key=refusal_cfg.get("embedding_model", ""),
                     threshold=refusal_cfg.get("threshold", 0.82),
+                    custom_phrases=tuple(refusal_cfg.get("custom_phrases") or ()),
                 )
                 if refused:
                     last_error = RuntimeError("refusal/deflection detected")

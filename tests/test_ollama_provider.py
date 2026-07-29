@@ -961,6 +961,42 @@ def test_chat_retries_on_lexical_refusal_and_returns_clean_second_attempt(
     assert calls[1]["options"]["seed"] == 1
 
 
+def test_chat_retries_on_custom_phrase_with_no_embedding_model(monkeypatch):
+    """Regression coverage for OllamaOptionRefusalRetry's custom_phrases
+    field: a phrase the user added at runtime, not one of the shipped
+    lexical patterns, still triggers a retry — with no embedding_model
+    configured at all."""
+    calls = []
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        calls.append(payload)
+        if len(calls) == 1:
+            # deliberately not covered by any shipped lexical pattern —
+            # only the custom_phrases entry below should catch this
+            return {"message": {"content": "That's outside my operating parameters."}}
+        return {"message": {"content": "a real, on-topic answer"}}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    monkeypatch.setattr(provider_mod.asyncio, "sleep", _fake_sleep)
+
+    result = _run_async(
+        OllamaProvider("http://localhost:11434").chat(
+            "llama3",
+            [Message(role="user", content="hi")],
+            options={
+                "refusal_retry": {
+                    "enabled": True,
+                    "embedding_model": "",
+                    "custom_phrases": ("outside my operating parameters",),
+                }
+            },
+        )
+    )
+
+    assert result == "a real, on-topic answer"
+    assert len(calls) == 2
+
+
 def test_chat_refusal_retry_disabled_returns_refusal_text_unchanged(monkeypatch):
     calls = []
 

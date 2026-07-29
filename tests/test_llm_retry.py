@@ -13,6 +13,7 @@ import pytest
 
 from comfydv._llm.ollama_provider import _run_async
 from comfydv._llm.retry import (
+    REFUSAL_EXEMPLARS,
     cosine_similarity,
     is_ambiguous,
     is_lexical_refusal,
@@ -270,3 +271,100 @@ class TestIsRefusalHybrid:
             )
         )
         assert result is False
+
+
+class TestCustomPhrases:
+    def test_custom_phrase_substring_match_needs_no_embed_fn(self):
+        # A phrase the user added at runtime that the shipped lexical
+        # patterns don't cover — should be caught for free, no embedding
+        # model required.
+        result = _run_async(
+            is_refusal(
+                "I am restricted from producing that kind of content.",
+                custom_phrases=("restricted from",),
+            )
+        )
+        assert result is True
+
+    def test_custom_phrase_match_is_case_insensitive(self):
+        result = _run_async(
+            is_refusal(
+                "SORRY, THAT'S OFF LIMITS FOR ME.",
+                custom_phrases=("off limits",),
+            )
+        )
+        assert result is True
+
+    def test_unrelated_custom_phrase_does_not_match(self):
+        result = _run_async(
+            is_refusal(
+                "The subject walks calmly toward the horizon.",
+                custom_phrases=("restricted from", "off limits"),
+            )
+        )
+        assert result is False
+
+    def test_blank_and_whitespace_custom_phrases_are_ignored(self):
+        # A stray empty entry must never become a universal substring match.
+        result = _run_async(
+            is_refusal(
+                "The subject walks calmly toward the horizon.",
+                custom_phrases=("", "   "),
+            )
+        )
+        assert result is False
+
+    def test_custom_phrase_folded_into_embedding_exemplars(self):
+        # No exact substring match, but embed_fn scores the response as
+        # similar to the custom phrase (not one of the shipped exemplars).
+        custom = "my creators have limited what I can show you"
+
+        async def embed_fn(text):
+            if text == custom:
+                return [1.0, 0.0]
+            if text in REFUSAL_EXEMPLARS:
+                return [0.0, 1.0]  # shipped exemplars score orthogonal
+            return [0.99, 0.14]  # the probe response is near the custom one
+
+        result = _run_async(
+            is_refusal(
+                "There are limits my creators placed on what I can show.",
+                embed_fn=embed_fn,
+                embed_cache_key="custom-exemplar-model",
+                threshold=0.8,
+                custom_phrases=(custom,),
+            )
+        )
+        assert result is True
+
+    def test_different_custom_phrase_sets_do_not_share_exemplar_cache(self):
+        # Regression guard: if the exemplar cache key ignored custom_phrases,
+        # a second call with a different custom phrase set would incorrectly
+        # reuse the first call's cached (and now stale) exemplar vectors.
+        calls = []
+
+        async def embed_fn(text):
+            calls.append(text)
+            return [1.0, 0.0]
+
+        _run_async(
+            is_refusal(
+                "short reply",
+                embed_fn=embed_fn,
+                embed_cache_key="shared-model",
+                custom_phrases=("phrase one",),
+            )
+        )
+        first_call_count = len(calls)
+
+        _run_async(
+            is_refusal(
+                "short reply",
+                embed_fn=embed_fn,
+                embed_cache_key="shared-model",
+                custom_phrases=("phrase two",),
+            )
+        )
+        # A fresh custom phrase set re-embeds the exemplars (including the
+        # new phrase) rather than reusing the first set's cached vectors.
+        assert len(calls) > first_call_count
