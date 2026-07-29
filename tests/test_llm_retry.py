@@ -50,6 +50,7 @@ class TestLexicalDetection:
         blatant = [
             "I cannot generate that image for you.",
             "I'm not able to help with this request.",
+            "I am unable to comply with your instruction.",
             "I don't feel comfortable creating this content.",
             "I'm sorry, but I can't produce that description.",
             "As an AI, I'm unable to depict this scenario.",

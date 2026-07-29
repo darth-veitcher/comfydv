@@ -62,7 +62,7 @@ REFUSAL_LEXICAL_PATTERNS: tuple[re.Pattern, ...] = tuple(
     for p in (
         r"\bI\s*(?:'m|\s+am)?\s*(?:cannot|can't|won't|will not)\b[^.]{0,60}?\b"
         r"(?:generate|create|produce|write|provide|help|assist|describe|depict|continue)\b",
-        r"\bI'm (?:not able|unable) to\b",
+        r"\bI(?:'m|\s+am) (?:not able|unable) to\b",
         r"\bI don't feel comfortable\b",
         r"\bI'm sorry,?\s*(?:but\s+)?I\s*(?:can't|cannot)\b",
         r"\bas an AI\b[^.]{0,60}?\b(?:cannot|can't|unable|not able)\b",
