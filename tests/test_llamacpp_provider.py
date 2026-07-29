@@ -405,6 +405,54 @@ def test_chat_exhausted_retries_returns_blank_without_raising(monkeypatch):
     assert calls["n"] == 3  # original + 2 retries, per max_retries=2
 
 
+def test_chat_timeout_escalates_per_retry_attempt(monkeypatch):
+    timeouts = []
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        timeouts.append(timeout)
+        if len(timeouts) < 3:
+            return {"choices": [{"message": {"content": ""}}]}
+        return {"choices": [{"message": {"content": "done"}}]}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    monkeypatch.setattr(provider_mod.asyncio, "sleep", _fake_sleep)
+
+    _run_async(
+        LlamaCppProvider("http://localhost:8080").chat(
+            "gemma-3-4b",
+            [Message(role="user", content="hi")],
+            timeout_secs=50.0,
+            max_retries=2,
+        )
+    )
+
+    assert timeouts == [50.0, 100.0, 150.0]
+
+
+def test_chat_attempt_info_populated_on_success(monkeypatch):
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        return {"choices": [{"message": {"content": "ok"}}]}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+
+    attempt_info: dict = {}
+    _run_async(
+        LlamaCppProvider("http://localhost:8080").chat(
+            "gemma-3-4b",
+            [Message(role="user", content="hi")],
+            options={"seed": 9},
+            attempt_info=attempt_info,
+        )
+    )
+
+    assert attempt_info == {
+        "seed": 9,
+        "attempts": 1,
+        "timeout_secs": 300.0,
+        "refusals": 0,
+    }
+
+
 # ---------------------------------------------------------------------------
 # chat_structured — zero new logic, delegates to the shared helper unchanged
 # ---------------------------------------------------------------------------
@@ -459,6 +507,35 @@ def test_chat_structured_forwards_options(monkeypatch):
     )
 
     assert captured["options"] == {"temperature": 0.0}
+
+
+def test_chat_structured_forwards_attempt_info(monkeypatch):
+    from pydantic import BaseModel
+
+    class Widget(BaseModel):
+        name: str
+
+    captured = {}
+
+    async def fake_chat_structured(**kwargs):
+        captured.update(kwargs)
+        return Widget(name="x")
+
+    monkeypatch.setattr("comfydv._llm.chat.chat_structured", fake_chat_structured)
+
+    attempt_info: dict = {}
+    _run_async(
+        LlamaCppProvider("http://localhost:8080").chat_structured(
+            "gemma-3-4b",
+            [Message(role="user", content="hi")],
+            Widget,
+            attempt_info=attempt_info,
+        )
+    )
+
+    # Same object passed straight through — the shared helper populates it,
+    # this provider doesn't need to know its shape.
+    assert captured["attempt_info"] is attempt_info
 
 
 # ---------------------------------------------------------------------------

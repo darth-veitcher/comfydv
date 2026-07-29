@@ -509,8 +509,20 @@ def _coerce_structured_value(value, comfy_type: str):
 class ChatCompletion:
     OUTPUT_NODE = True
 
-    _BASE_RETURN_TYPES = ("STRING", "OLLAMA_HISTORY", "STRING")
-    _BASE_RETURN_NAMES = ("response", "updated_history", "model_name")
+    # "seed_used" is always the LAST output, after any dynamic structured-
+    # output fields — not inserted right after model_name — so a schema's
+    # fields keep starting at the same fixed index (3) they occupied before
+    # this output existed. Already-wired workflows (e.g.
+    # workflows/ltx-i2v-pipeline.json) link FormatString inputs to a
+    # ChatCompletion node's dynamic field by output *index*; inserting a
+    # new fixed output ahead of those fields would silently repoint every
+    # such link at the wrong socket.
+    _FIXED_RETURN_TYPES = ("STRING", "OLLAMA_HISTORY", "STRING")
+    _FIXED_RETURN_NAMES = ("response", "updated_history", "model_name")
+    _SEED_RETURN_TYPE = ("INT",)
+    _SEED_RETURN_NAME = ("seed_used",)
+    _BASE_RETURN_TYPES = _FIXED_RETURN_TYPES + _SEED_RETURN_TYPE
+    _BASE_RETURN_NAMES = _FIXED_RETURN_NAMES + _SEED_RETURN_NAME
 
     # Per-node-instance structured-output config, keyed by unique_id — same
     # pattern as FormatString.node_configs.
@@ -579,8 +591,14 @@ class ChatCompletion:
             cls.RETURN_NAMES = cls._BASE_RETURN_NAMES
             return
         names = tuple(schema["properties"].keys())
-        cls.RETURN_TYPES = cls._BASE_RETURN_TYPES + _comfy_types_for_schema(schema)
-        cls.RETURN_NAMES = cls._BASE_RETURN_NAMES + names
+        # Dynamic fields land between the fixed base outputs and the
+        # trailing seed_used — see _SEED_RETURN_TYPE's comment above.
+        cls.RETURN_TYPES = (
+            cls._FIXED_RETURN_TYPES
+            + _comfy_types_for_schema(schema)
+            + cls._SEED_RETURN_TYPE
+        )
+        cls.RETURN_NAMES = cls._FIXED_RETURN_NAMES + names + cls._SEED_RETURN_NAME
 
     def chat(
         self,
@@ -624,6 +642,12 @@ class ChatCompletion:
         if user_images:
             messages[-1].images = user_images
         llm_options = dict(options) if options else None
+        # Populated in place by the provider (see _llm/retry.py's
+        # record_attempt_info) with the seed/timeout actually used and how
+        # many attempts/refusals it took — an out-param rather than a
+        # return-type change, so it works the same regardless of which
+        # concrete provider ``client`` is.
+        attempt_info: dict = {}
 
         # Provider owns transport, caching, and — for structured_output — the
         # tool-calling/retry/validation mechanism (pydantic-ai, ADR-007).
@@ -637,6 +661,7 @@ class ChatCompletion:
                     llm_options,
                     timeout_secs=float(timeout_secs),
                     max_retries=max_retries,
+                    attempt_info=attempt_info,
                 )
             )
         else:
@@ -651,20 +676,43 @@ class ChatCompletion:
                     llm_options,
                     timeout_secs=float(timeout_secs),
                     max_retries=max_retries,
+                    attempt_info=attempt_info,
                 )
             )
             response_text = parsed.model_dump_json()
+
+        seed_used = attempt_info.get("seed", 0)
+        attempts_made = attempt_info.get("attempts", 1)
+        refusals = attempt_info.get("refusals", 0)
 
         updated = list(history)
         updated.append({"role": "user", "content": prompt})
         updated.append({"role": "assistant", "content": response_text})
         n = len(updated)
+
+        # Visual feedback (US: "show me when a retry/refusal happened") —
+        # surfaced in the node's existing text preview rather than a new UI
+        # surface, so it's visible without any frontend/JS changes.
+        status_line = ""
+        if attempts_made > 1:
+            status_line = (
+                f"⚠️ Refusal/deflection detected — retried {refusals} "
+                f"time(s), succeeded on attempt {attempts_made} with "
+                f"seed={seed_used}.\n\n"
+                if refusals
+                else f"⚠️ Retried (blank/invalid response) — succeeded on "
+                f"attempt {attempts_made} with seed={seed_used}.\n\n"
+            )
+
         ui_text = (
-            f"{response_text}\n\n── History: {n} message(s) ──\n{_history_preview(updated)}"
+            f"{status_line}{response_text}\n\n"
+            f"── History: {n} message(s) ──\n{_history_preview(updated)}"
             if n > 2
-            else response_text
+            else f"{status_line}{response_text}"
         )
 
+        # seed_used is appended last, after any dynamic structured fields —
+        # see ChatCompletion's _SEED_RETURN_TYPE comment for why.
         result_tuple = (response_text, updated, effective_model)
         if structured_output:
             assert schema is not None  # structured_output implies this was parsed
@@ -674,6 +722,7 @@ class ChatCompletion:
                 for name, ctype in zip(schema["properties"].keys(), comfy_types)
             )
             result_tuple += extra
+        result_tuple += (seed_used,)
 
         return {
             "ui": {"text": [ui_text]},

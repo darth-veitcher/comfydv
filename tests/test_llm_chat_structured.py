@@ -142,6 +142,76 @@ def test_chat_structured_retries_on_validation_failure(monkeypatch):
     assert len(fake.calls) == 2
 
 
+def test_chat_structured_timeout_escalates_per_retry_attempt(monkeypatch):
+    bad = ValidationError.from_exception_data("Widget", [])
+    fake = _FakeAgent([bad, bad, _Widget(name="b", count=2)])
+    build_calls = []
+
+    def fake_build_agent(**kw):
+        build_calls.append(kw["timeout_secs"])
+        return fake
+
+    monkeypatch.setattr(chat_mod, "_build_agent", fake_build_agent)
+
+    _run_async(
+        chat_mod.chat_structured(
+            base_url="http://localhost:11434/v1",
+            model="llama3",
+            messages=_messages(),
+            schema=_Widget,
+            timeout_secs=100.0,
+            max_retries=2,
+        )
+    )
+
+    assert build_calls == [100.0, 200.0, 300.0]
+
+
+def test_chat_structured_attempt_info_populated_on_success(monkeypatch):
+    fake = _FakeAgent([_Widget(name="a", count=1)])
+    monkeypatch.setattr(chat_mod, "_build_agent", lambda **kw: fake)
+
+    attempt_info: dict = {}
+    _run_async(
+        chat_mod.chat_structured(
+            base_url="http://localhost:11434/v1",
+            model="llama3",
+            messages=_messages(),
+            schema=_Widget,
+            options={"seed": 5},
+            attempt_info=attempt_info,
+        )
+    )
+
+    assert attempt_info == {
+        "seed": 5,
+        "attempts": 1,
+        "timeout_secs": 300.0,
+        "refusals": 0,
+    }
+
+
+def test_chat_structured_attempt_info_populated_on_exhaustion(monkeypatch):
+    bad = ValidationError.from_exception_data("Widget", [])
+    fake = _FakeAgent([bad, bad])
+    monkeypatch.setattr(chat_mod, "_build_agent", lambda **kw: fake)
+
+    attempt_info: dict = {}
+    with pytest.raises(RuntimeError):
+        _run_async(
+            chat_mod.chat_structured(
+                base_url="http://localhost:11434/v1",
+                model="llama3",
+                messages=_messages(),
+                schema=_Widget,
+                max_retries=1,
+                attempt_info=attempt_info,
+            )
+        )
+
+    assert attempt_info["attempts"] == 2
+
+
 def test_chat_structured_exhausted_retries_raises_runtime_error(monkeypatch):
     bad = ValidationError.from_exception_data("Widget", [])
     fake = _FakeAgent([bad, bad, bad])  # max_retries=2 -> 3 total attempts

@@ -19,6 +19,8 @@ from comfydv._llm.retry import (
     is_lexical_refusal,
     is_refusal,
     next_seed,
+    next_timeout_secs,
+    record_attempt_info,
 )
 
 
@@ -39,6 +41,44 @@ def test_next_seed_starts_from_pinned_base():
 
 def test_next_seed_ignores_non_int_seed():
     assert next_seed({"seed": "not-an-int"}, 2) == 1
+
+
+class TestNextTimeoutSecs:
+    def test_attempt_one_returns_base_timeout_unchanged(self):
+        assert next_timeout_secs(300.0, 1) == 300.0
+
+    def test_escalates_multiplicatively_per_attempt(self):
+        assert next_timeout_secs(300.0, 2) == 600.0
+        assert next_timeout_secs(300.0, 3) == 900.0
+
+
+class TestRecordAttemptInfo:
+    def test_none_attempt_info_is_a_no_op(self):
+        # Must not raise — callers that don't care about this metadata pass
+        # None and should see no behavior change at all.
+        record_attempt_info(None, seed=1, attempts=2, timeout_secs=600.0, refusals=1)
+
+    def test_populates_dict_in_place(self):
+        info: dict = {}
+        record_attempt_info(info, seed=7, attempts=3, timeout_secs=900.0, refusals=2)
+        assert info == {
+            "seed": 7,
+            "attempts": 3,
+            "timeout_secs": 900.0,
+            "refusals": 2,
+        }
+
+    def test_overwrites_previous_values(self):
+        # Callers call this once per attempt (or once per return path) —
+        # a later call must replace, not merge with, an earlier one.
+        info: dict = {"seed": 1, "attempts": 1, "timeout_secs": 300.0, "refusals": 0}
+        record_attempt_info(info, seed=2, attempts=2, timeout_secs=600.0, refusals=1)
+        assert info == {
+            "seed": 2,
+            "attempts": 2,
+            "timeout_secs": 600.0,
+            "refusals": 1,
+        }
 
 
 # ---------------------------------------------------------------------------

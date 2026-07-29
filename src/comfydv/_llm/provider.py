@@ -83,6 +83,7 @@ class LLMProvider(Protocol):
         options: dict | None = None,
         timeout_secs: float = 300.0,
         max_retries: int = 2,
+        attempt_info: dict | None = None,
     ) -> str:
         """Free-text chat response.
 
@@ -92,7 +93,9 @@ class LLMProvider(Protocol):
         into normal behavior. Still returns the (possibly blank) last
         attempt's text rather than raising if every retry comes back blank —
         this method has never validated its output, unlike
-        ``chat_structured()``.
+        ``chat_structured()``. Each retry's request timeout also escalates
+        (``_llm/retry.py``'s ``next_timeout_secs``) rather than reusing the
+        same budget that just ran out.
 
         ADR-010: ``options`` may carry a ``"think"`` key (bool) to disable a
         "thinking"-capable model's chain-of-thought reasoning — every
@@ -101,6 +104,12 @@ class LLMProvider(Protocol):
         ``chat_template_kwargs``/``reasoning_effort`` in the request body),
         since neither backend recognizes a literal ``"think"`` key nested
         inside a generic options object.
+
+        ``attempt_info``, if given, is populated in place with the retry
+        loop's final outcome (seed/timeout used, attempt count, refusal
+        count) via ``_llm/retry.py``'s ``record_attempt_info`` — an optional
+        out-param, not a return-type change, so existing callers that don't
+        pass it see no behavior change.
         """
         ...
 
@@ -112,6 +121,7 @@ class LLMProvider(Protocol):
         options: dict | None = None,
         timeout_secs: float = 300.0,
         max_retries: int = 2,
+        attempt_info: dict | None = None,
     ) -> BaseModel:
         """Schema-validated chat response.
 
@@ -121,7 +131,8 @@ class LLMProvider(Protocol):
         field.
 
         ADR-010: see ``chat()`` — same ``options["think"]`` convention,
-        same per-provider translation.
+        same per-provider translation, same escalating per-attempt timeout,
+        and the same ``attempt_info`` out-param convention.
         """
         ...
 

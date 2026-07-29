@@ -27,7 +27,13 @@ from .ollama_provider import (
     _post_json,
 )
 from .provider import Message, ModelInfo, ModelStatus
-from .retry import RETRY_BACKOFF_SECS, is_refusal, next_seed
+from .retry import (
+    RETRY_BACKOFF_SECS,
+    is_refusal,
+    next_seed,
+    next_timeout_secs,
+    record_attempt_info,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -190,6 +196,7 @@ class LlamaCppProvider:
         options: dict | None = None,
         timeout_secs: float = 300.0,
         max_retries: int = 2,
+        attempt_info: dict | None = None,
     ) -> str:
         payload_messages = [_to_openai_message(m) for m in messages]
         options, think = _pop_think(options)
@@ -203,8 +210,12 @@ class LlamaCppProvider:
                 embed_fn = lambda t: self.embed(embedding_model, t)  # noqa: E731
         total_attempts = max(0, min(int(max_retries), 5)) + 1
         response_text = ""
+        refusal_count = 0
+        attempt_seed = 0
+        attempt_timeout = timeout_secs
 
         for attempt in range(1, total_attempts + 1):
+            attempt_timeout = next_timeout_secs(timeout_secs, attempt)
             payload: dict = {
                 "model": model,
                 "messages": payload_messages,
@@ -233,6 +244,13 @@ class LlamaCppProvider:
                 # spec's actual top-level "seed" field, so it takes effect
                 # against llama-server's /v1/chat/completions.
                 payload["seed"] = next_seed(options, attempt)
+                attempt_seed = payload["seed"]
+            else:
+                # attempt 1 never sets the top-level "seed" field above (only
+                # retries do) — fall back to whatever the caller pinned in
+                # options, so attempt_info/seed_used reports the real seed in
+                # play even on a first-attempt success, not a stale 0.
+                attempt_seed = (options or {}).get("seed", 0)
 
             cache_key = _cache_key(
                 "llamacpp_chat",
@@ -246,12 +264,19 @@ class LlamaCppProvider:
             )
             cached, hit = _CHAT_RESPONSE_CACHE.get(cache_key)
             if hit:
+                record_attempt_info(
+                    attempt_info,
+                    seed=attempt_seed,
+                    attempts=attempt,
+                    timeout_secs=attempt_timeout,
+                    refusals=refusal_count,
+                )
                 return cached
 
             result = await _post_json(
                 f"{self.host}/v1/chat/completions",
                 payload,
-                timeout=timeout_secs,
+                timeout=attempt_timeout,
                 headers=self.headers,
             )
             choices = result.get("choices") or []
@@ -272,11 +297,26 @@ class LlamaCppProvider:
                     )
                 if not refused:
                     _CHAT_RESPONSE_CACHE.set(cache_key, response_text)
+                    record_attempt_info(
+                        attempt_info,
+                        seed=attempt_seed,
+                        attempts=attempt,
+                        timeout_secs=attempt_timeout,
+                        refusals=refusal_count,
+                    )
                     return response_text
+                refusal_count += 1
 
             if attempt < total_attempts:
                 await asyncio.sleep(RETRY_BACKOFF_SECS)
 
+        record_attempt_info(
+            attempt_info,
+            seed=attempt_seed,
+            attempts=total_attempts,
+            timeout_secs=attempt_timeout,
+            refusals=refusal_count,
+        )
         # Every attempt came back blank — never raises here (chat() has
         # never validated its output, unlike chat_structured()); return the
         # last (blank) attempt uncached so the next queue run tries fresh.
@@ -290,6 +330,7 @@ class LlamaCppProvider:
         options: dict | None = None,
         timeout_secs: float = 300.0,
         max_retries: int = 2,
+        attempt_info: dict | None = None,
     ) -> BaseModel:
         from .chat import chat_structured as _chat_structured_impl
 
@@ -305,6 +346,13 @@ class LlamaCppProvider:
         )
         cached, hit = _CHAT_RESPONSE_CACHE.get(cache_key)
         if hit:
+            record_attempt_info(
+                attempt_info,
+                seed=(options or {}).get("seed", 0),
+                attempts=1,
+                timeout_secs=timeout_secs,
+                refusals=0,
+            )
             return schema.model_validate(cached)
 
         embed_fn = None
@@ -327,6 +375,7 @@ class LlamaCppProvider:
             max_retries=max_retries,
             timeout_secs=timeout_secs,
             embed_fn=embed_fn,
+            attempt_info=attempt_info,
         )
         _CHAT_RESPONSE_CACHE.set(cache_key, result.model_dump())
         return result

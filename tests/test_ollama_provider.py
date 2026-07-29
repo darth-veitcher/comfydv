@@ -928,6 +928,86 @@ def test_chat_text_only_payload_omits_images_key(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# attempt_info / escalating per-attempt timeout
+# ---------------------------------------------------------------------------
+
+
+def test_chat_timeout_escalates_per_retry_attempt(monkeypatch):
+    timeouts = []
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        timeouts.append(timeout)
+        if len(timeouts) < 3:
+            return {"message": {"content": ""}}  # blank -> retry
+        return {"message": {"content": "done"}}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    monkeypatch.setattr(provider_mod.asyncio, "sleep", _fake_sleep)
+
+    _run_async(
+        OllamaProvider("http://localhost:11434").chat(
+            "llama3",
+            [Message(role="user", content="hi")],
+            timeout_secs=100.0,
+            max_retries=2,
+        )
+    )
+
+    assert timeouts == [100.0, 200.0, 300.0]
+
+
+def test_chat_attempt_info_populated_on_success(monkeypatch):
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        return {"message": {"content": "ok"}}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+
+    attempt_info: dict = {}
+    _run_async(
+        OllamaProvider("http://localhost:11434").chat(
+            "llama3",
+            [Message(role="user", content="hi")],
+            options={"seed": 5},
+            attempt_info=attempt_info,
+        )
+    )
+
+    assert attempt_info == {
+        "seed": 5,
+        "attempts": 1,
+        "timeout_secs": 300.0,
+        "refusals": 0,
+    }
+
+
+def test_chat_attempt_info_reflects_refusal_retry(monkeypatch):
+    calls = []
+
+    async def fake_post(url, payload, *, timeout=120.0, headers=None):
+        calls.append(payload)
+        if len(calls) == 1:
+            return {"message": {"content": "I cannot generate that for you."}}
+        return {"message": {"content": "a real, on-topic answer"}}
+
+    monkeypatch.setattr(provider_mod, "_post_json", fake_post)
+    monkeypatch.setattr(provider_mod.asyncio, "sleep", _fake_sleep)
+
+    attempt_info: dict = {}
+    _run_async(
+        OllamaProvider("http://localhost:11434").chat(
+            "llama3",
+            [Message(role="user", content="hi")],
+            options={"refusal_retry": {"enabled": True, "embedding_model": ""}},
+            attempt_info=attempt_info,
+        )
+    )
+
+    assert attempt_info["attempts"] == 2
+    assert attempt_info["refusals"] == 1
+    assert attempt_info["seed"] == 1  # next_seed(): attempt 2 -> seed 1
+
+
+# ---------------------------------------------------------------------------
 # refusal-retry — comfydv-level "refusal_retry" options convention (see
 # OllamaOptionRefusalRetry / comfydv._llm.retry.is_refusal)
 # ---------------------------------------------------------------------------

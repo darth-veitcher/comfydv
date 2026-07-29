@@ -40,9 +40,24 @@ class _FakeProvider:
         self.calls.append(("unload_model", model))
 
     async def chat(
-        self, model, messages, options=None, timeout_secs=300.0, max_retries=2
+        self,
+        model,
+        messages,
+        options=None,
+        timeout_secs=300.0,
+        max_retries=2,
+        attempt_info=None,
     ):
         self.calls.append(("chat", model))
+        if attempt_info is not None:
+            attempt_info.update(
+                {
+                    "seed": (options or {}).get("seed", 0),
+                    "attempts": 1,
+                    "timeout_secs": timeout_secs,
+                    "refusals": 0,
+                }
+            )
         return self.chat_response
 
 

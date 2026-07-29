@@ -92,13 +92,35 @@ class _FakeProvider:
         self.calls.append(("unload_model", model))
 
     async def chat(
-        self, model, messages, options=None, timeout_secs=300.0, max_retries=2
+        self,
+        model,
+        messages,
+        options=None,
+        timeout_secs=300.0,
+        max_retries=2,
+        attempt_info=None,
     ):
         self.calls.append(("chat", model, messages, options, timeout_secs, max_retries))
+        if attempt_info is not None:
+            attempt_info.update(
+                {
+                    "seed": (options or {}).get("seed", 0),
+                    "attempts": 1,
+                    "timeout_secs": timeout_secs,
+                    "refusals": 0,
+                }
+            )
         return self.chat_response
 
     async def chat_structured(
-        self, model, messages, schema, options=None, timeout_secs=300.0, max_retries=2
+        self,
+        model,
+        messages,
+        schema,
+        options=None,
+        timeout_secs=300.0,
+        max_retries=2,
+        attempt_info=None,
     ):
         self.calls.append(
             (
@@ -113,6 +135,15 @@ class _FakeProvider:
         )
         if self.raise_on_chat_structured is not None:
             raise self.raise_on_chat_structured
+        if attempt_info is not None:
+            attempt_info.update(
+                {
+                    "seed": (options or {}).get("seed", 0),
+                    "attempts": 1,
+                    "timeout_secs": timeout_secs,
+                    "refusals": 0,
+                }
+            )
         return schema(**self.structured_field_values)
 
 
@@ -272,7 +303,7 @@ class TestUS4ChatCompletion:
     def test_chat_model_receives_wired_string(self):
         """Wiring LLMLoadModel.model_name → ChatCompletion.model works."""
         fake = _FakeProvider(chat_response="ok")
-        _, _, used_model = ChatCompletion().chat(
+        _, _, used_model, _ = ChatCompletion().chat(
             client=fake, model="llama3:latest", prompt="hi"
         )["result"]
         assert used_model == "llama3:latest"
@@ -280,11 +311,17 @@ class TestUS4ChatCompletion:
         assert fake.calls[0][1] == "llama3:latest"
 
     def test_chat_completion_returns_model_name(self):
-        assert ChatCompletion.RETURN_TYPES == ("STRING", "OLLAMA_HISTORY", "STRING")
+        assert ChatCompletion.RETURN_TYPES == (
+            "STRING",
+            "OLLAMA_HISTORY",
+            "STRING",
+            "INT",
+        )
         assert ChatCompletion.RETURN_NAMES == (
             "response",
             "updated_history",
             "model_name",
+            "seed_used",
         )
 
     def test_chat_is_output_node(self):
@@ -302,15 +339,24 @@ class TestUS4ChatCompletion:
         ret = ChatCompletion().chat(client=fake, model="m", prompt="hi")
         assert "hello world" in ret["ui"]["text"][0]
 
-    def test_chat_result_is_3_tuple(self):
+    def test_chat_result_is_4_tuple(self):
         fake = _FakeProvider(chat_response="hello")
         ret = ChatCompletion().chat(client=fake, model="m", prompt="hi")
         assert isinstance(ret["result"], tuple)
-        assert len(ret["result"]) == 3
-        response, history, model_name = ret["result"]
+        assert len(ret["result"]) == 4
+        response, history, model_name, seed_used = ret["result"]
         assert response == "hello"
         assert isinstance(history, list)
         assert model_name == "m"
+        assert seed_used == 0
+
+    def test_chat_result_seed_used_reflects_pinned_seed(self):
+        fake = _FakeProvider(chat_response="hello")
+        ret = ChatCompletion().chat(
+            client=fake, model="m", prompt="hi", options={"seed": 42}
+        )
+        _, _, _, seed_used = ret["result"]
+        assert seed_used == 42
 
     def test_chat_has_timeout_secs_input(self):
         input_types = ChatCompletion.INPUT_TYPES()
@@ -337,7 +383,7 @@ class TestUS4ChatCompletion:
     ):
         """Scenario: Single-turn completion returns non-empty response."""
         (client,) = OllamaClient().create_client(ollama_host)
-        response, updated_history, model_name = ChatCompletion().chat(
+        response, updated_history, model_name, _seed = ChatCompletion().chat(
             client=client,
             model=_CHAT_MODEL,
             prompt="Say exactly the word: pong",
@@ -359,14 +405,14 @@ class TestUS4ChatCompletion:
         """
         (client,) = OllamaClient().create_client(ollama_host)
         no_think = {"think": False}
-        _, history, _ = ChatCompletion().chat(
+        _, history, _, _ = ChatCompletion().chat(
             client=client,
             model=_CHAT_MODEL,
             prompt="My name is Alice. Remember it.",
             history=[],
             options=no_think,
         )["result"]
-        response, updated, _ = ChatCompletion().chat(
+        response, updated, _, _ = ChatCompletion().chat(
             client=client,
             model=_CHAT_MODEL,
             prompt="What is my name?",
@@ -380,11 +426,11 @@ class TestUS4ChatCompletion:
     def test_history_accumulated_correctly(self, ollama_host, skip_if_no_ollama):
         """History list grows by 2 entries per turn."""
         (client,) = OllamaClient().create_client(ollama_host)
-        _, h1, _ = ChatCompletion().chat(
+        _, h1, _, _ = ChatCompletion().chat(
             client=client, model=_CHAT_MODEL, prompt="Turn 1", history=[]
         )["result"]
         assert len(h1) == 2
-        _, h2, _ = ChatCompletion().chat(
+        _, h2, _, _ = ChatCompletion().chat(
             client=client, model=_CHAT_MODEL, prompt="Turn 2", history=h1
         )["result"]
         assert len(h2) == 4
@@ -428,7 +474,7 @@ class TestUS4ChatCompletion:
             max_retries=1,
             unique_id="smoke-test",
         )
-        response_text, _history, model_name, output = result["result"]
+        response_text, _history, model_name, output, _seed = result["result"]
         assert model_name == _CHAT_MODEL
         assert json.loads(response_text) == {"output": output}
         assert isinstance(output, str) and output.strip()
@@ -504,8 +550,9 @@ class TestStructuredOutput:
             "updated_history",
             "model_name",
             "output",
+            "seed_used",
         )
-        assert len(ret["result"]) == 4
+        assert len(ret["result"]) == 5
         assert ret["result"][3] == "clean text"
         assert json.loads(ret["result"][0]) == {"output": "clean text"}
 
@@ -532,6 +579,7 @@ class TestStructuredOutput:
             "STRING",
             "INT",
             "BOOLEAN",
+            "INT",
         )
         assert ChatCompletion.RETURN_NAMES == (
             "response",
@@ -540,8 +588,9 @@ class TestStructuredOutput:
             "summary",
             "score",
             "is_positive",
+            "seed_used",
         )
-        _, _, _, summary, score, is_positive = ret["result"]
+        _, _, _, summary, score, is_positive, _seed = ret["result"]
         assert summary == "great"
         assert score == 9
         assert isinstance(score, int)
@@ -569,7 +618,7 @@ class TestStructuredOutput:
             output_schema=_SCHEMA_WITH_OPTIONAL_NULLABLE_FIELD,
             unique_id="n3b",
         )
-        _, _, _, output, duration_seconds = ret["result"]
+        _, _, _, output, duration_seconds, _seed = ret["result"]
         assert output == "hi"
         assert duration_seconds is None  # FLOAT socket; only STRING coerces None to ""
 
@@ -598,7 +647,7 @@ class TestStructuredOutput:
             structured_output=True,
             unique_id="n5",
         )
-        assert len(ChatCompletion.RETURN_TYPES) == 4
+        assert len(ChatCompletion.RETURN_TYPES) == 5
 
         fake2 = _FakeProvider(chat_response="x")
         ChatCompletion().chat(
@@ -818,8 +867,8 @@ class TestUS5ComposableOptions:
             history=[],
             options=opts2,
         )
-        r1, _, _model = ChatCompletion().chat(**kwargs)["result"]
-        r2, _, _model = ChatCompletion().chat(**kwargs)["result"]
+        r1, _, _model, _seed = ChatCompletion().chat(**kwargs)["result"]
+        r2, _, _model, _seed = ChatCompletion().chat(**kwargs)["result"]
         assert r1 == r2
 
 
@@ -1058,6 +1107,7 @@ class TestUpdateStructuredOutputsRoute:
             "response",
             "updated_history",
             "model_name",
+            "seed_used",
         ]
 
     def test_valid_schema_returns_dynamic_outputs(self):
@@ -1077,6 +1127,7 @@ class TestUpdateStructuredOutputsRoute:
             "summary",
             "score",
             "is_positive",
+            "seed_used",
         ]
         assert types == [
             "STRING",
@@ -1085,6 +1136,7 @@ class TestUpdateStructuredOutputsRoute:
             "STRING",
             "INT",
             "BOOLEAN",
+            "INT",
         ]
 
     def test_invalid_json_while_typing_falls_back_to_base_outputs(self):
@@ -1102,6 +1154,7 @@ class TestUpdateStructuredOutputsRoute:
             "response",
             "updated_history",
             "model_name",
+            "seed_used",
         ]
 
     def test_incomplete_schema_missing_properties_falls_back_to_base_outputs(self):
@@ -1116,6 +1169,7 @@ class TestUpdateStructuredOutputsRoute:
             "response",
             "updated_history",
             "model_name",
+            "seed_used",
         ]
 
     def test_response_reflects_class_state_not_just_this_call(self):
@@ -1129,7 +1183,8 @@ class TestUpdateStructuredOutputsRoute:
                 "output_schema": _SINGLE_FIELD_SCHEMA,
             }
         )
-        assert ChatCompletion.RETURN_NAMES[-1] == "output"
+        assert ChatCompletion.RETURN_NAMES[-2] == "output"
+        assert ChatCompletion.RETURN_NAMES[-1] == "seed_used"
 
         data = self._call(
             {"unique_id": "r5", "structured_output": False, "output_schema": "{}"}
@@ -1138,6 +1193,7 @@ class TestUpdateStructuredOutputsRoute:
             "response",
             "updated_history",
             "model_name",
+            "seed_used",
         ]
         assert ChatCompletion.RETURN_NAMES == ChatCompletion._BASE_RETURN_NAMES
 

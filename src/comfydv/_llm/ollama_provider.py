@@ -19,7 +19,13 @@ import time
 from pydantic import BaseModel, ValidationError
 
 from .provider import Message, ModelInfo, ModelStatus
-from .retry import RETRY_BACKOFF_SECS, is_refusal, next_seed
+from .retry import (
+    RETRY_BACKOFF_SECS,
+    is_refusal,
+    next_seed,
+    next_timeout_secs,
+    record_attempt_info,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -359,6 +365,7 @@ class OllamaProvider:
         options: dict | None = None,
         timeout_secs: float = 300.0,
         max_retries: int = 2,
+        attempt_info: dict | None = None,
     ) -> str:
         if any(m.images for m in messages):
             await _require_vision_capability(self.host, model, self.headers)
@@ -380,11 +387,16 @@ class OllamaProvider:
         total_attempts = max(0, min(int(max_retries), 5)) + 1
         response_text = ""
         incomplete = False
+        refusal_count = 0
+        attempt_seed = 0
+        attempt_timeout = timeout_secs
 
         for attempt in range(1, total_attempts + 1):
             attempt_options = dict(options) if options else {}
             if attempt > 1:
                 attempt_options["seed"] = next_seed(options, attempt)
+            attempt_seed = attempt_options.get("seed", 0)
+            attempt_timeout = next_timeout_secs(timeout_secs, attempt)
 
             payload: dict = {
                 "model": model,
@@ -409,12 +421,19 @@ class OllamaProvider:
             )
             cached, hit = _CHAT_RESPONSE_CACHE.get(cache_key)
             if hit:
+                record_attempt_info(
+                    attempt_info,
+                    seed=attempt_seed,
+                    attempts=attempt,
+                    timeout_secs=attempt_timeout,
+                    refusals=refusal_count,
+                )
                 return cached
 
             result = await _post_json(
                 f"{self.host}/api/chat",
                 payload,
-                timeout=timeout_secs,
+                timeout=attempt_timeout,
                 headers=self.headers,
             )
             response_text = result.get("message", {}).get("content", "")
@@ -430,11 +449,19 @@ class OllamaProvider:
                     )
                 if not refused:
                     _CHAT_RESPONSE_CACHE.set(cache_key, response_text)
+                    record_attempt_info(
+                        attempt_info,
+                        seed=attempt_seed,
+                        attempts=attempt,
+                        timeout_secs=attempt_timeout,
+                        refusals=refusal_count,
+                    )
                     return response_text
                 # A detected refusal is handled exactly like a blank
                 # response below: fall through to the backoff/retry with a
                 # bumped seed (next_seed), rather than returning the refusal
                 # text to the caller.
+                refusal_count += 1
 
             # done: false alongside blank content is a distinct signal from
             # an ordinary blank generation — it's Ollama answering before
@@ -447,6 +474,14 @@ class OllamaProvider:
 
             if attempt < total_attempts:
                 await asyncio.sleep(RETRY_BACKOFF_SECS)
+
+        record_attempt_info(
+            attempt_info,
+            seed=attempt_seed,
+            attempts=total_attempts,
+            timeout_secs=attempt_timeout,
+            refusals=refusal_count,
+        )
 
         if incomplete:
             raise RuntimeError(
@@ -470,6 +505,7 @@ class OllamaProvider:
         options: dict | None = None,
         timeout_secs: float = 300.0,
         max_retries: int = 2,
+        attempt_info: dict | None = None,
     ) -> BaseModel:
         """Native ``/api/chat`` + ``"format"`` (grammar-constrained JSON
         decoding), not the shared pydantic-ai ``chat.py`` helper.
@@ -515,16 +551,28 @@ class OllamaProvider:
         )
         cached, hit = _CHAT_RESPONSE_CACHE.get(cache_key)
         if hit:
+            record_attempt_info(
+                attempt_info,
+                seed=(options or {}).get("seed", 0),
+                attempts=1,
+                timeout_secs=timeout_secs,
+                refusals=0,
+            )
             return schema.model_validate(cached)
 
         total_attempts = max(0, min(int(max_retries), 5)) + 1
         last_error: Exception | None = None
         last_invalid_text = ""
+        refusal_count = 0
+        attempt_seed = 0
+        attempt_timeout = timeout_secs
 
         for attempt in range(1, total_attempts + 1):
             attempt_options = dict(options) if options else {}
             if attempt > 1:
                 attempt_options["seed"] = next_seed(options, attempt)
+            attempt_seed = attempt_options.get("seed", 0)
+            attempt_timeout = next_timeout_secs(timeout_secs, attempt)
 
             payload: dict = {
                 "model": model,
@@ -543,7 +591,7 @@ class OllamaProvider:
                 result = await _post_json(
                     f"{self.host}/api/chat",
                     payload,
-                    timeout=timeout_secs,
+                    timeout=attempt_timeout,
                     headers=self.headers,
                 )
             except RuntimeError as exc:
@@ -577,6 +625,7 @@ class OllamaProvider:
                     custom_phrases=custom_phrases,
                 )
                 if refused:
+                    refusal_count += 1
                     last_error = RuntimeError("refusal/deflection detected")
                     last_invalid_text = content
                     if attempt < total_attempts:
@@ -584,8 +633,22 @@ class OllamaProvider:
                     continue
 
             _CHAT_RESPONSE_CACHE.set(cache_key, parsed.model_dump())
+            record_attempt_info(
+                attempt_info,
+                seed=attempt_seed,
+                attempts=attempt,
+                timeout_secs=attempt_timeout,
+                refusals=refusal_count,
+            )
             return parsed
 
+        record_attempt_info(
+            attempt_info,
+            seed=attempt_seed,
+            attempts=total_attempts,
+            timeout_secs=attempt_timeout,
+            refusals=refusal_count,
+        )
         raise RuntimeError(
             f"chat_structured: response failed validation against schema after "
             f"{total_attempts} attempt(s) (model={model!r}). Last error: "

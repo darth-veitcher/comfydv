@@ -47,6 +47,48 @@ def next_seed(options: dict | None, attempt: int) -> int:
     return base + (attempt - 1)
 
 
+def next_timeout_secs(base_timeout: float, attempt: int) -> float:
+    """Escalating per-attempt timeout for retries (1-indexed ``attempt``).
+
+    Attempt 1 gets the caller's own ``timeout_secs`` unchanged; each retry
+    multiplies it by the attempt number. A request that timed out may
+    genuinely need more time — a slow-to-load or heavily-loaded model, a
+    large prompt — not just an identical retry under the same budget it
+    just failed to meet.
+    """
+    return base_timeout * attempt
+
+
+def record_attempt_info(
+    attempt_info: dict | None,
+    *,
+    seed: int,
+    attempts: int,
+    timeout_secs: float,
+    refusals: int,
+) -> None:
+    """Populate an optional caller-supplied dict with the retry loop's
+    final outcome — the seed/timeout actually used, how many attempts it
+    took, and how many were refusal-triggered.
+
+    A plain out-param rather than a return-type change, so it's fully
+    backward compatible: a caller that doesn't pass ``attempt_info`` sees
+    no change in behavior at all. ``ChatCompletion`` uses this to expose
+    the seed actually used as a node output and to build a UI status line
+    when a retry/refusal happened.
+    """
+    if attempt_info is None:
+        return
+    attempt_info.update(
+        {
+            "seed": seed,
+            "attempts": attempts,
+            "timeout_secs": timeout_secs,
+            "refusals": refusals,
+        }
+    )
+
+
 # ---------------------------------------------------------------------------
 # Refusal/deflection detection
 # ---------------------------------------------------------------------------

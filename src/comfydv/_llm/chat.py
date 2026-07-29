@@ -46,7 +46,14 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
 
 from .provider import Message
-from .retry import RETRY_BACKOFF_SECS, EmbedFn, is_refusal, next_seed
+from .retry import (
+    RETRY_BACKOFF_SECS,
+    EmbedFn,
+    is_refusal,
+    next_seed,
+    next_timeout_secs,
+    record_attempt_info,
+)
 
 _STRUCTURED_OUTPUT_FAILURE_EXCEPTIONS = (
     UnexpectedModelBehavior,
@@ -127,6 +134,7 @@ async def chat_structured(
     max_retries: int = 2,
     timeout_secs: float = 300.0,
     embed_fn: EmbedFn | None = None,
+    attempt_info: dict | None = None,
 ) -> BaseModel:
     """Call ``model`` at ``base_url`` (an OpenAI-compatible ``/v1`` root) and
     return a validated instance of ``schema``.
@@ -171,13 +179,6 @@ async def chat_structured(
             "chat_structured requires the last message to have role='user'"
         )
 
-    agent = _build_agent(
-        base_url=base_url,
-        model=model,
-        schema=schema,
-        headers=headers,
-        timeout_secs=timeout_secs,
-    )
     history = _history_to_messages(messages)
     prompt = _user_prompt_content(messages[-1])
     think = None
@@ -204,7 +205,21 @@ async def chat_structured(
     total_attempts = max(0, min(int(max_retries), 5)) + 1
     last_error: Exception | None = None
     last_invalid_text = ""
+    refusal_count = 0
+    attempt_seed = (options or {}).get("seed", 0) if isinstance(options, dict) else 0
+    attempt_timeout = timeout_secs
     for attempt in range(1, total_attempts + 1):
+        attempt_timeout = next_timeout_secs(timeout_secs, attempt)
+        # Rebuilt each attempt so the escalated timeout actually takes
+        # effect — httpx.AsyncClient's timeout is fixed at construction,
+        # not mutable per-request.
+        agent = _build_agent(
+            base_url=base_url,
+            model=model,
+            schema=schema,
+            headers=headers,
+            timeout_secs=attempt_timeout,
+        )
         attempt_settings = dict(model_settings) if model_settings else {}
         if attempt > 1:
             # Confirmed live: a freshly-loaded model's first structured-output
@@ -217,6 +232,7 @@ async def chat_structured(
             # llama-server's OpenAI-compatible endpoints) and give it a beat
             # via RETRY_BACKOFF_SECS in case it's still finishing loading.
             seed = next_seed(options, attempt)
+            attempt_seed = seed
             attempt_settings["seed"] = seed
             if "extra_body" in attempt_settings:
                 # beacon-reviewer caught this: if a caller pinned options["seed"],
@@ -263,11 +279,19 @@ async def chat_structured(
                     custom_phrases=tuple(refusal_cfg.get("custom_phrases") or ()),
                 )
                 if refused:
+                    refusal_count += 1
                     last_error = RuntimeError("refusal/deflection detected")
                     last_invalid_text = content
                     if attempt < total_attempts:
                         await asyncio.sleep(RETRY_BACKOFF_SECS)
                     continue
+            record_attempt_info(
+                attempt_info,
+                seed=attempt_seed,
+                attempts=attempt,
+                timeout_secs=attempt_timeout,
+                refusals=refusal_count,
+            )
             return output
         except _STRUCTURED_OUTPUT_FAILURE_EXCEPTIONS as exc:
             last_error = exc
@@ -275,6 +299,13 @@ async def chat_structured(
             if attempt < total_attempts:
                 await asyncio.sleep(RETRY_BACKOFF_SECS)
 
+    record_attempt_info(
+        attempt_info,
+        seed=attempt_seed,
+        attempts=total_attempts,
+        timeout_secs=attempt_timeout,
+        refusals=refusal_count,
+    )
     raise RuntimeError(
         f"chat_structured: response failed validation against schema after "
         f"{total_attempts} attempt(s) (model={model!r}). Last error: "
