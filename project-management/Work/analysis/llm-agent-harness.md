@@ -240,11 +240,9 @@ only once the internals have converged (§3.1).
 
 ## 4. Safety: the part most likely to bite
 
-1. **Workflows are shared files.** A stdio MCP server is "run this command". If a workflow JSON
-   can define `command: …`, then loading someone else's workflow is remote code execution.
-   Rule: **workflow JSON may only *name* a stdio server.** Definitions live in a local config
-   file (for example `<ComfyUI user dir>/comfydv/mcp.json`, standard `mcpServers` format, read with
-   `load_mcp_toolsets`). HTTP MCP servers by URL are acceptable.
+1. **Workflows are shared files.** A stdio MCP server means "run this program on this computer". A
+   workflow JSON must never be able to start one silently. The trust model that enforces this is
+   in §4.1.
 2. **Prompt injection via tool output.** Fetched pages and search results go straight into the
    model's context. With read-only tools the damage is bounded. Every write-capable MCP server
    a user adds widens it. Document this. Shell and code-exec tools are an explicit non-goal.
@@ -261,6 +259,63 @@ only once the internals have converged (§3.1).
    full host authority. Code mode means the model can call tools in loops, so per-snippet tool-call caps
    and the run-level `UsageLimits` both apply.
 
+### 4.1 MCP server trust model (proposed; maintainer asked for options, 2026-11-12)
+
+Goal: Claude Code's pattern, with safe built-ins enabled by default and extended or overridden by
+local config, plus **transparent, low-friction toggling from the UI and the workflow** (like
+rgthree's group bypass toggles), without letting a shared workflow run code or leak data unannounced.
+
+**Layers** (later layers override earlier ones; **deny always beats allow**):
+
+| # | Layer | Where | Can add servers? | Can run local programs? |
+|---|---|---|---|---|
+| 1 | **Built-in** | shipped in `comfydv.mcp` (in-process FastMCP: `web`, …) | n/a | No (in-process, our code) |
+| 2 | **User config** | `<ComfyUI user dir>/comfydv/mcp.json`, standard `mcpServers` format (paste-compatible with Claude Desktop/Code) | Yes: HTTP and stdio | Yes, because the user wrote it |
+| 3 | **Managed config** (optional, later) | path from `COMFYDV_MCP_MANAGED`, for shared or multi-user ComfyUI hosts | Can **lock**: `allow`/`deny` lists, `allow_workflow_servers: false` | Policy only |
+| 4 | **Workflow** | node widgets saved in the workflow JSON | Only *proposes*: inert until approved (below) | Never without approval |
+
+**Rules:**
+
+- **Toggling is free; adding is approved.** A workflow may turn any *already-trusted* server
+  (layers 1–2, or previously approved) on or off, and narrow its tools, with no prompt. It's just
+  names and booleans, like a bypass toggle. A workflow can only *widen* access up to what local
+  config permits.
+- **Workflow-carried definitions are approve-on-first-use, hash-pinned.**
+  - Sharing a workflow that needs a server can carry that server's definition.
+  - On load, ComfyUI shows an approval dialog with the exact URL, or the exact command, args and env
+    variable *names*.
+  - A stdio definition is flagged red: "runs a program on this computer".
+  - Choices: **Approve & save to my config** / **Allow this session** / **Deny**.
+  - An approval is stored locally, keyed by a SHA-256 of the definition. If a later version of the
+    workflow changes one byte of the command or URL, it is pending again.
+  - HTTP servers need approval too: a prompt-injected agent could send your data to one.
+- **Headless runs fail closed.** A queue run via the API (`/prompt`, no browser to approve in)
+  that references a pending or unknown server errors before the first model call. The error names
+  the server and says how to approve it (add it to `mcp.json`).
+- **Secrets never live in workflows.** Config values may reference `${ENV_VAR}`. A workflow-carried
+  definition may name required variables but never contain their values. On export, headers and
+  env values are stripped.
+- **Per-tool narrowing.** Config `"tools": {"allow": [...], "deny": [...]}` per server. The node's
+  `allowed_tools` widget can only narrow further.
+
+**Making it visible (UI):**
+
+- The **Tool — MCP Servers** node renders one chip per server:
+  - name, plus a **source** badge (`built-in`, `user`, `approved`, `pending`)
+  - a **transport** icon (⚡ in-process, 🌐 HTTP, 🖥️ stdio, meaning a local program)
+  - an on/off toggle
+  - Pending chips are red with a **Review** button, which opens the approval dialog.
+- A toast appears on workflow load when it references unknown or pending servers.
+- The Agent's `trace` output starts with the servers and tools actually available to that run, as an audit line.
+
+**Options considered:**
+
+| | Friction | Security | Verdict |
+|---|---|---|---|
+| A. Config-only (workflows can only name servers) | High: sharing a workflow means editing `mcp.json` by hand | Highest | Too much friction for sharing |
+| **B. Layered + free toggles + hash-pinned approve-on-first-use; headless fails closed** | Low: one click per new server, never again unless it changes | High: nothing runs or connects unannounced | **Recommended** |
+| C. Trust workflow HTTP servers, approve only stdio | Lowest | Medium: an injected agent can exfiltrate to a workflow-chosen URL | Rejected |
+
 ## 5. Renaming and reorganisation
 
 Principle: **name by role, not by backend.** Only `OllamaClient` and `LlamaCppClient` are
@@ -271,8 +326,18 @@ backend-specific, so only they keep backend names.
 | Categories | No | `dv/llm`, `dv/llm/clients`, `dv/llm/options`, `dv/llm/headers`, `dv/llm/history`, `dv/llm/tools` |
 | Display names | No | "LLM Option — Temperature", "LLM Header — Bearer Token", "Agent", "Tool — Web Search", … |
 | Python modules | No | Split `ollama.py` into `src/comfydv/llm/{clients,chat,agent,models,options,headers,history,tools}.py` |
-| Node class keys | **Yes** | `OllamaOptionSeed` → `LLMOptionSeed` etc. Keep each old key registered as a thin subclass with `DEPRECATED = True` (ComfyUI hides deprecated nodes from search but still loads them). Remove after one minor release. |
-| Socket types | **Yes** (link type checks) | `OLLAMA_OPTIONS/HISTORY/HEADERS` → `LLM_OPTIONS/HISTORY/HEADERS`. Needs a spike: ComfyUI's frontend may accept comma-joined type unions on inputs, which would allow a zero-break transition. If not, it is a single breaking change, documented in `MIGRATION_MAP` the way ADR-007 did it. |
+| Node class keys | **Yes** | `OllamaOptionSeed` → `LLMOptionSeed` etc. **Clean break** (maintainer decision, 2026-11-12): no deprecated aliases. |
+| Socket types | **Yes** (link type checks) | `OLLAMA_OPTIONS/HISTORY/HEADERS` → `LLM_OPTIONS/HISTORY/HEADERS`, in the same clean break. |
+
+**Documenting the break** (required, because a clean break is only acceptable if nobody is surprised):
+- Ship it as a **versioned release** through the release pipeline (§8), never as an unannounced change on the
+  default branch that ComfyUI-Manager's git-clone installs track.
+- `CHANGELOG.md` gets a **Breaking** section with the full old→new table. `MIGRATION_MAP` is extended
+  with every renamed node and socket.
+- The README "Upgrading a workflow" section gets the same table.
+- `workflows/ltx-i2v-pipeline.json` is migrated in the same change.
+- Optional but cheap: a `scripts/migrate_workflow.py` that rewrites node types and socket types in a
+  saved workflow JSON using `MIGRATION_MAP`, so users don't have to rewire by hand.
 
 This rename is **independent of the agent work** and should land first, as its own small spec,
 so the Agent and Tool nodes are created in their final home rather than renamed straight after.
@@ -306,20 +371,66 @@ so the Agent and Tool nodes are created in their final home rather than renamed 
 
 | # | Spec | Bullet | Demo |
 |---|---|---|---|
-| 0 | `010-llm-node-naming` | Categories, display names, module split, deprecated aliases, socket-type spike | Old workflow loads; new names appear in search |
-| 1 | `011-llm-agent` | pydantic-ai 2.68 upgrade (regression-test `_llm/chat.py`) + `[mcp]` and harness `[codemode]` deps + ComfyUI install smoke test; `LLMProvider.agent_model()`; `OllamaNativeModel` (non-streaming, tools, think, options); `OpenAIChatModel` for llama.cpp; `Agent` node; in-process `comfydv.mcp.web` with **web_fetch**; **Tool — Web Fetch**; limits; live progress; `trace` | "Summarise <url>" on a local qwen3 via Ollama, every step visible on the node. The MCP path is proven on day 1. |
-| 2 | 011 | **web_search** on `comfydv.mcp.web` (SearXNG) + **Tool — Web Search**; `searxng` service in `docker-compose.dev.yml` | "What changed in llama.cpp this week?" → search → fetch → answer |
-| 3 | 011 | **Skills**: `Skills` capability, `LLM_SKILLS` socket, **Skill — Library** + **Skill — Inline**, `requires-tools` check, built-in `web-research` skill | The same question answered better with `web-research` wired: the trace shows `📘 loaded skill` before the `🔧` calls |
-| 3b | 011 | **Sandbox**: `execution: code_mode` on Agent (`CodeMode`), `run_skill_script` for skill scripts, limits on the node; a live eval of code mode vs tool calls on target local models | Research question answered in fewer model steps; trace shows one `run_code` doing parallel searches |
-| 4 | 011 | **Tool — MCP Server**: external servers (HTTP by URL with headers; stdio by name from config), with a `skills` output (`skill://` resources) | Agent uses a third-party MCP server's tools and skills alongside the built-ins |
-| 5 | 011 | Structured output + image input on `Agent` (`format` on the native model; reuse dynamic sockets) | Vision agent returns typed fields into FormatString |
+| R | `010-release-pipeline` | **First, because everything after it ships through it.** `develop` branch; CI gate (ruff, ty, pytest) on PRs; static version + python-semantic-release; `main` → tag + GitHub Release + PyPI + Comfy Registry; `develop` → PyPI pre-releases (§8) | Merge to `develop` publishes `0.2.0.dev1` to PyPI, and `pip install comfydv` still gets the last stable release |
+| 0 | `011-llm-node-naming` | **Clean break**: categories, display names, module split, node keys and socket types renamed; `MIGRATION_MAP`, CHANGELOG **Breaking** section, README table, migrated sample workflow, optional `scripts/migrate_workflow.py` | First versioned release with a documented break; the migrated `ltx-i2v-pipeline.json` loads |
+| 1 | `012-llm-agent` | pydantic-ai 2.68 upgrade (regression-test `_llm/chat.py`) + `[mcp]` and harness `[codemode]` deps + ComfyUI install smoke test; `LLMProvider.agent_model()`; `OllamaNativeModel` (non-streaming, tools, think, options); `OpenAIChatModel` for llama.cpp; `Agent` node; in-process `comfydv.mcp.web` with **web_fetch**; **Tool — Web Fetch**; limits; live progress; `trace` | "Summarise <url>" on a local qwen3 via Ollama, every step visible on the node. The MCP path is proven on day 1. |
+| 2 | 012 | **web_search** on `comfydv.mcp.web` (SearXNG) + **Tool — Web Search**; `searxng` service in `docker-compose.dev.yml` | "What changed in llama.cpp this week?" → search → fetch → answer |
+| 3 | 012 | **Skills**: `Skills` capability, `LLM_SKILLS` socket, **Skill — Library** + **Skill — Inline**, `requires-tools` check, built-in `web-research` skill | The same question answered better with `web-research` wired: the trace shows `📘 loaded skill` before the `🔧` calls |
+| 3b | 012 | **Sandbox**: `execution: code_mode` on Agent (`CodeMode`, default stays `tool_calls`), `run_skill_script` for skill scripts, limits on the node; a live eval of code mode vs tool calls on target local models | Research question answered in fewer model steps; trace shows one `run_code` doing parallel searches |
+| 4 | 012 | **Tool — MCP Server(s)**: the layered trust model (§4.1): user `mcp.json`, free toggles, hash-pinned approve-on-first-use for workflow-carried servers, headless fail-closed; with a `skills` output (`skill://` resources) | Agent uses a third-party MCP server's tools and skills alongside the built-ins |
+| 5 | 012 | Structured output + image input on `Agent` (`format` on the native model; reuse dynamic sockets) | Vision agent returns typed fields into FormatString |
 | 6 | later | Converge `ChatCompletion` onto `agent_model()` (no tools), retiring ADR-009's duplication, only once parity is proven | Same workflow, one code path |
 
 **Future** (into `Work/planning/future-features.md` once agreed): sub-agents as tools (Agent output →
 `LLM_TOOLS`), streaming tokens to the UI, persistent agent memory, cloud providers
 (OpenAI/Anthropic) as additional `LLM_CLIENT`s, where native web search and MCP *would* apply.
 
-## 8. Open decisions for the maintainer
+## 8. Release and distribution (maintainer concern, 2026-11-12)
+
+**The problem today:** comfydv has **no releases**.
+- There are no git tags, no CI test workflow and no publishing.
+- The `0.1.0` CHANGELOG entry was never tagged.
+- ComfyUI-Manager installs by **`git-clone` of the default branch**, so every merge to `main` reaches
+  users immediately. A clean-break rename (§5), or this PR's dependency upgrade, would hit them on merge.
+
+**Proposed model:** BEACON's `gitflow` release integration (`beacon integration add release`), adapted
+for ComfyUI:
+
+| Branch | Who installs it | Publishes | Version |
+|---|---|---|---|
+| `main` (default branch, protected, PRs from `develop` only) | Everyone: ComfyUI-Manager git-clone, Comfy Registry, `pip install comfydv` | git tag `vX.Y.Z` + GitHub Release + **PyPI** + **Comfy Registry** | `0.2.0`, `0.3.0`, … |
+| `develop` (protected, CI-gated; feature PRs target it) | You: `git checkout develop` in your ComfyUI's `custom_nodes/comfydv`, or `pip install --pre comfydv` | git tag + **PyPI pre-release** | `0.2.0.dev1`, `0.2.0.dev2`, … |
+
+- **Dev builds go to real PyPI as pre-releases, not TestPyPI** (a deviation from BEACON's template).
+  pip and uv **ignore pre-releases unless asked** (`--pre` or an exact `==0.2.0.dev3`), so users never
+  get them by accident. TestPyPI doesn't host our dependencies (pydantic-ai, fastmcp, monty, …), so
+  testing from it needs `--extra-index-url https://pypi.org/simple`, which is clumsy and open to
+  dependency confusion.
+- **Comfy Registry gets stable releases only.** Its docs require a static semver `version` and say
+  nothing about pre-releases. It publishes via `Comfy-Org/publish-node-action` on a version change on
+  `main`, with a `REGISTRY_ACCESS_TOKEN` secret and `[tool.comfy] PublisherId`.
+- **Versioning:**
+  - Switch from `hatch-vcs` (dynamic) to a **static `version` in `pyproject.toml`**, bumped by
+    python-semantic-release from Conventional Commits, which the `commit-msg` hook already enforces.
+    Both the Registry and BEACON's PSR config need the static field.
+  - `feat` → minor, `fix`/`perf` → patch. While at 0.x, `BREAKING CHANGE` → minor (`major_on_zero = false`).
+    The rename therefore ships as `0.3.0` (say) with a **Breaking** changelog section, not silently.
+  - Decide separately whether the agent release is the moment for `1.0.0`.
+- **CI gate** (`ci.yml`, new) on every PR to `develop` and `main`: `ruff check`, `ruff format --check`,
+  `ty check`, `pytest -m "not integration and not system"`. Prerequisite: clear the existing broken
+  windows on `main` (57 ruff findings, 38 ty diagnostics), or the gate starts red.
+- **Bootstrap:** tag the current `main` as `v0.1.0`, so the existing `[Unreleased]` changelog becomes the first PSR release.
+- **One-time setup only the maintainer can do:**
+  - PyPI pending Trusted Publisher (`release.yml`, environment `pypi`)
+  - a Comfy Registry publisher and the `REGISTRY_ACCESS_TOKEN` repo secret
+  - GitHub environment `pypi`
+  - branch protection for `main` and `develop`
+  - confirm `main` stays the default branch
+
+**Effect on in-flight work:** PR #37 (dependency upgrade + telemetry) should merge into `develop`, not
+`main`, so it reaches git-clone users only in a release. That needs `develop` created from `main` first.
+
+## 9. Open decisions for the maintainer
 
 Resolved (2026-11-12):
 
@@ -327,11 +438,13 @@ Resolved (2026-11-12):
 - ✅ **Search backend: SearXNG.** DuckDuckGo is dropped from v1.
 - ✅ **Upgrade dependencies as needed** (maintainer, 2026-11-12). Done on this branch: `pydantic-ai-slim[openai,mcp]==2.68.0`, `pydantic-ai-harness[codemode]==0.68.0`, `pydantic>=2.12`. The exact-pin trade-off is accepted.
 - ✅ **Sandbox: Monty** (§3.4, ADR-013): it runs code-mode snippets and skill scripts, with no authority beyond wired tools.
+- ✅ **Rename: clean break**, documented as a breaking change in a versioned release (§5).
+- ✅ **Spec layout:** release pipeline (010) → rename (011) → agent (012) (§7).
+- ✅ **Code mode default:** `tool_calls` until a live eval on target local models says otherwise.
 - ✅ **Skills are first-class and distinct from tools** (§3.3, ADR-012): tools act, skills instruct. Skills are text-only `SKILL.md` folders, progressively disclosed, with their own socket and node category.
 
 Still open:
 
-1. **Rename back-compat:** deprecated aliases for one release (recommended) or a clean break with `MIGRATION_MAP`?
-2. **MCP stdio:** accept the "named servers from local config only" rule (recommended), or allow stdio definitions in the workflow?
-3. **Spec layout:** rename as its own spec 010 first (recommended), or fold it into the agent epic?
-4. **Code mode default:** keep `tool_calls` as the default until a live eval says otherwise (recommended), or default to `code_mode`?
+1. **MCP trust model:** adopt option B from §4.1 (layered config, free toggles, hash-pinned approve-on-first-use, headless fail-closed)?
+2. **Dev channel:** PyPI pre-releases (recommended, §8) or TestPyPI (BEACON's default)?
+3. **`develop` branch:** create it from `main` now and retarget PR #37 to it?
