@@ -451,6 +451,7 @@ wheels = [
 
 [[package]]
 name = "comfydv"
+version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
@@ -490,7 +491,7 @@ requires-dist = [
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "pydantic", specifier = ">=2.12" },
     { name = "pydantic-ai-harness", extras = ["codemode"], specifier = "==0.68.0" },
-    { name = "pydantic-ai-slim", extras = ["mcp", "openai"], specifier = "==2.68.0" },
+    { name = "pydantic-ai-slim", extras = ["openai", "mcp"], specifier = "==2.68.0" },
 ]
 
 [package.metadata.requires-dev]

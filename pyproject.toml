@@ -1,6 +1,6 @@
 [project]
 name = "comfydv"
-dynamic = ["version"]
+version = "0.1.0"
 requires-python = ">=3.11"
 description = "Quality of life ComfyUI nodes: dynamic string formatting, seed-controlled random selection, and conditional queue interruption."
 readme = "README.md"
@@ -20,11 +20,8 @@ Repository = "https://github.com/darth-veitcher/comfydv"
 Documentation = "https://darth-veitcher.github.io/comfydv/stable/"
 
 [build-system]
-requires = ["hatchling", "hatch-vcs"]
+requires = ["hatchling"]
 build-backend = "hatchling.build"
-
-[tool.hatch.version]
-source = "vcs"
 
 [dependency-groups]
 dev = [
