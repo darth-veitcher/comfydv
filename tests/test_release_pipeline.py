@@ -102,3 +102,61 @@ def test_torchvision_is_not_a_dependency():
     """R11: no code or test imports torchvision."""
     dev = load_pyproject()["dependency-groups"]["dev"]
     assert not any(d.startswith("torchvision") for d in dev)
+
+
+# --- CI quality gate (contracts/ci-gate.md, C1-C8) ----------------------------
+
+
+def _ci() -> dict:
+    return load_workflow("ci.yml")
+
+
+def test_c1_runs_on_pull_requests_to_develop_and_main():
+    on = _ci()["on"]
+    assert sorted(on["pull_request"]["branches"]) == ["develop", "main"]
+
+
+def test_c2_never_uses_pull_request_target():
+    """C2: pull_request_target runs fork code with the base repository's secrets."""
+    assert "pull_request_target" not in _ci()["on"]
+
+
+def test_c3_permissions_are_read_only():
+    ci = _ci()
+    assert ci["permissions"] == {"contents": "read"}
+    for job in ci["jobs"].values():
+        assert job.get("permissions", {"contents": "read"}) == {"contents": "read"}
+
+
+def test_c4_no_step_uses_secrets():
+    assert "secrets." not in (WORKFLOWS / "ci.yml").read_text()
+
+
+def test_c5_matrix_covers_python_3_11_to_3_13():
+    matrix = _ci()["jobs"]["checks"]["strategy"]["matrix"]
+    assert [str(v) for v in matrix["python-version"]] == ["3.11", "3.12", "3.13"]
+
+
+def test_c6_installs_the_locked_versions():
+    runs = [s.get("run", "") for s in _ci()["jobs"]["checks"]["steps"]]
+    assert any("uv sync --frozen" in r for r in runs)
+
+
+def test_c7_runs_every_quality_gate():
+    runs = "\n".join(s.get("run", "") for s in _ci()["jobs"]["checks"]["steps"])
+    for command in (
+        "ruff check",
+        "ruff format --check",
+        "ty check",
+        'pytest -m "not integration and not system"',
+    ):
+        assert command in runs, command
+
+
+def test_c8_one_quality_gate_job_summarises_the_matrix():
+    """C8: rulesets require one stable check name, whatever the matrix holds."""
+    gate = _ci()["jobs"]["quality-gate"]
+    assert gate["needs"] == "checks" or gate["needs"] == ["checks"]
+    assert gate["if"] == "always()"
+    runs = "\n".join(s.get("run", "") for s in gate["steps"])
+    assert "needs.checks.result" in runs
