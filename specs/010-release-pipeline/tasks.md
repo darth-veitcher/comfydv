@@ -43,7 +43,7 @@ outside this branch. Each one says why.
 - [x] T004-T Write FAILING tests for P4 to P8 (the PSR version source, zero-version rules, commit tags, `develop` pre-release token and changelog mode) in `tests/test_release_pipeline.py`.
 - [x] T004-I Add `[tool.semantic_release]` to `pyproject.toml` from the T001 template, changed as research R4, R5 and R12 say, so that T004-T passes.
 - [x] T005-T Write a FAILING test that `torch` comes from the PyTorch CPU index and that `torchvision` is absent, in `tests/test_release_pipeline.py`.
-- [ ] T005-I Add the CPU index for `torch` to `[tool.uv.sources]`, remove `torchvision` from the dev group in `pyproject.toml`, and run `uv lock`.
+- [x] T005-I Add the CPU index for `torch` to `[tool.uv.sources]`, remove `torchvision` from the dev group in `pyproject.toml`, and run `uv lock`.
 
 **Checkpoint**: `uv build` makes `comfydv-0.1.0` packages, and the full test suite passes.
 

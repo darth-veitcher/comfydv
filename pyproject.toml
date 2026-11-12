@@ -25,6 +25,9 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
+    # numpy and pillow are what ComfyUI gives _encode_image_tensor at runtime.
+    # numpy came only through torchvision before; declare it.
+    "numpy>=1.26",
     "pillow>=10.0.0",
     "playwright>=1.60.0",
     "pytest>=8.4.2",
@@ -32,7 +35,6 @@ dev = [
     "pyyaml>=6.0.2",
     "ruff==0.16.9",
     "torch>=2.9.0",
-    "torchvision>=0.24.0",
     "ty==0.0.101",
 ]
 docs = [
@@ -47,6 +49,19 @@ docs = [
     "mkdocstrings[python]>=1.0.8",
     "shtab>=1.7.1",
 ]
+
+[tool.uv]
+# tests/test_ollama.py uses torch only to build small CPU tensors. The default
+# PyPI wheel on Linux pulls ~6 GB of CUDA packages, so take the CPU build there
+# and on Windows (macOS wheels are CPU-only already). Research R11, spec 010.
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform != 'darwin'" }]
 
 [tool.ruff]
 # Pinned in the dev group (ruff==0.16.9), so this version's default rule set
