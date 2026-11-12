@@ -304,3 +304,12 @@ def test_changelog_template_renders_only_commit_summaries():
     assert "commit.descriptions[1:]" not in changes
     for name in ("CHANGELOG.md.j2", ".release_notes.md.j2"):
         assert (template_dir / name).is_file(), name
+
+
+def test_w5_prereleases_do_not_commit_to_develop():
+    """W5 / FR-020: on develop PSR tags and publishes, but writes no commit, so
+    pyproject.toml and CHANGELOG.md on develop never conflict with main."""
+    run = _step("Python Semantic Release")["run"]
+    assert "--no-commit" in run
+    # The flag is set only off main: a stable release must commit its version.
+    assert re.search(r'if \[ "\$\{\{ github\.ref_name \}\}" != "main" \]', run)
