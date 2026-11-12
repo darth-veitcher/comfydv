@@ -4,6 +4,8 @@
 
 > Accepted
 
+Amended 2026-11-12, before merge: use `pydantic_ai_harness.Skills` for the catalog and the load step.
+
 _Date:_ 2026-11-12
 _Deciders:_ darth-veitcher
 
@@ -94,6 +96,8 @@ socket that is separate from tools.
   server. Scripts run only in Monty, and they can act only through wired tools (ADR-013). The
   harness scanner can also check skill files.
 - `requires-tools` is our own frontmatter key, not part of the shared format. Other tools ignore it.
+- The `Skills` capability needs `pydantic-ai-harness[codemode,skills]` in `pyproject.toml` and
+  `requirements.txt`. Add the `skills` extra with the first skill work.
 - Skill — from MCP needs `fastmcp-slim[server]` (the `SkillsProvider`) when a comfydv MCP server
   serves skills. Add it with that work.
 - The harness `Skills` capability is 0.x, so its API can change. The exact pin (ADR-013) controls

@@ -19,7 +19,7 @@ _FENCE = re.compile(r"^```(\w*)\n(.*?)^```", re.MULTILINE | re.DOTALL)
 NOT_RUN: dict[str, str] = {
     "cd /path/to/ComfyUI/custom_nodes": "needs a ComfyUI install and network access to clone from GitHub",
     "llama-server --models-dir ./models -c 8192": "needs a llama-server binary and model files",
-    "pip install -r custom_nodes/comfydv/requirements.txt": "needs a ComfyUI install and network access to PyPI",
+    "pip install -r comfydv/requirements.txt": "needs a ComfyUI install and network access to PyPI",
     "uv sync": "runs this test suite itself",
 }
 

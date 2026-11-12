@@ -43,13 +43,15 @@ cd /path/to/ComfyUI/custom_nodes
 git clone https://github.com/darth-veitcher/comfydv.git
 ```
 
-Restart ComfyUI. The nodes are in the node menu under **dv/string_operations**, **dv/utils**, **dv/ollama** and **dv/llamacpp**.
-
-ComfyUI Manager installs the Python packages from `requirements.txt`: `jinja2`, `pydantic`, `pydantic-ai-slim` and `pydantic-ai-harness`. After you install by hand, run this command with the Python of ComfyUI:
+Run this command with the Python of ComfyUI, from the same directory:
 
 ```bash
-pip install -r custom_nodes/comfydv/requirements.txt
+pip install -r comfydv/requirements.txt
 ```
+
+Restart ComfyUI. The nodes are in the node menu under **dv/string_operations**, **dv/utils**, **dv/ollama** and **dv/llamacpp**.
+
+ComfyUI Manager installs the Python packages from `requirements.txt` for you: `jinja2`, `pydantic`, `pydantic-ai-slim` and `pydantic-ai-harness`.
 
 The LLM nodes need a backend that you install yourself:
 
@@ -84,7 +86,7 @@ Type a template in **Format String**. Write each variable as `{variable_name}` i
 | `saved_file_path` | The JSON file with the template and the input values, in the ComfyUI output directory. It is empty if you did not set `save_path` or if the save failed. |
 | One output for each variable | The value of that input, as text, so that you can connect it to more nodes |
 
-Set `template_type` to **Jinja2** to use filters (`| upper`, `| int`), conditions and loops. Jinja2 templates run in a sandbox. A template can use only its variables, the filters, `now()`, `fromjson` and the `datetime`, `random` and `math` modules.
+Set `template_type` to **Jinja2** to use filters (`| upper`, `| int`), conditions and loops. Jinja2 templates run in a sandbox. A template can use its variables, the Jinja2 filters and functions, the `fromjson` filter, `now()` and the `datetime`, `random` and `math` modules. It cannot get access to files or run commands.
 
 ![Format String in Jinja2 mode](docs/assets/jinja2.png)
 
@@ -119,7 +121,7 @@ For example, a quality-check node can set `status` to `false` when the draft is 
 ![Ollama Client](docs/assets/ollama_client.png)
 
 1. Add **Ollama Client** and set `host`. The default is `http://localhost:11434`.
-2. Add **LLM Model Selector** and select a model from the list. Click **⟳ Refresh models** to get the current list from the server. Or type a model name in the `model` input of **Chat Completion**.
+2. Add **LLM Model Selector**. Select a model from the list. Click **⟳ Refresh models** to get the current list from the server. Or type a model name in the `model` input of **Chat Completion**.
 3. Add **Chat Completion**. Connect `client`, `model` and `prompt`.
 4. Click **Queue**.
 
@@ -194,7 +196,7 @@ Connect one or more **Ollama Option** nodes in a chain. Connect the chain to the
 | Top P | `top_p` | 0.9 (0 to 1) | Lower makes the model select only from its most probable words. | Ollama |
 | Top K | `top_k` | 40 (0 to 100) | The number of most probable words that the model selects from. | Ollama |
 | Repeat Penalty | `repeat_penalty` | 1.1 (0 to 2) | Higher makes the model repeat itself less. | Ollama |
-| Disable Thinking | `think` | on | On: a thinking model answers without its reasoning step. This is faster. | Both |
+| Disable Thinking | `think` (`false` disables thinking) | on | On: a thinking model answers without its reasoning step. This is faster. | Both |
 | Refusal Retry | `refusal_retry` | on | Retries with a new seed when the response looks like a refusal. | Both |
 | Extra Body | any | `{}` | Your own JSON values, added to the options. | Ollama |
 
@@ -246,7 +248,7 @@ Some nodes have new names, so that their names do not depend on the backend. If 
 
 ## Control telemetry
 
-comfydv connects only to the servers in your graph. When it loads, it also connects to Ollama at `OLLAMA_HOST`, `host.docker.internal:11434` or `localhost:11434` to fill the model lists. Some of the libraries that it uses can send data or check for updates. comfydv turns these off when it loads, unless you set them yourself:
+comfydv connects to the servers in your graph. When it loads, it also connects to Ollama at `OLLAMA_HOST`, `host.docker.internal:11434` or `localhost:11434` to fill the model lists. It connects to no other server. Some of the libraries that it uses can send data or check for updates. comfydv turns these off when it loads, unless you set them yourself:
 
 | Variable | comfydv default | Effect |
 |---|---|---|
@@ -255,7 +257,7 @@ comfydv connects only to the servers in your graph. When it loads, it also conne
 | `FASTMCP_SHOW_SERVER_BANNER` | `false` | No start-up message on the console |
 | `PYDANTIC_AI_NO_BANNER` | `1` | No first-run message on the console |
 
-To turn one on again, set its variable before you start ComfyUI. For example, set `FASTMCP_TELEMETRY_MODE=native` and configure an OpenTelemetry SDK and exporter. Then the traces go to your own collector. These settings apply to all of the ComfyUI process, so other node packs also get them.
+To turn one on again, set its variable before you start ComfyUI. For example, set `FASTMCP_TELEMETRY_MODE=native`. Then configure an OpenTelemetry SDK and exporter, so that the traces go to your own collector. These settings apply to all of the ComfyUI process, so other node packs also get them.
 
 ## Limits
 
@@ -268,7 +270,7 @@ To turn one on again, set its variable before you start ComfyUI. For example, se
 - Image input needs a vision model, and llama.cpp also needs `--mmproj`.
 - On llama.cpp, the sampling options (Temperature, Max Tokens, Top P, Top K, Repeat Penalty and Extra Body) have no effect. Set them when you start `llama-server`.
 - On llama.cpp, the Seed node sets only the seeds of the retries.
-- If another node pack loads FastMCP before comfydv, the telemetry defaults have no effect. To be sure, set the variables before you start ComfyUI.
+- If another node pack loads FastMCP before comfydv, the three `FASTMCP_` defaults have no effect. To be sure, set the variables before you start ComfyUI.
 
 ## Technical notes
 

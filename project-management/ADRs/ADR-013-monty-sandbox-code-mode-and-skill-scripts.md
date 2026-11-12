@@ -44,8 +44,7 @@ A `FunctionModel` emitted one `run_code` call whose snippet called a host tool t
 ### Version constraint discovered
 
 `pydantic-ai-harness` 0.68.0 pins **`pydantic-ai-slim==2.68.0` exactly**, and harness versions move in
-lockstep with pydantic-ai. Before this ADR, comfydv was on 2.9.0, and against that the resolver can only pick an
-obsolete harness (0.8.0). Adopting `CodeMode` therefore means **upgrading pydantic-ai 2.9 → 2.68**
+lockstep with pydantic-ai. Before this ADR, comfydv was on 2.9.0. With that version, the resolver could select only an obsolete harness (0.8.0). Adopting `CodeMode` therefore means **upgrading pydantic-ai 2.9 → 2.68**
 and pinning it exactly. pydantic-ai 2.68 also prints a first-run banner to stdout unless
 `pydantic_ai.BANNER_ENABLED = False` or `PYDANTIC_AI_NO_BANNER` is set. comfydv handles this, along with the
 other telemetry defaults, in [ADR-014](ADR-014-telemetry-off-by-default.md). 2.68's `OllamaModel` is still OpenAI-compatible (`/v1`), so ADR-011's native Ollama model
@@ -64,8 +63,8 @@ is still required.
    beyond the read-only skill mount, and no environment. This keeps the delineation of ADR-012:
    tools are still the only things that act. Code, whether the model wrote it or a skill shipped it,
    only *composes* tool calls.
-3. **Conservative limits by default:** 30 s per snippet or script, 256 MiB memory, and a tool-call cap
-   per snippet (harness default 100; comfydv default 20). The Agent node gives them as inputs.
+3. **Conservative limits by default:** 30 s per snippet or script, 256 MiB memory, and a tool-call
+   cap per snippet. The harness default cap is 100. The comfydv default is lower, and the Agent spec sets it. The Agent node gives them as inputs.
 4. **Honest about the subset.**
    - A skill script that uses unsupported features (third-party imports, classes with inheritance, …)
      fails the type check or the parse. The model gets a clear error that names the script.
