@@ -35,7 +35,7 @@ Do the epics in this order. Each later epic ships through the release pipeline.
 
 1. **Release Pipeline & Distribution** — `epics/release-pipeline.md` — 📋 PLANNING —
    CI gate, `develop` to PyPI pre-releases, `main` to PyPI and the Comfy Registry.
-   This is first because comfydv has no releases: each merge to `main` goes to
+   This is first because comfydv has never published a release: each merge to `main` goes to
    all users at once.
 2. **LLM Node Naming (clean break)** — `epics/llm-node-naming.md` — 📋 PLANNING —
    Remove "Ollama" from the names of nodes that operate with both backends.

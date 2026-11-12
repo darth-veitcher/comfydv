@@ -35,5 +35,5 @@ and checks each rule.
 
 | # | Rule | Requirement |
 |---|---|---|
-| G1 | The tag `v0.1.0` exists on commit `abe055e`. The quickstart checks it, not a test, because a CI checkout has no tags. | FR-025 |
+| G1 | The tag `v0.1.0` exists on commit `4f69405`. The quickstart checks it, not a test, because a shallow CI checkout has no tags. | FR-025 |
 | G2 | `.comfyignore` excludes `tests/`, `specs/`, `project-management/` and `docs/`. | R8 |

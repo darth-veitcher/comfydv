@@ -164,7 +164,7 @@ branch and the commit that it cloned.
 - **FR-033**: The project name MUST stay `comfydv`, because the Comfy Registry node ID is `comfydv` and cannot change.
 - **FR-034**: Before the first stable release, the Comfy Registry node `comfydv` MUST belong to the publisher `darth-veitcher`.
 
-- **FR-025**: Before the first pipeline run, `main` MUST have the tag `v0.1.0`, so the first release counts commits from that point.
+- **FR-025**: The pipeline MUST count the first release from the existing tag `v0.1.0`, on commit `4f69405` (2026-07-04).
 - **FR-026**: The existing `[Unreleased]` changelog entries MUST appear in the first release.
 
 **ComfyUI Manager channels**

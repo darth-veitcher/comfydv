@@ -127,16 +127,20 @@ and from the sources named in each item, on 2026-11-12.
 ## R12. Changelog bootstrap
 
 - **Decision**:
-  - Tag `v0.1.0` on `abe055e`. This is the last `main` commit before the BEACON bootstrap
-    (2025-11-05).
+  - Use the existing annotated tag `v0.1.0` on `4f69405` ("Release v0.1.0", 2026-07-04) as the baseline.
+    Push no new tag.
   - Use PSR `changelog.mode = "update"`, with the insertion flag above the hand-written entries.
   - Rename the hand-written `## [Unreleased]` heading to "Notes for 0.2.0 (written by hand)".
 - **Rationale**:
-  - PSR counts the commits after `v0.1.0`. Those commits are the ones that the `[Unreleased]`
-    entries describe, so the first release contains them (FR-026).
+  - PSR counts the commits after `v0.1.0`, and most `[Unreleased]` entries describe those commits.
+    The hand-written notes stay in the file, so the first release keeps all of them (FR-026).
   - `update` mode keeps the hand-written history, and the rename happens once, in the bootstrap.
-- **Fact**: the `[0.1.0]` entry has the date 2026-06-01, but no commit has that date. The entry was
-  written later. The tag uses the real commit.
+- **Facts**:
+  - The tag exists, but nothing was published from it: GitHub has no Release, and PyPI has no
+    `comfydv` project (HTTP 404). An earlier draft of this item said that no tags exist. That was
+    wrong, because this repository's local checkout is shallow and has no tags.
+  - The `[0.1.0]` changelog entry has the date 2026-06-01, and the tag has the date 2026-07-04.
+  - A dry run of PSR 9.21.2 on a full clone gives `0.2.0-dev.1` on `develop` and `0.2.0` on `main`.
 
 ## R13. Verification of "latest"
 

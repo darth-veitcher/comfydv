@@ -11,7 +11,8 @@ _Deciders:_ darth-veitcher
 
 ## Context
 
-comfydv has no releases. ComfyUI Manager clones the default branch, so each merge to `main` goes to
+comfydv has never published a release. It has a git tag `v0.1.0`, but nothing on PyPI or the Comfy
+Registry. ComfyUI Manager clones the default branch, so each merge to `main` goes to
 all users at once. The maintainer chose these points on 2026-11-12:
 
 - `develop` for development, and `main` for releases (gitflow).

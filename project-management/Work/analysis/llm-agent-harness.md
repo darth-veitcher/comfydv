@@ -393,7 +393,7 @@ so the Agent and Tool nodes are created in their final home rather than renamed 
 ## 8. Release and distribution (maintainer concern, 2026-11-12)
 
 **The problem today:** comfydv has **no releases**.
-- There are no git tags, no CI test workflow and no publishing.
+- There is one git tag (`v0.1.0`), but no CI test workflow and no publishing.
 - The `0.1.0` CHANGELOG entry was never tagged.
 - ComfyUI-Manager installs by **`git-clone` of the default branch**, so every merge to `main` reaches
   users immediately. A clean-break rename (§5), or this PR's dependency upgrade, would hit them on merge.

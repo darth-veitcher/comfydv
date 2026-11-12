@@ -106,7 +106,7 @@ at the repository root. It changes no `src/` code.
 4. Run `beacon integration add release`, then change the generated `release.yml`. Make the PyPI and Registry changes of ADR-017.
 5. Add `.comfyignore`, and prepare `CHANGELOG.md` (research R12).
 6. Write `PUBLISHING.md`, and change `README.md` and `AGENTS.md`.
-7. After the merge: tag `v0.1.0` on `abe055e`, then do the quickstart scenarios.
+7. After the merge: confirm that the tag `v0.1.0` is on `4f69405`, then do the quickstart scenarios.
 
 ## Complexity Tracking
 

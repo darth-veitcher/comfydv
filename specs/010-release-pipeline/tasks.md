@@ -81,11 +81,11 @@ outside this branch. Each one says why.
 - [ ] T023-I [US2] Add the insertion flag to `CHANGELOG.md`, and rename the `[Unreleased]` heading as research R12 says, so that T023-T passes.
 - [ ] T024 [US2] Write the stable-release install steps in the Install section of `README.md`.
 - [ ] T025 [US2] Write `PUBLISHING.md` from the T001 template, with the one-time setup and the ruleset bypass of research R7.
-- [-] T026 [US2] Push the tag `v0.1.0` on commit `abe055e` (G1). _Deferred — a tag push goes outside this branch, so the maintainer does it or approves it._
+- [x] T026 [US2] Confirm that the tag `v0.1.0` exists for G1. It is on commit `4f69405` (2026-07-04), so no tag push is necessary.
 - [-] T027 [US2] Add GitHub Actions as a push-only bypass actor in the `main` and `develop` rulesets. _Deferred — maintainer action in the GitHub settings (research R7)._
 - [-] T028 [US2] Do quickstart scenarios 4 and 5. _Deferred — needs a release pull request to `main`._
 
-**Checkpoint**: The contract tests for US2 pass. The live release waits on T026 to T028.
+**Checkpoint**: The contract tests for US2 pass. The live release waits on T027 and T028.
 
 ---
 
@@ -142,5 +142,5 @@ outside this branch. Each one says why.
 
 1. **MVP**: Phase 1, Phase 2 and US1. Merge it, and the branches have a gate.
 2. Then US2 and US3, with the documentation tasks.
-3. Then the maintainer does T026 and T027, and the first release runs (T028, T032).
+3. Then the maintainer does T027, and the first release runs (T028, T032).
 4. US4 follows the first Registry release.

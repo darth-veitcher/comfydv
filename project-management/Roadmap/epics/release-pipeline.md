@@ -6,7 +6,8 @@
 Planning  — started 2026-11-12
 
 ## Why now
-comfydv has no releases. It has no git tags, no CI gate and no publish step.
+comfydv has never published a release. It has one git tag, `v0.1.0`, but no GitHub Release, no
+PyPI package, no CI gate and no publish step.
 ComfyUI-Manager installs the default branch with `git clone`. Thus each merge to
 `main` goes to all users at once.
 
