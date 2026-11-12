@@ -281,3 +281,14 @@ def test_g2_registry_archive_leaves_out_development_files():
         if line.strip() and not line.startswith("#")
     }
     assert {"tests", "specs", "project-management", "docs"} <= ignored
+
+
+def test_changelog_has_the_insertion_flag_above_the_history():
+    """P8 / R12: PSR's 'update' mode inserts each release at the flag, so the
+    flag must sit above the hand-written entries, and the flag must match the
+    one in pyproject.toml."""
+    flag = _psr()["changelog"]["insertion_flag"]
+    text = (ROOT / "CHANGELOG.md").read_text()
+    assert text.count(flag) == 1
+    assert text.index(flag) < text.index("## [0.1.0]")
+    assert "## [Unreleased]" not in text  # renamed in the bootstrap (research R12)

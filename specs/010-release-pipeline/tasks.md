@@ -77,7 +77,7 @@ outside this branch. Each one says why.
 - [x] T021-I [US2] Add the Comfy Registry publish step and its check to `.github/workflows/release.yml`, and add `[tool.comfy]` to `pyproject.toml`, so that T021-T passes.
 - [x] T022-T [US2] Write FAILING tests for W9 (merge `main` into `develop`) and G2 (`.comfyignore`) in `tests/test_release_pipeline.py`.
 - [x] T022-I [US2] Keep the sync step in `.github/workflows/release.yml` and add `.comfyignore`, so that T022-T passes.
-- [ ] T023-T [US2] Write a FAILING test that `CHANGELOG.md` has the PSR insertion flag above the hand-written entries, in `tests/test_release_pipeline.py`.
+- [x] T023-T [US2] Write a FAILING test that `CHANGELOG.md` has the PSR insertion flag above the hand-written entries, in `tests/test_release_pipeline.py`.
 - [ ] T023-I [US2] Add the insertion flag to `CHANGELOG.md`, and rename the `[Unreleased]` heading as research R12 says, so that T023-T passes.
 - [ ] T024 [US2] Write the stable-release install steps in the Install section of `README.md`.
 - [ ] T025 [US2] Write `PUBLISHING.md` from the T001 template, with the one-time setup and the ruleset bypass of research R7.
