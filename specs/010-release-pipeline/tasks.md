@@ -98,7 +98,7 @@ outside this branch. Each one says why.
 **Independent Test**: Scenarios in `features/us3_dev_prerelease.feature`.
 
 - [x] T030-T [US3] Write a FAILING test for W5 (`--no-commit` on `develop` only) in `tests/test_release_pipeline.py`.
-- [ ] T030-I [US3] Make PSR run with `--no-commit` on `develop` only in `.github/workflows/release.yml`, so that T030-T passes.
+- [x] T030-I [US3] Make PSR run with `--no-commit` on `develop` only in `.github/workflows/release.yml`, so that T030-T passes.
 - [ ] T031 [US3] Write the pre-release install steps (`pip install --pre comfydv`) in the Install section of `README.md`.
 - [-] T032 [US3] Do quickstart scenario 3. _Deferred — needs a merge to `develop` with the pipeline in place._
 

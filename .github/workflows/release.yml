@@ -73,7 +73,16 @@ jobs:
             "python-semantic-release==9.21.2" "gitpython<3.1.60"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          "$RUNNER_TEMP/psr/bin/semantic-release" -v version
+          # Only main commits the version bump (FR-020). On develop, PSR still
+          # tags and pushes the tag, so the next pre-release counts from it,
+          # and builds from the working tree with the pre-release version.
+          # Then develop's PSR-managed files (pyproject version, CHANGELOG)
+          # never diverge from main's, and develop -> main PRs do not conflict.
+          commit_opt=""
+          if [ "${{ github.ref_name }}" != "main" ]; then
+            commit_opt="--no-commit"
+          fi
+          "$RUNNER_TEMP/psr/bin/semantic-release" -v version $commit_opt
 
       - name: Publish to PyPI
         if: steps.psr.outputs.released == 'true'
