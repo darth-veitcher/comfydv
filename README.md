@@ -18,6 +18,7 @@ Each node has unit tests. The tests of the LLM nodes also run against a real Oll
 | Task | Node or command | Section |
 |---|---|---|
 | Install comfydv | ComfyUI Manager: search for `comfydv` | [Install](#install) |
+| Test the next release | `git checkout develop` in `custom_nodes/comfydv` | [Install](#install) |
 | Build text from a template | **Format String** | [Build text from a template](#build-text-from-a-template) |
 | Select one input at random | **Random Choice** | [Select one input at random](#select-one-input-at-random) |
 | Stop a run when a check fails | **Circuit Breaker** | [Stop a run when a check fails](#stop-a-run-when-a-check-fails) |
@@ -52,6 +53,21 @@ pip install -r comfydv/requirements.txt
 Restart ComfyUI. The nodes are in the node menu under **dv/string_operations**, **dv/utils**, **dv/ollama** and **dv/llamacpp**.
 
 ComfyUI Manager installs the Python packages from `requirements.txt` for you: `jinja2`, `pydantic`, `pydantic-ai-slim` and `pydantic-ai-harness`.
+
+**Choose a version:**
+
+- ComfyUI Manager installs the last release. The Manager calls it **latest**.
+- A `git clone` gets the `main` branch. `main` changes only at a release, so it is also the last release.
+- To test the next release before it ships, run `git checkout develop` in `custom_nodes/comfydv`, then restart ComfyUI. `develop` can contain work that is not finished.
+
+**As a Python package:** comfydv is also on PyPI. ComfyUI does not load nodes from a package that pip installs. Use the package to use comfydv's Python code, for example the LLM providers, in your own program.
+
+```bash
+pip install comfydv        # the last release
+pip install --pre comfydv  # the last pre-release, from develop
+```
+
+A pre-release has a version like `0.3.0.dev2`. pip installs a pre-release only when you add `--pre` or give its exact version.
 
 The LLM nodes need a backend that you install yourself:
 
@@ -275,6 +291,7 @@ To turn one on again, set its variable before you start ComfyUI. For example, se
 ## Technical notes
 
 - **Python**: 3.11 or later.
+- **Releases**: python-semantic-release calculates each version from the Conventional Commits. A merge to `main` publishes to PyPI and to the Comfy Registry. A merge to `develop` publishes a PyPI pre-release ([ADR-017](project-management/ADRs/ADR-017-release-channels-and-pipeline.md)). The maintainer guide is [PUBLISHING.md](PUBLISHING.md).
 - **Dependencies**: `pydantic-ai-slim[openai,mcp]` and `pydantic-ai-harness[codemode]` have exact version pins, because the harness requires the exact pydantic-ai version. `requirements.txt` is written by hand for ComfyUI Manager ([ADR-003](project-management/ADRs/ADR-003-requirements-txt-authoring-policy.md)).
 - **HTTP**: the nodes use `aiohttp` to talk to Ollama ([ADR-004](project-management/ADRs/ADR-004-aiohttp-over-httpx-for-ollama.md)). The client node is the only place for the host and the headers ([ADR-005](project-management/ADRs/ADR-005-ollama-host-config-via-client-node.md)).
 - **Backends**: one `LLMProvider` interface for Ollama and llama.cpp ([ADR-007](project-management/ADRs/ADR-007-llm-provider-adapter-pattern.md)). Images go on the message ([ADR-008](project-management/ADRs/ADR-008-multimodal-image-input-across-llmprovider-boundary.md)).
@@ -296,6 +313,8 @@ uv run ty check
 uv run pytest -m "not integration and not system"
 ```
 
+Each pull request to `develop` or `main` runs these checks in CI, on Python 3.11, 3.12 and 3.13. A pull request cannot merge until the `quality-gate` check passes. Open pull requests against `develop`.
+
 Integration tests need Ollama at `localhost:11434` (`just test-integration`). System tests need the Docker Compose harness (`just test-system`). To start ComfyUI with this repository mounted, run `just up`. Read [AGENTS.md](AGENTS.md) for the rules of the repository.
 
 ## Glossary
@@ -310,9 +329,11 @@ Integration tests need Ollama at `localhost:11434` (`just test-integration`). Sy
 - **Node**: one box on the ComfyUI canvas.
 - **Ollama**: a program that downloads models and runs them on your own computer.
 - **OpenTelemetry**: a standard for trace data about what a program does.
+- **Pre-release**: a version from `develop`, for tests. pip skips it unless you ask for it.
 - **Projector**: the file that lets a llama.cpp model accept images. `--mmproj` loads it.
 - **PyPI**: the Python package index, where `pip` gets packages.
 - **Queue run**: one run of a workflow, after you click **Queue**.
+- **Release**: a version from `main`, on PyPI and on the Comfy Registry.
 - **Router mode**: a llama.cpp mode that loads and unloads models from a directory.
 - **Sandbox**: a restricted place to run code or templates, with no access to the rest of your computer.
 - **Seed**: a number that sets the random choices. The same seed gives the same result.

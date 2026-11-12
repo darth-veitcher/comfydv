@@ -21,6 +21,7 @@ NOT_RUN: dict[str, str] = {
     "llama-server --models-dir ./models -c 8192": "needs a llama-server binary and model files",
     "pip install -r comfydv/requirements.txt": "needs a ComfyUI install and network access to PyPI",
     "uv sync": "runs this test suite itself",
+    "pip install comfydv        # the last release": "needs network access to PyPI",
 }
 
 

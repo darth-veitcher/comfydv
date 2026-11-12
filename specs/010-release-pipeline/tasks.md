@@ -81,7 +81,7 @@ outside this branch. Each one says why.
 - [x] T023-I [US2] Add the insertion flag to `CHANGELOG.md`, and rename the `[Unreleased]` heading as research R12 says, so that T023-T passes.
 - [x] T029-T [US2] Write a FAILING test that PSR uses a template that renders only the summary line of each commit, in `tests/test_release_pipeline.py`.
 - [x] T029-I [US2] Copy PSR's markdown templates to `.github/semantic-release/templates/`, remove the commit-body block, and set `template_dir` in `pyproject.toml`, so that T029-T passes.
-- [ ] T024 [US2] Write the stable-release install steps in the Install section of `README.md`.
+- [x] T024 [US2] Write the stable-release install steps in the Install section of `README.md`.
 - [x] T025 [US2] Write `PUBLISHING.md` from the T001 template, with the one-time setup and the ruleset bypass of research R7.
 - [x] T026 [US2] Confirm that the tag `v0.1.0` exists for G1. It is on commit `4f69405` (2026-07-04), so no tag push is necessary.
 - [-] T027 [US2] Add GitHub Actions as a push-only bypass actor in the `main` and `develop` rulesets. _Deferred — maintainer action in the GitHub settings (research R7)._
@@ -101,7 +101,7 @@ outside this branch. Each one says why.
 - [x] T030-I [US3] Make PSR run with `--no-commit` on `develop` only in `.github/workflows/release.yml`, so that T030-T passes.
 - [x] T033-T [US3] Write a FAILING test that `import comfydv` works in a Python with no ComfyUI, in `tests/test_packaging.py`.
 - [x] T033-I [US3] Register the three FormatString routes in `src/comfydv/format_string.py` only when ComfyUI is loaded, so that T033-T passes (constitution IV).
-- [ ] T031 [US3] Write the pre-release install steps (`pip install --pre comfydv`) in the Install section of `README.md`.
+- [x] T031 [US3] Write the pre-release install steps (`pip install --pre comfydv`) in the Install section of `README.md`.
 - [-] T032 [US3] Do quickstart scenario 3. _Deferred — needs a merge to `develop` with the pipeline in place._
 
 **Checkpoint**: US3 works with US2 or without it, because `develop` runs the same workflow.
@@ -122,8 +122,8 @@ outside this branch. Each one says why.
 
 ## Phase 7: Polish
 
-- [ ] T050 Write the release commands in the Commands section of `AGENTS.md`, and remove the text "Until then, no package publishes".
-- [ ] T051 Add the release pipeline and its channels to the Technical notes of `README.md`.
+- [x] T050 Write the release commands in the Commands section of `AGENTS.md`, and remove the text "Until then, no package publishes".
+- [x] T051 Add the release pipeline and its channels to the Technical notes of `README.md`.
 - [ ] T052 Run `beacon docs check`, then the two review passes of the `beacon-docs` skill, on `README.md`, `AGENTS.md` and `PUBLISHING.md`.
 - [ ] T053 Run the quality gates: `uv run ruff check`, `uv run ruff format --check`, `uv run ty check`, `uv run pytest` and `beacon doctor --strict`.
 
