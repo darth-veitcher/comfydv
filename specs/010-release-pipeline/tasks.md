@@ -57,7 +57,7 @@ outside this branch. Each one says why.
 
 - [x] T010-T [US1] Write FAILING tests for C1 to C8 in `tests/test_release_pipeline.py`, one test for each rule.
 - [x] T010-I [US1] Write `.github/workflows/ci.yml` so that T010-T passes.
-- [ ] T011 [US1] Add the `quality-gate` check and the CI tiers to the Commands section of `AGENTS.md`.
+- [x] T011 [US1] Add the `quality-gate` check and the CI tiers to the Commands section of `AGENTS.md`.
 - [-] T012 [US1] Do quickstart scenario 1 on a test pull request. _Deferred — needs `ci.yml` on GitHub, after this branch merges._
 - [-] T013 [US1] Add `quality-gate` as a required status check in the `develop` and `main` rulesets. _Deferred — maintainer action in the GitHub settings, after the check has run once._
 
