@@ -252,9 +252,10 @@ def test_w10_registry_version_is_verified():
     step = _step("Verify the Comfy Registry")
     assert "github.ref_name == 'main'" in step["if"]
     assert "https://api.comfy.org/nodes/comfydv/versions" in step["run"]
-    # The version comes in through env, not inline in `run`: an expression in
-    # a shell script is an injection risk.
-    assert "steps.psr.outputs.version" in str(step.get("env", {})) + step["run"]
+    # The version comes from pyproject.toml in the workspace: after a release
+    # PSR has written the new version there, and on a manual Registry retry
+    # (W11) PSR releases nothing and sets no version output.
+    assert "pyproject.toml" in step["run"]
     steps = _release_job()["steps"]
     assert steps.index(step) > steps.index(_step("Publish to the Comfy Registry"))
 
@@ -324,3 +325,16 @@ def test_p9_release_commit_is_a_conventional_commit():
     psr = _psr()
     assert psr["commit_message"] == "chore(release): {version}"
     assert "^chore\\(release\\):" in psr["changelog"]["exclude_commit_patterns"]
+
+
+def test_w11_a_manual_run_can_retry_the_registry_publish():
+    """W11: after a Registry failure, a re-run finds the tag, so PSR releases
+    nothing and the Registry steps would be skipped. A manual run on main with
+    publish_registry publishes and verifies the version on main instead."""
+    inputs = _release()["on"]["workflow_dispatch"]["inputs"]
+    assert inputs["publish_registry"]["type"] == "boolean"
+    assert inputs["publish_registry"]["default"] is False
+    for name in ("Publish to the Comfy Registry", "Verify the Comfy Registry"):
+        condition = _step(name)["if"]
+        assert "github.ref_name == 'main'" in condition
+        assert "inputs.publish_registry" in condition
