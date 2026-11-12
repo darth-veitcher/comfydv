@@ -160,6 +160,10 @@ branch and the commit that it cloned.
 
 **Bootstrap**
 
+- **FR-032**: `pyproject.toml` MUST set `[tool.comfy] PublisherId` to `darth-veitcher`.
+- **FR-033**: The project name MUST stay `comfydv`, because the Comfy Registry node ID is `comfydv` and cannot change.
+- **FR-034**: Before the first stable release, the Comfy Registry node `comfydv` MUST belong to the publisher `darth-veitcher`.
+
 - **FR-025**: Before the first pipeline run, `main` MUST have the tag `v0.1.0`, so the first release counts commits from that point.
 - **FR-026**: The existing `[Unreleased]` changelog entries MUST appear in the first release.
 
@@ -197,7 +201,9 @@ branch and the commit that it cloned.
 ## Assumptions
 
 - The maintainer does the one-time setup: the PyPI Trusted Publisher, the Comfy Registry publisher and its key, the GitHub environment and branch protection.
-- The Comfy Registry publisher ID is the maintainer's GitHub user name, `darth-veitcher`. The maintainer confirms it during setup.
+- The Comfy Registry publisher ID is `darth-veitcher` (created 2026-11-12). It cannot change.
+- The Comfy Registry already has a node `comfydv`, imported from the ComfyUI Manager list under the placeholder publisher "Unclaimed". It has no versions. The maintainer claims it for `darth-veitcher`.
+- The `REGISTRY_ACCESS_TOKEN` repository secret holds the Comfy Registry key. The maintainer added it on 2026-11-12.
 - The quality gate runs the unit tier only. The integration and system tiers need Ollama or Docker, which hosted CI does not have.
 - `beacon doctor --strict` stays a local gate, because BEACON is not a project dependency.
 - The first stable release after this spec is `0.2.0`, because the `[Unreleased]` entries contain new features.

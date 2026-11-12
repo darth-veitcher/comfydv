@@ -81,7 +81,9 @@ the Registry entry before the switch.
 ## Notes
 One-time setup that only the maintainer can do:
 - Add a PyPI Trusted Publisher for `release.yml` with the environment `pypi`.
-- Create a Comfy Registry publisher. Add its key as the `REGISTRY_ACCESS_TOKEN` secret.
+- ✅ Create a Comfy Registry publisher: `darth-veitcher` (2026-11-12).
+- ✅ Add its key as the `REGISTRY_ACCESS_TOKEN` repository secret (2026-11-12).
+- Claim the existing Registry node `comfydv` (now under "Unclaimed") for `darth-veitcher`. On 2026-11-12 the claim was not complete yet.
 - Add branch protection to `main` and `develop`.
 
 Design detail: `project-management/Work/analysis/llm-agent-harness.md` §8.
