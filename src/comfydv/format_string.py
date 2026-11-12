@@ -681,7 +681,6 @@ class FormatString:
 
 
 # Custom route for updating node configuration
-@PromptServer.instance.routes.post("/update_format_string_node")
 async def update_format_string_node(request: web.Request) -> web.Response:
     """
     AIOHTTP route handler for updating a FormatString node's configuration.
@@ -733,7 +732,6 @@ async def update_format_string_node(request: web.Request) -> web.Response:
 
 
 # Custom route for loading node state
-@PromptServer.instance.routes.post("/load_format_string_node")
 async def load_format_string_node(request: web.Request) -> web.Response:
     """
     AIOHTTP route handler for loading a FormatString node's state from disk.
@@ -769,7 +767,6 @@ async def load_format_string_node(request: web.Request) -> web.Response:
 
 
 # Custom route for getting node-specific configuration
-@PromptServer.instance.routes.get("/get_format_string_node_config/{node_id}")
 async def get_format_string_node_config(request: web.Request) -> web.Response:
     """
     AIOHTTP route handler for retrieving a FormatString node's configuration.
@@ -801,3 +798,15 @@ async def get_format_string_node_config(request: web.Request) -> web.Response:
 NODE_CLASS_MAPPINGS = {"FormatString": FormatString}
 
 NODE_DISPLAY_NAME_MAPPINGS = {"FormatString": "Format String"}
+
+
+# Register the routes only inside ComfyUI. Outside it (tests, docs builds, a
+# `pip install comfydv`), there is no PromptServer, and the module must still
+# import (constitution IV).
+if "comfy" in sys.modules:
+    _routes = PromptServer.instance.routes
+    _routes.post("/update_format_string_node")(update_format_string_node)
+    _routes.post("/load_format_string_node")(load_format_string_node)
+    _routes.get("/get_format_string_node_config/{node_id}")(
+        get_format_string_node_config
+    )
