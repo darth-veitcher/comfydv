@@ -163,3 +163,70 @@ def test_c8_one_quality_gate_job_summarises_the_matrix():
     assert gate["if"] == "always()"
     runs = "\n".join(s.get("run", "") for s in gate["steps"])
     assert "needs.checks.result" in runs
+
+
+# --- release workflow (contracts/release-workflow.md, W1-W10) ---------------
+
+
+def _release() -> dict:
+    return load_workflow("release.yml")
+
+
+def _release_job() -> dict:
+    return _release()["jobs"]["release"]
+
+
+def _step(name_part: str) -> dict:
+    matches = [s for s in _release_job()["steps"] if name_part in s.get("name", "")]
+    assert len(matches) == 1, f"expected one step named like {name_part!r}"
+    return matches[0]
+
+
+def test_w1_runs_on_pushes_to_main_and_develop_and_on_demand():
+    on = _release()["on"]
+    assert sorted(on["push"]["branches"]) == ["develop", "main"]
+    assert "workflow_dispatch" in on
+
+
+def test_w2_one_run_per_branch_at_a_time():
+    concurrency = _release()["concurrency"]
+    assert "github.ref" in concurrency["group"]
+    assert concurrency["cancel-in-progress"] is False
+
+
+def test_w3_uses_the_pypi_environment_on_both_branches():
+    environment = _release_job()["environment"]
+    name = environment["name"] if isinstance(environment, dict) else environment
+    assert name == "pypi"
+
+
+def test_w4_permissions_are_minimal():
+    assert _release()["permissions"] == {"contents": "write", "id-token": "write"}
+
+
+def test_w6_pypi_publish_is_trusted_and_idempotent():
+    """W6: Trusted Publishing (no password input) and skip-existing for re-runs."""
+    publish = [
+        s
+        for s in _release_job()["steps"]
+        if s.get("uses", "").startswith("pypa/gh-action-pypi-publish")
+    ]
+    assert publish, "no PyPI publish step"
+    for step in publish:
+        inputs = step.get("with", {})
+        assert "password" not in inputs
+        assert inputs.get("skip-existing") is True
+        assert "repository-url" not in inputs  # PyPI, not TestPyPI (research R5)
+
+
+def test_w8_third_party_actions_are_pinned_to_a_commit():
+    """W8: actions outside actions/* and pypa/* run with secrets, so pin a SHA."""
+    for workflow in ("release.yml", "ci.yml"):
+        for step in all_steps(load_workflow(workflow)):
+            uses = step.get("uses", "")
+            if not uses or uses.startswith(("actions/", "pypa/")):
+                continue
+            ref = uses.split("@", 1)[1]
+            assert re.fullmatch(r"[0-9a-f]{40}", ref), (
+                f"{workflow}: {uses} is not pinned"
+            )
