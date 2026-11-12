@@ -3,8 +3,8 @@
 ## Status
 Paused  — started 2026-06-28; paused 2026-11-12
 
-Spec 002 shipped. Specs 003 and 004 have a spec but no plan or tasks, and their
-bugs are still present. Spec 005 is mostly complete. This epic resumes after
+Spec 002 (Manager-compatible install) shipped. Specs 003 (FormatString frontend UX) and 004 (node
+logic correctness) have a spec but no plan or tasks, and their bugs are still present. Spec 005 (metadata cleanup) is mostly complete. This epic resumes after
 `release-pipeline`, so that its fixes reach users as a release.
 
 ## Why now
@@ -19,7 +19,7 @@ A codebase audit (2026-06-28) found three categories of defects. Together, they 
 4. **Metadata drift**: `pyproject.toml` `description` is still the placeholder "Add your description here". A `comfydv = "comfydv:main"` script entry is declared but no `main()` function exists — any `pip install` would create a broken CLI entry point. `dynamic.js` references `ToJSON`/`To JSON` nodes that don't exist. `src/comfydv/README.md` describes a "Model Unloader" node that was never implemented.
 
 ## Dependencies
-_None — this epic is self-contained and can start immediately._
+- `release-pipeline`: the fixes reach users only as a release.
 
 ## Specs
 

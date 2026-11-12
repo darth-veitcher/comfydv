@@ -11,8 +11,8 @@ _Deciders:_ darth-veitcher
 
 ## Context
 
-The maintainer asked for all telemetry to be switched off by default. comfydv runs inside a user's
-ComfyUI process and should contact only the servers wired into the graph: Ollama, llama-server,
+The maintainer asked us to switch off all telemetry by default. comfydv runs inside a user's
+ComfyUI process and it must contact only the servers in the graph: Ollama, llama-server,
 SearXNG, MCP servers.
 
 The pydantic-ai 2.68 upgrade (ADR-013) brought in FastMCP, the MCP SDK, Monty and OpenTelemetry's
@@ -25,7 +25,7 @@ API. An audit of the installed stack (2026-11-12) found:
 | FastMCP 4.1 | stdout server banner | on |
 | pydantic-ai 2.68 | stdout first-run banner advertising a hosted observability service | on |
 | pydantic-ai 2.68 | Agent instrumentation | **off** (`Agent._instrument_default = False`) |
-| Monty 1.6 | OpenTelemetry instrumentation | **off**; opt-in only via `instrument_telemetry()` |
+| Monty 1.6 | OpenTelemetry instrumentation | **off**; opt-in only through `instrument_telemetry()` |
 | pydantic-ai-harness | `PostHog` capability | Not telemetry: an opt-in connector to PostHog's MCP server |
 
 No hardcoded analytics endpoints were found elsewhere. OpenTelemetry spans are no-ops without an
@@ -60,10 +60,9 @@ Any new dependency that reports, announces or calls out on its own gets its off-
 
 **Harder / constrained:**
 - **Process-wide.** Another node pack using FastMCP or pydantic-ai in the same ComfyUI process
-  inherits these defaults, unless the user or that pack set the variables first. This is accepted
-  (the change only removes outbound behaviour) and documented.
-- If FastMCP is imported before `comfydv._llm` (by another node pack loaded first), FastMCP's
-  settings are already fixed and the env defaults don't affect it. Users who need a guarantee should
+  inherits these defaults, unless the user or that pack set the variables first. We accept this, because the change only removes outbound behaviour. The README documents it.
+- If another node pack imports FastMCP before `comfydv._llm`, FastMCP's settings are already fixed,
+  and the env defaults have no effect. Users who need a guarantee should
   set the variables before starting ComfyUI.
 - Upstream can add new behaviours, or rename variables, on upgrade. The exact pins (ADR-013) plus
   the import-order tests catch a rename; a new behaviour needs a re-audit on each upgrade.

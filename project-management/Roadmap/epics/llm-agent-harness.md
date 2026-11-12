@@ -27,7 +27,8 @@ links them. Otherwise, add each one by hand after you run `/speckit-specify`._
 - An Agent node answers a question with web search and web fetch on a local
   Ollama model. The node shows each step while it runs.
 - The same graph operates with llama.cpp when you change only the client node.
-- A skill changes the agent's method, and the trace shows when the agent loads it.
+- With a skill wired, the agent loads it, and the trace shows the load. A test checks that the
+  answer follows a step that only the skill gives.
 - Code mode does the same task in fewer model steps than tool calls.
 - A workflow cannot start an MCP server or connect to one without the user's approval.
 - An API run that refers to an unapproved server fails before the first model call.

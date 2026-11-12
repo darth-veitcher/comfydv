@@ -12,7 +12,7 @@ _Deciders:_ darth-veitcher
 ## Context
 
 comfydv's LLM nodes are one-shot chat functions. We want an *agent*: a node whose model calls tools (web search, web fetch, MCP servers) and loops
-for several steps before it answers. It must use the same local backends that we already support (Ollama and llama.cpp router mode, via the
+for several steps before it answers. It must use the same local backends that we already support (Ollama and llama.cpp router mode, through the
 `LLMProvider` Protocol of ADR-007).
 
 `pydantic-ai` is a runtime dependency since ADR-007. A tool-call loop of our own would re-implement
@@ -22,10 +22,11 @@ what it provides:
 - `MCPToolset` (FastMCP-based, stdio and HTTP transports)
 - local web search and web fetch tools
 - `TestModel` and `FunctionModel` for tests
- ADR-006's rejection of pydantic-ai was about dependency weight, and ADR-007 already
+
+ADR-006's rejection of pydantic-ai was about dependency weight, and ADR-007 already
 accepted that weight.
 
-The catch: pydantic-ai's `OllamaModel` is an `OpenAIChatModel` over Ollama's
+The problem: pydantic-ai's `OllamaModel` is an `OpenAIChatModel` over Ollama's
 `/v1/chat/completions`. ADR-009 proved that this endpoint reloads the model at the default context
 size on **every** call, discarding `num_ctx`. An agent's context grows with every tool result. Thus a silent 4096-token ceiling makes multi-step
 runs unreliable, in exactly the situations where an agent must help.
@@ -44,13 +45,13 @@ runs unreliable, in exactly the situations where an agent must help.
 3. **MCP is the single tool mechanism, and a core dependency.** `pydantic-ai-slim[openai]` becomes
    `[openai,mcp]` in `pyproject.toml` and `requirements.txt`. Every tool reaches the agent through
    `MCPToolset`. comfydv's own tools (`web_fetch`, and `web_search` over SearXNG) are FastMCP servers under
-   `src/comfydv/mcp/`. They are mounted **in-process** (no subprocess). Other MCP clients can also run
-   them standalone.
+   `src/comfydv/mcp/`. The Agent runner mounts them **in-process** (no subprocess). Other MCP clients can
+   also run them standalone.
 4. **Tools travel as plain, hashable descriptors** on a new `LLM_TOOLS` socket, each naming an
-   MCP source: built-in, HTTP URL, or named stdio server. Live toolsets and MCP connections are
-   built per execution inside the agent runner and torn down when it finishes.
-5. **stdio MCP servers are referenced by name only**, from a local config file outside the
-   workflow. A shared workflow JSON must never be able to specify a command to execute.
+   MCP source: built-in, HTTP URL, or named stdio server. The agent runner builds the live toolsets and MCP connections for each execution, and closes
+   them when it finishes.
+5. **A workflow refers to a stdio MCP server only by name.** A local config file outside the
+   workflow defines it ([ADR-015](ADR-015-mcp-server-trust-model.md)). A shared workflow JSON must never be able to specify a command to execute.
 6. **The agent ships as a new `Agent` node.** It is not a `tools` input on `ChatCompletion`, whose
    cache, refusal-retry and seed semantics assume one deterministic request.
 
@@ -70,6 +71,8 @@ runs unreliable, in exactly the situations where an agent must help.
   including `starlette`, `uvicorn` and `cryptography`. Those carry pin-conflict risk with other
   ComfyUI custom-node packs, so the first bullet must smoke-test an install into a real ComfyUI
   environment. `rich` arrives transitively, but comfydv code must not import it (ADR-001).
+- The built-in FastMCP servers need `fastmcp-slim[server]`. `[mcp]` installs only the FastMCP
+  client, so add the `server` extra with the first built-in server.
 - Tool-calling quality depends on the local model. We fail fast on models whose Ollama
   `/api/show` capabilities lack `tools`.
 - Tool output is untrusted input to the model (prompt injection). v1 is limited to read-only
@@ -103,7 +106,7 @@ and the tools are reusable outside ComfyUI.
 
 **Why rejected:** The maintainer decided MCP is mandatory. Optional extras would also mean
 lazy-import branches and a degraded install path through ComfyUI-Manager, which installs
-`requirements.txt` only. DuckDuckGo is dropped in favour of SearXNG.
+`requirements.txt` only. We use SearXNG, not DuckDuckGo.
 
 ### Alternative E: Add `tools` to the existing `ChatCompletion` node
 
@@ -116,4 +119,4 @@ multi-step runs in one node. Convergence is still on the table once both run on 
 
 - Analysis: `project-management/Work/analysis/llm-agent-harness.md`
 - Related ADRs: [ADR-012](ADR-012-agent-skills-as-on-demand-know-how-distinct-from-tools.md) (skills), [ADR-004](ADR-004-aiohttp-over-httpx-for-ollama.md), [ADR-005](ADR-005-ollama-host-config-via-client-node.md), [ADR-006](ADR-006-structured-ollama-output-tool-calling-not-pydantic-ai.md), [ADR-007](ADR-007-llm-provider-adapter-pattern.md), [ADR-009](ADR-009-native-structured-output-mode.md)
-- External reference: pydantic-ai 2.9.0 (`pydantic_ai.models.Model`, `pydantic_ai.mcp.MCPToolset`, `pydantic_ai.capabilities`)
+- External reference: pydantic-ai 2.9.0 when written; now pinned at 2.68.0 (ADR-013) (`pydantic_ai.models.Model`, `pydantic_ai.mcp.MCPToolset`, `pydantic_ai.capabilities`)

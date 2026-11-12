@@ -152,6 +152,11 @@ Decision record: [ADR-012](../../ADRs/ADR-012-agent-skills-as-on-demand-know-how
 costs one catalog line until the model decides it's relevant and loads it. That's what lets a
 graph offer ten skills to a model with an 8k context.
 
+**Mechanism (updated 2026-11-12, see ADR-012):** `pydantic_ai_harness.Skills` already gives the
+catalog and the on-demand load (`load_capability`), plus a prompt-injection scanner. comfydv adds only
+`read_skill_file`, `run_skill_script` (Monty), inline and MCP-served skills, `mode: always` and the
+`requires-tools` check. The text below is the first design, kept for reference.
+
 **Mechanism (pydantic-ai):** one `Skills` capability (`AbstractCapability`) per agent run:
 
 - `get_instructions()` → the skill catalog ("Available skills: `web-research` — how to research a

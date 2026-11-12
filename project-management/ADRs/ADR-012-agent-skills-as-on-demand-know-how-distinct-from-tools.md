@@ -14,100 +14,125 @@ _Deciders:_ darth-veitcher
 ADR-011 gives comfydv's `Agent` node **tools**: MCP-served actions such as `web_search`, `web_fetch`
 and third-party servers. The maintainer also wants **skills**, with a clear line between the two.
 
-Without that line, "skill" tends to blur into "a tool", "a longer system prompt" or "a plugin",
-and every later feature argues the boundary again. There is also a practical pressure. Local models
-often run with 4–16k contexts, so packing every procedure into the system prompt does not scale past
-a handful of procedures.
+Without that line, the meaning of "skill" is not clear. It can mean "a tool", "a longer system
+prompt" or "a plugin", and each later feature has the same discussion again. Local models often run
+with 4–16k contexts, so a system prompt with all the procedures does not scale past a small number.
 
-An open format already exists. The **Agent Skills** format is a folder containing a `SKILL.md`
-with YAML frontmatter (`name`, `description`), a Markdown body of instructions and optional
-supporting files. Claude, Cursor, Codex, VS Code/Copilot, Gemini, Goose and OpenCode all use it.
-FastMCP 4.1, which `pydantic-ai-slim[mcp]` already pulls in (ADR-011), ships a `SkillsProvider`
-that serves skill folders as `skill://{name}/SKILL.md` MCP resources. pydantic-ai 2.9 has no skills
-feature of its own. Its `AbstractCapability` can contribute instructions (`get_instructions`) and a
-toolset (`get_toolset`), and that is all a skills mechanism needs.
+These facts apply (verified 2026-11-12, pydantic-ai-slim 2.68.0, pydantic-ai-harness 0.68.0):
+
+- **An open format exists.** An Agent Skills skill is a folder with a `SKILL.md` file. The file
+  has YAML frontmatter (`name`, `description`) and a Markdown body of instructions. The folder can
+  also have supporting files. Claude, Cursor, Codex, VS Code/Copilot, Gemini, Goose and OpenCode use it.
+- **pydantic-ai-harness has a `Skills` capability** (`pydantic_ai_harness.skills`, extra `skills`).
+  It puts a catalog of skill names and descriptions in the agent's instructions. The model loads a
+  skill with the `load_capability` tool. The capability reads skill folders from a pydantic-ai
+  workspace, and it can scan skill files for prompt injection. It does not read supporting files,
+  and it does not run scripts.
+- **FastMCP 4.1 has a `SkillsProvider`.** It serves skill folders as `skill://{name}/SKILL.md` MCP
+  resources. It is in the FastMCP `server` extra. `pydantic-ai-slim[mcp]` installs only the
+  `client` extra, so `import fastmcp.server.providers.skills` fails in the current environment.
 
 ## Decision
 
-1. **Definitions.**
-   - A **tool** is an *action*: a typed function, executed on an MCP server, that may have side
-     effects and returns data.
-   - A **skill** is *know-how*: instructions and reference material written for the model, plus
-     optional Python scripts. A skill **never acts by itself**. Its scripts run only in the Monty
-     sandbox (ADR-013), and the sandbox can reach the world only through the agent's wired tools.
-   - A skill may **declare** the tools it expects (`requires-tools` in frontmatter). It never
-     **contains** a tool.
+Give the agent skills as Agent Skills `SKILL.md` folders that the model reads on demand, on a
+socket that is separate from tools.
 
-   Rule of thumb: *if it does something, it's a tool; if it tells the model how to do something,
-   it's a skill.*
-2. **Format: Agent Skills `SKILL.md` folders.** We do not invent our own format. Existing
-   skills from other ecosystems work unchanged.
-3. **Progressive disclosure via a `Skills` capability.**
-   - The agent's instructions contain only a catalog: one line per skill, its name and description.
-   - Two internal tools let the model pull content on demand. `load_skill(name)` returns the body.
-     `read_skill_file(name, path)` returns a supporting file, resolved strictly inside the skill
-     folder.
-   - These two tools are skill-system plumbing. They never appear on the `LLM_TOOLS` socket, and
-     the trace labels them separately (`📘 loaded skill` vs `🔧 tool call`).
-   - A per-skill `mode: always` inlines the body instead. This is the escape hatch for models whose
-     tool calling is too weak to call `load_skill` reliably.
-4. **Separate graph vocabulary.** Skills travel on their own `LLM_SKILLS` socket and live in the
-   `dv/llm/skills` category, so tools and skills never share a socket. There are three source nodes:
-   - **Skill — Library:** names a skill from configured local skill roots. A workflow can name a
-     skill but cannot supply a path.
-   - **Skill — Inline:** a skill authored on the node itself.
-   - **Skill — from MCP:** reads `skill://` resources, exposed as a second `skills` output on
+1. **Definitions.**
+   - A **tool** is an *action*: a typed function that runs on an MCP server. It can have side
+     effects, and it returns data.
+   - A **skill** is *know-how*: instructions and reference material for the model, and optional
+     Python scripts. A skill **never acts by itself**. Its scripts run only in the Monty sandbox
+     (ADR-013), and the sandbox can reach the world only through the agent's wired tools.
+   - A skill can **declare** the tools that it expects (`requires-tools` in the frontmatter). It
+     never **contains** a tool.
+
+   Rule of thumb: *if it does something, it is a tool. If it tells the model how to do something,
+   it is a skill.*
+2. **Format: Agent Skills `SKILL.md` folders.** We do not make a format of our own. Skills from
+   other tools operate without change.
+3. **Use `pydantic_ai_harness.Skills` for the catalog and the load step.** comfydv adds only what
+   the harness does not do:
+   - `read_skill_file(name, path)` gives a supporting file. comfydv resolves the path strictly
+     inside the skill folder.
+   - `run_skill_script` runs a script in Monty (item 6).
+   - Inline skills and MCP-served skills (item 4). comfydv gives them to the harness as skill
+     folders in the run's workspace.
+   - A per-skill `mode: always` puts the body in the instructions. This is the escape hatch for a
+     model that cannot call the load tool reliably.
+
+   These internal tools never appear on the `LLM_TOOLS` socket. The trace shows them separately
+   (`📘 loaded skill` and `🔧 tool call`).
+4. **Separate graph vocabulary.** Skills go on their own `LLM_SKILLS` socket, in the
+   `dv/llm/skills` category. Tools and skills never share a socket. There are three source nodes:
+   - **Skill — Library** names a skill from the configured local skill roots. A workflow can name
+     a skill, but it cannot give a path.
+   - **Skill — Inline** holds a skill that the user writes on the node.
+   - **Skill — from MCP** reads `skill://` resources. It is a second `skills` output on
      **Tool — MCP Server**.
-5. **Fail fast on missing prerequisites.** If a wired skill's `requires-tools` names a tool that no
-   wired toolset provides, the Agent node raises before the first model call.
-6. **Skill scripts run only in the Monty sandbox** (see [ADR-013](ADR-013-monty-sandbox-code-mode-and-skill-scripts.md),
-   which amends this ADR's first draft). `scripts/*.py` run through an internal `run_skill_script`
-   tool. The skill folder is mounted read-only, and the only way out of the sandbox is the agent's
-   wired tools. Code composes tools; it never acts by itself, so the tool/skill delineation holds.
-   Non-Python scripts are never run.
+5. **Fail before the first model call when a tool is missing.** If the `requires-tools` of a wired
+   skill names a tool that no wired toolset gives, the Agent node raises an error.
+6. **Skill scripts run only in the Monty sandbox** ([ADR-013](ADR-013-monty-sandbox-code-mode-and-skill-scripts.md)
+   amends the first draft of this ADR). The internal `run_skill_script` tool runs `scripts/*.py`.
+   Monty mounts the skill folder read-only, and the agent's wired tools are the only way out of
+   the sandbox. Code composes tools and never acts by itself, so the line between tools and skills
+   stays. comfydv never runs a script that is not Python.
 
 ## Consequences
 
 **Easier:**
-- One unambiguous boundary for future features. New ability → MCP tool. New procedure → skill.
-- A graph can offer many skills at the cost of one catalog line each, which matters on small local contexts.
+- Each later feature has one clear boundary. A new ability is an MCP tool. A new procedure is a skill.
+- A graph can offer many skills for one catalog line each. This is important for small local contexts.
+- comfydv does not keep its own catalog and load code, because the harness gives it.
 - comfydv's own MCP servers can ship the tools and the skills that teach them together, for
-  example `comfydv.mcp.web` plus a built-in `web-research` skill.
-- Skills written for Claude Code or Cursor can be reused in ComfyUI as they are.
+  example `comfydv.mcp.web` and a built-in `web-research` skill.
+- Skills from Claude Code or Cursor operate in ComfyUI without change.
 
 **Harder / constrained:**
-- Progressive disclosure depends on the model choosing to call `load_skill`. Weak models need `mode: always`.
-- Skills are trusted instructions. A malicious skill is a prompt injection. Mitigations: skill roots are local and user-controlled.
-  MCP-served skills carry their server's trust. Scripts run only inside Monty and can act only
-  through wired tools (ADR-013).
-- `requires-tools` is our own frontmatter key, not part of the shared format. Other ecosystems ignore it harmlessly.
+- Progressive disclosure needs the model to call the load tool. A weak model needs `mode: always`.
+- Skills are trusted instructions, so a malicious skill is a prompt injection. Mitigations: the
+  skill roots are local, and the user controls them. MCP-served skills have the trust of their
+  server. Scripts run only in Monty, and they can act only through wired tools (ADR-013). The
+  harness scanner can also check skill files.
+- `requires-tools` is our own frontmatter key, not part of the shared format. Other tools ignore it.
+- Skill — from MCP needs `fastmcp-slim[server]` (the `SkillsProvider`) when a comfydv MCP server
+  serves skills. Add it with that work.
+- The harness `Skills` capability is 0.x, so its API can change. The exact pin (ADR-013) controls
+  when it changes.
 
 **Debt introduced:**
-- Some third-party skills have scripts that need full CPython (third-party packages, unsupported
-  syntax). Their instructions load, but their scripts fail Monty's checks with a clear error.
+- Some third-party skills have scripts that need full CPython (third-party packages, syntax that
+  Monty does not support). Their instructions load, but their scripts fail Monty's checks with a
+  clear error.
 
 ## Considered Alternatives
 
-### Alternative A: Skills as tools (each skill becomes a callable tool returning its text)
+### Alternative A: Skills as tools (each skill is a tool that returns its text)
 
-**Why rejected:** It erases the delineation the maintainer asked for. Skills would inflate the tool
-schema list every step, and in traces and UI they'd look identical to actions.
+**Why rejected:** It removes the line that the maintainer asked for. Skills would make the list of
+tool schemas longer at each step. In traces and in the UI, they would look the same as actions.
 
-### Alternative B: Skills as system-prompt fragments (concatenate selected skills)
+### Alternative B: Skills as parts of the system prompt
 
-**Why rejected:** It is always-on context cost with no progressive disclosure, so it doesn't scale on
-small local contexts. It is kept as the per-skill `mode: always` escape hatch, not as the default.
+**Why rejected:** It costs context at all times, with no progressive disclosure, so it does not
+scale on small local contexts. We keep it as the per-skill `mode: always` escape hatch, not as the
+default.
 
-### Alternative C: A comfydv-specific skill format (for example a JSON widget schema)
+### Alternative C: A skill format of our own (for example a JSON widget schema)
 
-**Why rejected:** It cuts us off from an existing, multi-vendor ecosystem for no gain.
-FastMCP already speaks `SKILL.md`.
+**Why rejected:** It cuts us off from an existing multi-vendor ecosystem, for no gain. The harness
+and FastMCP already read `SKILL.md`.
 
-### Alternative D: Never execute skill scripts
+### Alternative D: Never run skill scripts
 
-**Originally chosen, then superseded by ADR-013.** The original reason was "needs a code-execution tool with
+**First chosen, then replaced by ADR-013.** The first reason was "needs a code-execution tool with
 real sandboxing inside ComfyUI's process space". Monty answers it: a language-level Python sandbox
 in a worker subprocess, with no host access by default.
+
+### Alternative E: Our own `Skills` capability (the first draft of this ADR)
+
+**Why rejected:** `pydantic_ai_harness.Skills` already gives the catalog and the load step, with
+the same format and a prompt-injection scanner. Our own copy would repeat it (DRY). comfydv builds
+only the parts that the harness does not have.
 
 ---
 
@@ -115,4 +140,4 @@ in a worker subprocess, with no host access by default.
 
 - Analysis: `project-management/Work/analysis/llm-agent-harness.md` §3.3
 - Related ADRs: [ADR-013](ADR-013-monty-sandbox-code-mode-and-skill-scripts.md) (script execution), [ADR-011](ADR-011-pydantic-ai-agent-harness-with-native-ollama-model.md)
-- External reference: Agent Skills format (agentskills.io); FastMCP `fastmcp.server.providers.skills`
+- External reference: Agent Skills format (agentskills.io); `pydantic_ai_harness.skills`; FastMCP `fastmcp.server.providers.skills`

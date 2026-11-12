@@ -31,7 +31,7 @@ production workflows. Its documentation is clear to a ComfyUI user without progr
 
 ## This quarter (Q4 2026)
 
-Do the epics in this order. Each epic ships through the one before it.
+Do the epics in this order. Each later epic ships through the release pipeline.
 
 1. **Release Pipeline & Distribution** — `epics/release-pipeline.md` — 📋 PLANNING —
    CI gate, `develop` to PyPI pre-releases, `main` to PyPI and the Comfy Registry.
@@ -41,7 +41,7 @@ Do the epics in this order. Each epic ships through the one before it.
    Remove "Ollama" from the names of nodes that operate with both backends.
    It ships as the first release with a documented breaking change.
 3. **LLM Agent Harness** — `epics/llm-agent-harness.md` — 📋 PLANNING — Agent
-   node with MCP tools, skills and a Monty sandbox (ADR-011 to ADR-014).
+   node with MCP tools, skills and a Monty sandbox (ADR-011 to ADR-015).
 4. **ComfyUI UX Polish** — `epics/ux-and-install.md` — ⏸ PAUSED — The FormatString
    and RandomChoice bugs in specs 003 and 004. It resumes after the release pipeline.
 
