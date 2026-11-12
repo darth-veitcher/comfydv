@@ -74,6 +74,7 @@ LlamaCppClient ┴─► LLM_CLIENT ─┐                            │
         │ OllamaProvider   → OllamaNativeModel(pydantic_ai Model)  │  aiohttp → /api/chat
         │ LlamaCppProvider → OpenAIChatModel(base_url=…/v1)        │  openai SDK (exists)
         │ tools.py → descriptor → MCPToolset (built-in | http | stdio) │
+        │ skills.py → Skills capability (catalog + load_skill)      │  SKILL.md, text only
         │ agent.py → run_agent(model, tools, limits, on_status)     │  pydantic_ai.Agent
         └───────────────────────────────────────────────────────────┘
         ┌──────────── comfydv.mcp (first-party FastMCP servers) ────┐
@@ -130,9 +131,54 @@ SearXNG fits the project's local-first stance: it sits next to Ollama in `docker
 no API keys and is reached over aiohttp, which keeps ADR-004 intact. DuckDuckGo is out of scope
 for v1. If a zero-setup fallback is wanted later, it is one more function on `comfydv.mcp.web`.
 
-### 3.3 The Agent node
+### 3.3 Skills, and how they differ from tools
 
-Inputs: `client`, `model`, `prompt`, `system`/instructions, `tools` (optional), `options`,
+Decision record: [ADR-012](../../ADRs/ADR-012-agent-skills-as-on-demand-know-how-distinct-from-tools.md) (Proposed).
+
+**The delineation, in one line: a tool *does* something; a skill *tells the model how* to do something.**
+
+| | **Tool** | **Skill** |
+|---|---|---|
+| What it is | An action: a typed function the model calls | Know-how: instructions + reference files, written for the model |
+| Executes code? | Yes (on an MCP server) | **Never.** Pure text. Any `scripts/` in a skill folder are not run (no code-exec tool, by design). |
+| Side effects / I/O | Yes (network, files, APIs) | None |
+| Enters the context as | A schema (name, description, parameters) every step; results when called | A one-line **catalog entry** (name + description) every step; the **body only when loaded** (progressive disclosure) |
+| Format | MCP tool | [Agent Skills](https://agentskills.io) `SKILL.md` folder (YAML frontmatter `name`, `description`) — the same format Claude, Cursor, Codex etc. use, so existing skills drop in |
+| Socket / category | `LLM_TOOLS` · `dv/llm/tools` | `LLM_SKILLS` · `dv/llm/skills` |
+| Relationship | — | A skill may **declare** the tools it expects (`requires-tools: [web_search, web_fetch]` in frontmatter). It never **contains** tools. If a required tool isn't wired, the Agent node fails fast with a clear message. |
+
+**How skills differ from the system prompt:** the system prompt is always fully in context. A skill
+costs one catalog line until the model decides it's relevant and loads it. That's what lets a
+graph offer ten skills to a model with an 8k context.
+
+**Mechanism (pydantic-ai):** one `Skills` capability (`AbstractCapability`) per agent run:
+
+- `get_instructions()` → the skill catalog ("Available skills: `web-research` — how to research a
+  question with search + fetch and cite sources; …"), plus one sentence telling the model to
+  call `load_skill` before acting on a matching task.
+- `get_toolset()` → two **internal** tools: `load_skill(name)` (returns the `SKILL.md` body) and
+  `read_skill_file(name, path)` (supporting files, resolved strictly inside the skill folder).
+  These are the skill system's plumbing, not user tools. They never appear on `LLM_TOOLS`, and the
+  `trace` output shows them as `📘 loaded skill: web-research`, distinct from `🔧 tool calls`.
+- `mode` per skill: `on_demand` (default, progressive disclosure) or `always` (body inlined into
+  instructions). `always` is the escape hatch for small models whose tool calling is too weak to
+  reliably call `load_skill`.
+
+**Skill sources** (each a node emitting `LLM_SKILLS`, chainable):
+
+| Node | Source | Notes |
+|---|---|---|
+| **Skill — Library** | A combo of skills found in the configured skill roots: `<ComfyUI user dir>/comfydv/skills/` and the skills comfydv ships in `src/comfydv/skills/` | The workflow *names* a skill. It cannot point at an arbitrary path, so a shared workflow can't read `~/.ssh` via `read_skill_file`. |
+| **Skill — Inline** | `name`, `description` and a multiline `instructions` widget on the node | A skill authored in the graph. It's just text, so it is safe to share. |
+| **Skill — from MCP** | An MCP server exposing skills as `skill://` resources (FastMCP's `SkillsProvider`) | Lets comfydv's own MCP servers ship tools **and** the skills that teach them. The **Tool — MCP Server** node gets a second `skills` output, so one server definition can feed both sockets. |
+
+**Shipped built-in skill:** `web-research` (`requires-tools: [web_search, web_fetch]`). It
+demonstrates the split on day one: the MCP server provides the abilities, and the skill provides
+the method (query reformulation, fetch the top N, cross-check, cite URLs).
+
+### 3.4 The Agent node
+
+Inputs: `client`, `model`, `prompt`, `system`/instructions, `tools` (optional), `skills` (optional), `options`,
 `history`, `image`, `max_steps` (→ `UsageLimits.request_limit`), `max_tool_calls`,
 `timeout_secs`, and later `structured_output`/`output_schema` (reusing `ChatCompletion`'s
 dynamic-socket machinery).
@@ -166,6 +212,10 @@ only once the internals have converged (§3.1).
    `timeout_secs` are mandatory, with conservative defaults.
 4. **Human approval** (pydantic-ai's `ApprovalRequiredToolset`) does not fit ComfyUI's
    non-interactive execution model. It is out of scope for v1. The allowlist and limits above replace it.
+5. **Skills are trusted instructions.** A skill is text, but it is text the model is told to *follow*.
+   A malicious skill is a prompt injection with a head start. Library skills come only from local
+   skill roots the user controls. Skills from a third-party MCP server carry that server's trust
+   level. Skill files are never executed, and `read_skill_file` cannot escape the skill folder.
 
 ## 5. Renaming and reorganisation
 
@@ -207,9 +257,10 @@ so the Agent and Tool nodes are created in their final home rather than renamed 
 | 0 | `010-llm-node-naming` | Categories, display names, module split, deprecated aliases, socket-type spike | Old workflow loads; new names appear in search |
 | 1 | `011-llm-agent` | `[mcp]` dep + ComfyUI install smoke test; `LLMProvider.agent_model()`; `OllamaNativeModel` (non-streaming, tools, think, options); `OpenAIChatModel` for llama.cpp; `Agent` node; in-process `comfydv.mcp.web` with **web_fetch**; **Tool — Web Fetch**; limits; live progress; `trace` | "Summarise <url>" on a local qwen3 via Ollama, every step visible on the node. The MCP path is proven on day 1. |
 | 2 | 011 | **web_search** on `comfydv.mcp.web` (SearXNG) + **Tool — Web Search**; `searxng` service in `docker-compose.dev.yml` | "What changed in llama.cpp this week?" → search → fetch → answer |
-| 3 | 011 | **Tool — MCP Server**: external servers (HTTP by URL with headers; stdio by name from config) | Agent uses a third-party MCP server alongside the built-ins |
-| 4 | 011 | Structured output + image input on `Agent` (`format` on the native model; reuse dynamic sockets) | Vision agent returns typed fields into FormatString |
-| 5 | later | Converge `ChatCompletion` onto `agent_model()` (no tools), retiring ADR-009's duplication, only once parity is proven | Same workflow, one code path |
+| 3 | 011 | **Skills**: `Skills` capability, `LLM_SKILLS` socket, **Skill — Library** + **Skill — Inline**, `requires-tools` check, built-in `web-research` skill | The same question answered better with `web-research` wired: the trace shows `📘 loaded skill` before the `🔧` calls |
+| 4 | 011 | **Tool — MCP Server**: external servers (HTTP by URL with headers; stdio by name from config), with a `skills` output (`skill://` resources) | Agent uses a third-party MCP server's tools and skills alongside the built-ins |
+| 5 | 011 | Structured output + image input on `Agent` (`format` on the native model; reuse dynamic sockets) | Vision agent returns typed fields into FormatString |
+| 6 | later | Converge `ChatCompletion` onto `agent_model()` (no tools), retiring ADR-009's duplication, only once parity is proven | Same workflow, one code path |
 
 **Future** (into `Work/planning/future-features.md` once agreed): sub-agents as tools (Agent output →
 `LLM_TOOLS`), streaming tokens to the UI, persistent agent memory, cloud providers
@@ -221,9 +272,11 @@ Resolved (2026-11-12):
 
 - ✅ **MCP is mandatory.** It is a core dependency, not an extra, and comfydv will grow its own servers. §3.2 follows from this: MCP is the single tool mechanism, and built-ins are in-process FastMCP servers.
 - ✅ **Search backend: SearXNG.** DuckDuckGo is dropped from v1.
+- ✅ **Skills are first-class and distinct from tools** (§3.3, ADR-012): tools act, skills instruct. Skills are text-only `SKILL.md` folders, progressively disclosed, with their own socket and node category.
 
 Still open:
 
 1. **Rename back-compat:** deprecated aliases for one release (recommended) or a clean break with `MIGRATION_MAP`?
 2. **MCP stdio:** accept the "named servers from local config only" rule (recommended), or allow stdio definitions in the workflow?
 3. **Spec layout:** rename as its own spec 010 first (recommended), or fold it into the agent epic?
+4. **Skill scripts:** never execute `scripts/` inside skill folders (recommended for v1, as there's no code-exec tool), or plan a sandboxed executor later?

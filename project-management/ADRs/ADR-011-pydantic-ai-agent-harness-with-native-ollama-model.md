@@ -113,5 +113,5 @@ multi-step runs in one node. Convergence is still on the table once both run on 
 ## Links
 
 - Analysis: `project-management/Work/analysis/llm-agent-harness.md`
-- Related ADRs: [ADR-004](ADR-004-aiohttp-over-httpx-for-ollama.md), [ADR-005](ADR-005-ollama-host-config-via-client-node.md), [ADR-006](ADR-006-structured-ollama-output-tool-calling-not-pydantic-ai.md), [ADR-007](ADR-007-llm-provider-adapter-pattern.md), [ADR-009](ADR-009-native-structured-output-mode.md)
+- Related ADRs: [ADR-012](ADR-012-agent-skills-as-on-demand-know-how-distinct-from-tools.md) (skills), [ADR-004](ADR-004-aiohttp-over-httpx-for-ollama.md), [ADR-005](ADR-005-ollama-host-config-via-client-node.md), [ADR-006](ADR-006-structured-ollama-output-tool-calling-not-pydantic-ai.md), [ADR-007](ADR-007-llm-provider-adapter-pattern.md), [ADR-009](ADR-009-native-structured-output-mode.md)
 - External reference: pydantic-ai 2.9.0 (`pydantic_ai.models.Model`, `pydantic_ai.mcp.MCPToolset`, `pydantic_ai.capabilities`)
