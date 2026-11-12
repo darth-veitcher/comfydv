@@ -40,7 +40,7 @@ outside this branch. Each one says why.
 
 - [x] T003-T Write FAILING tests for P1 (the name is `comfydv`) and P2 (a static `version`, not dynamic) in `tests/test_release_pipeline.py`.
 - [x] T003-I Replace `hatch-vcs` with `version = "0.1.0"` in `pyproject.toml`, so that T003-T passes.
-- [ ] T004-T Write FAILING tests for P4 to P8 (the PSR version source, zero-version rules, commit tags, `develop` pre-release token and changelog mode) in `tests/test_release_pipeline.py`.
+- [x] T004-T Write FAILING tests for P4 to P8 (the PSR version source, zero-version rules, commit tags, `develop` pre-release token and changelog mode) in `tests/test_release_pipeline.py`.
 - [ ] T004-I Add `[tool.semantic_release]` to `pyproject.toml` from the T001 template, changed as research R4, R5 and R12 say, so that T004-T passes.
 - [ ] T005-T Write a FAILING test that `torch` comes from the PyTorch CPU index and that `torchvision` is absent, in `tests/test_release_pipeline.py`.
 - [ ] T005-I Add the CPU index for `torch` to `[tool.uv.sources]`, remove `torchvision` from the dev group in `pyproject.toml`, and run `uv lock`.
