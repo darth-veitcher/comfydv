@@ -1,7 +1,11 @@
 # Epic: ComfyUI UX Polish & Manager Compatibility
 
 ## Status
-Active  — started 2026-06-28
+Paused  — started 2026-06-28; paused 2026-11-12
+
+Spec 002 shipped. Specs 003 and 004 have a spec but no plan or tasks, and their
+bugs are still present. Spec 005 is mostly complete. This epic resumes after
+`release-pipeline`, so that its fixes reach users as a release.
 
 ## Why now
 A codebase audit (2026-06-28) surfaced three categories of defects that collectively prevent comfydv from being correctly installed via ComfyUI Manager and degrade the user experience in every ComfyUI session:
@@ -21,18 +25,18 @@ _None — this epic is self-contained and can start immediately._
 
 <!-- populated by beacon link-spec -->
 
-- specs/002-manager-compatible-install-requirements-txt-and-custom-node-list-registration/
-- specs/003-formatstring-frontend-ux-debounce-connection-migration-node-id-parity-toast-feedback/
-- specs/004-node-logic-correctness-per-instance-formatstring-schema-randomchoice-determinism-circuitbreaker-any-type/
-- specs/005-metadata-cleanup-pyproject-description-scripts-dead-code-removal-tooltips-category-consistency/
+- specs/002-manager-compatible-install-requirements-txt-and-custom-node-list-registration/ — shipped
+- specs/003-formatstring-frontend-ux-debounce-connection-migration-node-id-parity-toast-feedback/ — needs plan and tasks
+- specs/004-node-logic-correctness-per-instance-formatstring-schema-randomchoice-determinism-circuitbreaker-any-type/ — needs plan and tasks
+- specs/005-metadata-cleanup-pyproject-description-scripts-dead-code-removal-tooltips-category-consistency/ — tooltips and categories remain
 ## ADRs
 
 - [ADR-003](../../ADRs/ADR-003-requirements-txt-authoring-policy.md) — hand-authored requirements.txt as curated subset of pyproject.toml
 
 ## Success criteria
 
-- [ ] `requirements.txt` at repo root lists only actual runtime dependencies (`jinja2>=3.1.6`), is hand-authored not `uv export`-generated, and a `uv sync` + Manager-simulated install succeeds
-- [ ] comfydv is submitted to / listed in `ltdrdata/ComfyUI-Manager`'s `custom-node-list.json`
+- [x] `requirements.txt` at repo root lists only actual runtime dependencies (`jinja2>=3.1.6`), is hand-authored not `uv export`-generated, and a `uv sync` + Manager-simulated install succeeds
+- [x] comfydv is submitted to / listed in `ltdrdata/ComfyUI-Manager`'s `custom-node-list.json`
 - [ ] FormatString template input is debounced (≥ 300 ms) so output connections are not dropped while a user is still typing
 - [ ] FormatString output slots are updated via `removeOutput`/`addOutput` with connection migration rather than wiping `this.outputs.length = 0`
 - [ ] FormatString node ID is consistent between JS and Python (no `format_string_` prefix mismatch)
@@ -41,9 +45,9 @@ _None — this epic is self-contained and can start immediately._
 - [ ] `RandomChoice.IS_CHANGED` does not call the actual `random_choice` method; uses a hash of the seed + input count instead
 - [ ] `RandomChoice` seed=0 produces a deterministic, reproducible output (sentinel for "random" is -1 or an explicit widget toggle)
 - [ ] `CircuitBreaker.trigger` accepts `any_type` so it can be placed anywhere in a graph, not only after IMAGE nodes
-- [ ] `pyproject.toml` `description` is a real sentence; the broken `[project.scripts]` entry is removed
-- [ ] Dead code and stale references are removed: `ToJSON`/`To JSON` from `dynamic.js`, "Model Unloader" from `src/comfydv/README.md`
-- [ ] `aiohttp` is moved from dev dependencies to production dependencies (it is imported unconditionally at module level)
+- [x] `pyproject.toml` `description` is a real sentence; the broken `[project.scripts]` entry is removed
+- [x] Dead code and stale references are removed: `ToJSON`/`To JSON` from `dynamic.js`, "Model Unloader" from `src/comfydv/README.md` (2026-11-12: the README is deleted, and the debug logging in both JS files is removed)
+- [x] `aiohttp` is moved from dev dependencies to production dependencies (it is imported unconditionally at module level)
 - [ ] All three nodes have `"tooltip"` metadata on each input
 - [ ] CATEGORY is consistent across all three nodes (single submenu)
 - [ ] `beacon doctor --strict` passes on `main` after each spec merges

@@ -1,7 +1,7 @@
 # Roadmap — Strategy
 
 **Project:** comfydv  
-**Last reviewed:** 2026-06-28
+**Last reviewed:** 2026-11-12
 
 ---
 
@@ -17,18 +17,45 @@
 
 ## Vision
 
-`comfydv` is a small, high-quality ComfyUI utility pack that fills the gaps the core node library leaves: composable string formatting, seed-controlled randomisation, and workflow flow-control. Winning looks like: every node is well-tested, installs in one step, produces no surprises in production workflows, and is documented well enough that a non-programmer ComfyUI user can connect it without reading source code.
+`comfydv` is a small, high-quality ComfyUI node pack. It has two parts:
+
+- **Utility nodes**: string formatting, seed-controlled random choice and a
+  circuit breaker.
+- **Local LLM nodes**: chat, vision and (next) agents with tools, skills and a
+  sandbox, on Ollama or llama.cpp.
+
+Success means: each node has tests, installs in one step, causes no surprises in
+production workflows and has documentation that a ComfyUI user without
+programming knowledge can follow. Users get changes only as versioned releases.
 
 ---
 
-## This quarter (Q3 2026)
+## This quarter (Q4 2026)
 
-- **BEACON bootstrap** — `epics/archive/beacon-bootstrap.md` — ✅ DONE — BEACON framework wired up; problem statement, constitution, roadmap, and ADR template populated; quality gates clean
-- **Logging modernisation** — `epics/logging-modernisation.md` — ✅ DONE — stdlib logging, NullHandler, silent-by-default; colorama/rich/termcolor removed; 11 tests
-- **ComfyUI UX Polish & Manager Compatibility** — `epics/ux-and-install.md` — 🔄 ACTIVE — Fix installation, core UX bugs (debounce, connection drops, alert dialogs), correctness bugs (class-level mutation, IS_CHANGED, seed=0), and metadata drift
-- **LLM Provider Abstraction** — `epics/archive/llm-provider-abstraction.md` — ✅ DONE — shared `LLMProvider` protocol (list/load/unload/chat/structured-output) and generic ComfyUI nodes; Ollama integration migrated onto it (ADR-007, supersedes ADR-006); merged via PR #17
-- **llama.cpp Model Integration** — `epics/llamacpp-integration.md` — 🔄 ACTIVE — Add a `LlamaCppProvider` implementing the shared protocol via llama-server's router mode (GitHub issue #15); dependency on LLM Provider Abstraction now satisfied
-- **VLM Image Input for ChatCompletion** — `epics/vlm-image-input.md` — 📋 PLANNING — Wire a ComfyUI IMAGE into the existing generic ChatCompletion node so a vision-capable model can describe/understand images; images carried on the `Message` and translated per-provider (ADR-008 extends ADR-007)
+Do the epics in this order. Each epic ships through the one before it.
+
+1. **Release Pipeline & Distribution** — `epics/release-pipeline.md` — 📋 PLANNING —
+   CI gate, `develop` to PyPI pre-releases, `main` to PyPI and the Comfy Registry.
+   This is first because comfydv has no releases: each merge to `main` goes to
+   all users at once.
+2. **LLM Node Naming (clean break)** — `epics/llm-node-naming.md` — 📋 PLANNING —
+   Remove "Ollama" from the names of nodes that operate with both backends.
+   It ships as the first release with a documented breaking change.
+3. **LLM Agent Harness** — `epics/llm-agent-harness.md` — 📋 PLANNING — Agent
+   node with MCP tools, skills and a Monty sandbox (ADR-011 to ADR-014).
+4. **ComfyUI UX Polish** — `epics/ux-and-install.md` — ⏸ PAUSED — The FormatString
+   and RandomChoice bugs in specs 003 and 004. It resumes after the release pipeline.
+
+Done this quarter:
+
+- **llama.cpp Model Integration** — `epics/archive/llamacpp-integration.md` — ✅ DONE
+- **VLM Image Input for ChatCompletion** — `epics/archive/vlm-image-input.md` — ✅ DONE.
+  One follow-up is open: a test against a live vision backend (spec 009, T010).
+- **Agent harness design and dependency upgrade** — PR #37 — pydantic-ai 2.68, MCP,
+  Monty, telemetry off by default, BEACON 1.18 and Spec Kit 1.0.
+
+Earlier quarters: `epics/archive/` (BEACON bootstrap, logging, Ollama integration,
+LLM provider abstraction).
 
 For the live rollup (specs per epic, % tasks complete, last-commit age):
 
@@ -40,19 +67,24 @@ beacon epic list --detailed
 
 ## Sequencing and dependencies
 
-- **BEACON bootstrap** is a prerequisite for all other epics (quality gates need to pass before new work merges)
-- **Test hardening** is independent of documentation and can run in parallel
-- **Documentation** depends on the final node API (output order, input names) being stable — start after test hardening locks the contracts
-- **llama.cpp Model Integration** depends on **LLM Provider Abstraction** landing first — its `LlamaCppProvider` implements the protocol that epic defines, and reuses its generic nodes as-is
+- **Release pipeline** comes before all user-visible changes. It needs the CI gate
+  to start green, so this quarter's lint and type cleanup is a prerequisite (done in PR #37).
+- **Node naming** depends on the release pipeline. A clean break is acceptable only
+  in a versioned release with migration notes.
+- **Agent harness** depends on node naming, so that its new nodes start with their
+  final names. It uses the dependency upgrade in PR #37.
+- **UX polish** is independent of the LLM epics. It can run in parallel when the
+  release pipeline is ready.
 
 ---
 
 ## Out of scope this quarter
 
-- PyPI / ComfyUI Manager listing — deferred until test coverage is solid and the API is stable
-- GPU-dependent nodes — out of scope; the utility pack is CPU-only by design
-- Multi-language template engines (Handlebars, Liquid, etc.) — not planned; Jinja2 covers the use cases
-- A UI node editor or visual template builder — too complex; out of scope for this stage
+- A `1.0.0` release. Decide after the agent harness ships.
+- Cloud LLM providers (OpenAI, Anthropic) as LLM clients.
+- GPU-dependent utility nodes.
+- Template engines other than Jinja2 and Python f-strings.
+- A visual template builder.
 
 ---
 
@@ -68,4 +100,4 @@ beacon epic list --detailed
 
 ---
 
-*Last reviewed: 2026-06-28 — initial population. `beacon doctor` will warn if it goes stale (>90 days).*
+*Last reviewed: 2026-11-12 — Q4 strategy review: release pipeline first, then node naming, then the agent harness. `beacon doctor` warns if this file goes stale (>90 days).*

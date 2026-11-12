@@ -1,7 +1,7 @@
 # Epic: llama.cpp Model Integration
 
 ## Status
-Active — spec 008-llamacpp-integration complete, ready to finish once merged
+Done — completed 2026-11-12
 
 ## Why now
 
@@ -45,7 +45,7 @@ once this epic is accepted._
   - `list_models()` via `GET /models`, surfacing native status (`unloaded`/`loading`/`loaded`/`sleeping`/`downloading`) directly — no normalization needed, since llama.cpp's vocabulary is the `ModelStatus` enum's superset
   - `load_model()` / `unload_model()` via `POST /models/load` / `POST /models/unload`
   - `chat_structured()` via the same shared `pydantic-ai` mechanism as `OllamaProvider`, `OpenAIProvider(base_url=<llama-server host>/v1)` — no new structured-output code, just a different `base_url`
-- `LlamaCppClient` config node (reuses the [ADR-005](../../ADRs/ADR-005-ollama-host-config-via-client-node.md) config-node pattern), outputs the same `LLM_CLIENT` socket type `OllamaClient` does
+- `LlamaCppClient` config node (reuses the [ADR-005](../../../ADRs/ADR-005-ollama-host-config-via-client-node.md) config-node pattern), outputs the same `LLM_CLIENT` socket type `OllamaClient` does
 - No new node classes for model selection, load/unload, or chat — the generic `LLMModelSelector`, `LLMLoadModel`, `LLMUnloadModel`, and `ChatCompletion` nodes from the prerequisite epic work unchanged once a `LlamaCppClient` is wired in
 - `LlamaCppClient` registered in `NODE_CLASS_MAPPINGS` / `NODE_DISPLAY_NAME_MAPPINGS`
 - Test coverage for `LlamaCppProvider` mirrors the `OllamaProvider` test conventions established in the prerequisite epic

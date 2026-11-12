@@ -1,7 +1,7 @@
 # Epic: VLM Image Input for ChatCompletion
 
 ## Status
-Planning — started 2026-07-22
+Done — completed 2026-11-12
 
 ## Why now
 
