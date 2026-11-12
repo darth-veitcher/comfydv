@@ -18,8 +18,8 @@ description: BEACON SHIP phase — promote validated DEV work to PROD, extract w
 ### Before releasing
 
 - [ ] All bullets in `tasks.md` are marked complete
-- [ ] All tests pass on `main`
-- [ ] Last CI run on `main` is green (`gh run list --branch main --limit 3`)
+- [ ] All tests pass on `develop`
+- [ ] Last CI run on `develop` is green (`gh run list --branch develop --limit 3`)
 - [ ] Features have been validated in the DEV environment by a human
 - [ ] `beacon doctor --strict` exits 0
 - [ ] No known regressions
@@ -45,18 +45,22 @@ up. Before shipping, check the user-facing surface — BEACON organises it with
 `public-api-docs`, `project-urls`, `docs-freshness`, opt-in `diataxis-coverage`,
 `writing`, `writing-artefacts`).
 
-### Tag the release
+### Open the release PR
 
-This project is trunk-based, so there is no promotion PR: `main` is always
-shippable. Run `/git:release` — it checks CI is green on `main`, suggests the
-next version from Conventional Commits since the last tag, and tags `main`.
+Run `/git:release` — this:
+1. Checks DEV CI is green
+2. Generates a changelog from Conventional Commits since last release
+3. Opens a `develop → main` PR using `.github/PULL_REQUEST_TEMPLATE/release.md`
 
-### After tagging
+The PR requires a human approval in GitHub Actions (configured in Settings → Environments → prod).
 
-1. **Confirm the release** — the tag is pushed and CI is publishing from it:
+### After the PR merges
+
+1. **Tag the release:**
    ```bash
-   git describe --tags --abbrev=0
-   gh run list --branch main --limit 3
+   git checkout main && git pull
+   git tag -a vX.Y.Z -m "Release vX.Y.Z"
+   git push origin vX.Y.Z
    ```
 
 2. **Clean `Work/`** — transient notes belong in git history, not the repo:

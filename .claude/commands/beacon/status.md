@@ -21,7 +21,7 @@ Run these read-only probes and read their output:
    git status --porcelain              # dirty? (uncommitted work)
    git log --oneline -8                # recent history
    # PR-merged probe: 0 == this branch already landed on the trunk upstream.
-   git merge-base --is-ancestor HEAD origin/main; echo "merged=$?"
+   git merge-base --is-ancestor HEAD origin/develop; echo "merged=$?"
    ```
 
 2. **SEED gate.** `beacon seed` — FAILs while the problem statement / architecture
@@ -88,7 +88,7 @@ row is the recommendation. (This mirrors the phase gates in `beacon help phases`
 | SEED green, no epics declared, horizon empty | DESIGN | `/beacon.epics` — the roadmap names no initiatives yet; set the horizon first |
 | On integration/default branch (`main` / `develop`), epic exists with owned stubs not yet broken out into real specs | DESIGN | `/beacon.audit <slug>` — confirm the epic's stubs/specs cover every Success criterion before building (default-on *design* moment; tune via doctor.toml `[audit] moments`) |
 | On integration/default branch (`main` / `develop`), epic(s) exist | DESIGN→BUILD | `/beacon.specify <epic> <feature>` (with SpecKit) **or** `/git:feature <name>` + `beacon bullet start` for non-spec work |
-| Branch already merged into `main` (PR landed), bullet still active | SHIP | `beacon bullet finish && git switch main && git pull` |
+| Branch already merged into `develop` (PR landed), bullet still active | SHIP | `beacon bullet finish && git switch develop && git pull` |
 | Spec branch, `spec.md` present but no `plan.md` | DESIGN | `/beacon.plan` |
 | Spec branch, `plan.md` present but no `tasks.md` | DESIGN | `/beacon.tasks` |
 | Spec branch, `tasks.md` has active `[ ]` / `[~]` tasks | BUILD | `/beacon.implement` |

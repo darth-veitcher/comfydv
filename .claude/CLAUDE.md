@@ -20,7 +20,7 @@ SEED → DESIGN → BUILD → SHIP
 | **SEED** | "I have an idea for…" / new project | `project-management/Background/00-problem-statement.md` | One problem, one user, success criteria, non-goals |
 | **DESIGN** | "How should we architect…" / "Break this down" | `specs/[feature]/{spec,plan,tasks}.md` (Spec Kit); `project-management/ADRs/ADR-NNN-*.md`; updated `Background/01-final-architecture-document.md` | spec, plan, tasks complete and reviewed |
 | **BUILD** | "Starting bullet #N" | Working software per bullet; updated `beacon.md` + Roadmap | All tests pass; previous bullets unbroken; demoable |
-| **SHIP** | All bullets complete | PR via `/git:pr`; `Work/` cleaned; patterns promoted to ADRs | PR merged to `main`; clean `Work/` |
+| **SHIP** | All bullets complete | PR via `/git:pr`; `Work/` cleaned; patterns promoted to ADRs | PR merged to `develop`; clean `Work/` |
 
 Full phase guides ship as Claude Code skills at `.claude/skills/beacon-{seed,design,build,ship}/SKILL.md` — they auto-activate on the entry triggers above.
 
@@ -34,8 +34,8 @@ Full phase guides ship as Claude Code skills at `.claude/skills/beacon-{seed,des
               └── /speckit-tasks      # DESIGN — produces tasks.md
                     └── /speckit-implement   # BUILD — executes tasks
                           └── /speckit-converge  # BUILD — assess code vs spec; append unmet work (SpecKit ≥ 1.0)
-                                └── /git:pr        # SHIP — PR to main
-                                      └── /git:release   # SHIP — tag main
+                                └── /git:pr        # SHIP — PR to develop
+                                      └── /git:release   # SHIP — PR develop → main
 ```
 
 Lost in the pipeline? `/beacon.status` reads the repo and tells you which phase
@@ -53,25 +53,24 @@ A tracer bullet is a complete minimal path through the system, end-to-end:
 
 One bullet per session. Scope creep goes to `project-management/Work/planning/future-features.md`.
 
-### Git workflow (trunk-based)
+### Git workflow (gitflow: two-branch environment model)
 
 ```
-main     ── always shippable (PRs only; releases are tags on main)
+main     ── PROD  (PR from develop only)
+  ↑ /git:release
+develop  ── DEV   (PRs only; automated gate)
   ↑ /git:pr
 NNN-slug                                                 ← spec work (from /speckit-specify)
 feature/[slug] · fix/[slug] · chore/[slug] · docs/[slug] ← non-spec (/git:feature)
 ```
 
-There is no `develop` branch: every branch is cut from `main` and every PR
-targets `main`.
-
 | Command | Action |
 |---|---|
 | `/beacon.constitution` | Author `.specify/memory/constitution.md` from BEACON principles (run once, early) |
 | `/speckit-specify <feature>` | Create spec + `NNN-slug` branch |
-| `/git:feature <name>` | Cut branch from `main` for non-spec work |
-| `/git:pr` | PR to `main` |
-| `/git:release` | Tag `main` with the next version; CI publishes from the tag |
+| `/git:feature <name>` | Cut branch from `develop` for non-spec work |
+| `/git:pr` | PR to `develop` |
+| `/git:release` | PR `develop → main` with changelog |
 
 Conventional Commits enforced by the `commit-msg` hook. Do not bypass.
 
@@ -139,7 +138,7 @@ Then ask: *"Would I sign my name to this?"* If not, refactor before committing.
 |---|---|---|
 | At end of every BUILD session | `beacon doctor` | Catches placeholder text, stale Work/sessions, missing ADRs, framework drift |
 | Before opening a PR | `beacon doctor --strict` | Promotes warnings to failures — CI-grade gate |
-| Project doesn't ship to PyPI yet | `beacon integration add release` | Installs PSR + Trusted Publishing pipeline (main → PyPI) |
+| Project doesn't ship to PyPI yet | `beacon integration add release` | Installs PSR + Trusted Publishing pipeline (main → PyPI, develop → TestPyPI) |
 | Refresh framework files only | `beacon upgrade` | Never touches `.specify/` or user content |
 
 If `beacon doctor` reports `problem-statement: Placeholder text…` you have not actually written the problem statement — `00-problem-statement.md` still contains template tokens. Fix that before opening any feature branch.

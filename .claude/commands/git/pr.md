@@ -1,5 +1,5 @@
 ---
-description: Open a pull request from the current branch to main. Runs BEACON quality gates first and populates the description from the related spec.
+description: Open a pull request from the current branch to develop (default) or main (hotfix). Runs BEACON quality gates first and populates the description from the related spec.
 argument-hint: [pr-title] — optional; inferred from branch name if omitted
 allowed-tools: Bash, Read, Grep
 ---
@@ -15,8 +15,8 @@ BRANCH=$(git rev-parse --abbrev-ref HEAD)
 echo "Current branch: $BRANCH"
 ```
 
-This project is on trunk-based git flow, so every PR (feature, fix, hotfix)
-targets **main**.
+- If branch starts with `fix/` AND was cut from `main` (check `git log main..HEAD`): this is a **hotfix** — target `main`
+- Otherwise: target **develop**
 
 ## 2. Run BEACON quality gates
 
@@ -44,14 +44,14 @@ Build the PR body using:
 - Specification summary from `spec.md` (user stories + acceptance criteria)
 - Plan summary from `plan.md` (what changed architecturally)
 - Task list from `tasks.md` (which bullets are complete)
-- `git log main..HEAD --oneline` (commits included)
+- `git log develop..HEAD --oneline` (commits included)
 
 Use `.github/PULL_REQUEST_TEMPLATE/feature.md` as the structure.
 
 ## 4. Open the PR
 
 ```bash
-BASE="main"
+BASE="develop"   # or "main" for a hotfix
 TITLE="${ARGUMENTS:-$(echo "$BRANCH" | sed 's|^[^/]*/||' | tr '-' ' ')}"
 
 gh pr create \
@@ -67,3 +67,4 @@ Report:
 - PR URL
 - Target branch and why
 - Required CI checks that must pass
+- If this is a hotfix to `main`: remind to cherry-pick it to `develop` after merge

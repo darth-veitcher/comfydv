@@ -18,7 +18,7 @@ description: BEACON BUILD phase — implement one tracer bullet per session with
 ### Start of session
 1. Fix any broken windows first (failing tests, lint warnings, TODOs) — max 15 min. If it takes longer, create a ticket and park it.
 2. Confirm today's epic + bullet: `beacon bullet status` (shows what this worktree is for).
-3. Pull latest from `main`: `git fetch origin && git checkout main && git pull`
+3. Pull latest from `develop`: `git fetch origin && git checkout develop && git pull`
 4. Create feature branch: `/git:feature <bullet-description>` (or `/speckit-specify` for a spec-driven feature).
 5. Run `beacon bullet start [<title>] [--epic <slug>]` to register the bullet (records an entry in the committed `project-management/.beacon/bullets.toml` for non-spec branches; for spec branches resolves the active task from `tasks.md`).
 6. Write the **acceptance test first** (from the acceptance criteria in `spec.md`).
@@ -41,7 +41,7 @@ beacon doctor --strict   # semantic health — fails on placeholders, drift, sta
 3. `beacon bullet list` to regenerate the project dashboard.
 4. Write any cross-spec decisions as ADRs and link them in the relevant epic's `## ADRs` section (don't leave them in session notes).
 5. Once every task is done, converge before review: `/beacon.converge` (SpecKit ≥ 1.0). It reads the spec, plan, and tasks against the code and appends any unbuilt work as new tasks — or reports clean. If it appended tasks, keep building; otherwise proceed.
-6. Open PR to `main`: `/git:pr`
+6. Open PR to `develop`: `/git:pr`
 7. Ask: **"Would I sign my name to this?"**
 
 ---
