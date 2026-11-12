@@ -55,14 +55,14 @@ correction at the bottom of this file). The actual work is now
 rewrite using a `_FakeProvider` double). Original text kept below for
 history, not as the active task list:
 
-- [-] T007-T [US1] ~~Write FAILING test: `OllamaClient` node constructs and outputs an `OllamaProvider` via the `LLM_CLIENT` socket, in `tests/test_ollama.py`~~ _Superseded, see Phase 8 T-CUT-08._
-- [-] T007-I [US1] ~~Update `OllamaClient` in `src/comfydv/ollama.py` to construct and output an `OllamaProvider` via `LLM_CLIENT`~~ _Superseded, see Phase 8 T-CUT-04._
-- [-] T008-T [US1] ~~Write FAILING test: `OllamaProvider.chat()` returns model text via the existing `/api/chat` aiohttp call~~ _Superseded, see Phase 8 T-CUT-03._
-- [-] T008-I [US1] ~~Implement `OllamaProvider.chat()` in `src/comfydv/_llm/ollama_provider.py`~~ _Superseded, see Phase 8 T-CUT-02._
-- [-] T009-T [US1] ~~Write FAILING test: generic `ChatCompletion` node (non-structured) calls `provider.chat()` and surfaces a clear error on an unreachable host~~ _Superseded, see Phase 8 T-CUT-08._
-- [-] T009-I [US1] ~~Rename `OllamaChatCompletion` → `ChatCompletion`, delegate the non-structured path to `LLMProvider.chat()`, update `NODE_CLASS_MAPPINGS`~~ _Superseded, see Phase 8 T-CUT-05/T-CUT-06._
-- [-] T010-T [US1] ~~Write FAILING test: two `ChatCompletion` nodes sharing one `OllamaClient` both pick up a host change~~ _Superseded, see Phase 8 T-CUT-08._
-- [-] T010-I [US1] ~~Verify/adjust that `OllamaClient` → `OllamaProvider` construction happens per node execution~~ _Superseded, folded into Phase 8 T-CUT-04 (construction is already per-call in `create_client()`)._
+- [x] T007-T [US1] Write FAILING test: `OllamaClient` node constructs and outputs an `OllamaProvider` via the `LLM_CLIENT` socket, in `tests/test_ollama.py` _Delivered by (superseded): Phase 8 T-CUT-08._
+- [x] T007-I [US1] Update `OllamaClient` in `src/comfydv/ollama.py` to construct and output an `OllamaProvider` via `LLM_CLIENT` _Delivered by (superseded): Phase 8 T-CUT-04._
+- [x] T008-T [US1] Write FAILING test: `OllamaProvider.chat()` returns model text via the existing `/api/chat` aiohttp call _Delivered by (superseded): Phase 8 T-CUT-03._
+- [x] T008-I [US1] Implement `OllamaProvider.chat()` in `src/comfydv/_llm/ollama_provider.py` _Delivered by (superseded): Phase 8 T-CUT-02._
+- [x] T009-T [US1] Write FAILING test: generic `ChatCompletion` node (non-structured) calls `provider.chat()` and surfaces a clear error on an unreachable host _Delivered by (superseded): Phase 8 T-CUT-08._
+- [x] T009-I [US1] Rename `OllamaChatCompletion` → `ChatCompletion`, delegate the non-structured path to `LLMProvider.chat()`, update `NODE_CLASS_MAPPINGS` _Delivered by (superseded): Phase 8 T-CUT-05/T-CUT-06._
+- [x] T010-T [US1] Write FAILING test: two `ChatCompletion` nodes sharing one `OllamaClient` both pick up a host change _Delivered by (superseded): Phase 8 T-CUT-08._
+- [x] T010-I [US1] Verify/adjust that `OllamaClient` → `OllamaProvider` construction happens per node execution _Delivered by (superseded), folded into Phase 8 T-CUT-04 (construction is already per-call in `create_client()`)._
 
 **Checkpoint**: superseded — see `atomic-cutover-plan.md`'s checkpoint (T-CUT-10, full suite green).
 
@@ -80,8 +80,8 @@ history, not as the active task list:
 - [x] T012-I [US2] Implement the bounded retry loop (0–5, matching ADR-006's existing contract) around the `pydantic-ai` call in `src/comfydv/_llm/chat.py`, with the Agent's own internal retries disabled (`retries=0`) so the error contract is comfydv's — makes T012-T pass (depends on T011-I)
 - [x] T013-T [US2] Write test: exhausted retries raise `RuntimeError` naming the model, attempt count, and a truncated last-response snippet, in `tests/test_llm_chat_structured.py` (witnesses `features/us2_structured_output.feature` scenario "Exhausted retries fail clearly instead of passing through bad data")
 - [x] T013-I [US2] Implement the exhausted-retry error path in `src/comfydv/_llm/chat.py`, matching ADR-006's existing error message contract (model, attempt count, truncated last response) — makes T013-T pass (depends on T012-I)
-- [-] T014-T [US2] _Superseded — see `atomic-cutover-plan.md` D5 and T-CUT-08. Original: write FAILING test that `ChatCompletion`'s `structured_output=True` path wires a schema through `chat_structured()` to per-field dynamic ComfyUI output sockets. D5 replaces the originally-planned retry-count-style test with a delegation test against a `_FakeProvider`, since retry behavior is already covered by `tests/test_llm_chat_structured.py`._
-- [-] T014-I [US2] _Superseded — see `atomic-cutover-plan.md` T-CUT-05. Original: wire `ChatCompletion`'s `structured_output`/`output_schema` inputs to `LLMProvider.chat_structured()`, preserving the dynamic-socket UX from ADR-006 — still the right implementation shape, just executed as part of the coordinated T-CUT-05 rename, not standalone._
+- [x] T014-T [US2] _Delivered by (superseded) — see `atomic-cutover-plan.md` D5 and T-CUT-08. Original: write FAILING test that `ChatCompletion`'s `structured_output=True` path wires a schema through `chat_structured()` to per-field dynamic ComfyUI output sockets. D5 replaces the originally-planned retry-count-style test with a delegation test against a `_FakeProvider`, since retry behavior is already covered by `tests/test_llm_chat_structured.py`._
+- [x] T014-I [US2] _Delivered by (superseded) — see `atomic-cutover-plan.md` T-CUT-05. Original: wire `ChatCompletion`'s `structured_output`/`output_schema` inputs to `LLMProvider.chat_structured()`, preserving the dynamic-socket UX from ADR-006 — still the right implementation shape, just executed as part of the coordinated T-CUT-05 rename, not standalone._
 
 **Checkpoint**: US1 + US2 both independently functional — matches today's Ollama capability, now on the shared mechanism.
 
@@ -99,14 +99,14 @@ method bodies), **T-CUT-03** (`tests/test_ollama_provider.py`, new file),
 and **T-CUT-05/T-CUT-06/T-CUT-08** (the node renames + delegation +
 registration + test rewrite). Original text kept for history:
 
-- [-] T015-T [US3] ~~Write FAILING test: `OllamaProvider.list_models()` returns `ModelInfo` entries with status normalized into `ModelStatus`~~ _Superseded, see Phase 8 T-CUT-03._
-- [-] T015-I [US3] ~~Implement `OllamaProvider.list_models()`~~ _Superseded, see Phase 8 T-CUT-02._
-- [-] T016-T [US3] ~~Write FAILING test: `OllamaProvider.load_model()`/`unload_model()` are idempotent~~ _Superseded, see Phase 8 T-CUT-03._
-- [-] T016-I [US3] ~~Implement `OllamaProvider.load_model()`/`unload_model()`~~ _Superseded, see Phase 8 T-CUT-02._
-- [-] T017-T [US3] ~~Write FAILING test: generic `LLMModelSelector` node returns model+status pairs~~ _Superseded, see Phase 8 T-CUT-08._
-- [-] T017-I [US3] ~~Rename `OllamaModelSelector` → `LLMModelSelector`, delegate to `LLMProvider.list_models()`~~ _Superseded, see Phase 8 T-CUT-05/T-CUT-06._
-- [-] T018-T [US3] ~~Write FAILING test: generic `LLMLoadModel`/`LLMUnloadModel` nodes call the protocol~~ _Superseded, see Phase 8 T-CUT-08._
-- [-] T018-I [US3] ~~Rename `OllamaLoadModel`/`OllamaUnloadModel` → `LLMLoadModel`/`LLMUnloadModel`~~ _Superseded, see Phase 8 T-CUT-05/T-CUT-06._
+- [x] T015-T [US3] Write FAILING test: `OllamaProvider.list_models()` returns `ModelInfo` entries with status normalized into `ModelStatus` _Delivered by (superseded): Phase 8 T-CUT-03._
+- [x] T015-I [US3] Implement `OllamaProvider.list_models()` _Delivered by (superseded): Phase 8 T-CUT-02._
+- [x] T016-T [US3] Write FAILING test: `OllamaProvider.load_model()`/`unload_model()` are idempotent _Delivered by (superseded): Phase 8 T-CUT-03._
+- [x] T016-I [US3] Implement `OllamaProvider.load_model()`/`unload_model()` _Delivered by (superseded): Phase 8 T-CUT-02._
+- [x] T017-T [US3] Write FAILING test: generic `LLMModelSelector` node returns model+status pairs _Delivered by (superseded): Phase 8 T-CUT-08._
+- [x] T017-I [US3] Rename `OllamaModelSelector` → `LLMModelSelector`, delegate to `LLMProvider.list_models()` _Delivered by (superseded): Phase 8 T-CUT-05/T-CUT-06._
+- [x] T018-T [US3] Write FAILING test: generic `LLMLoadModel`/`LLMUnloadModel` nodes call the protocol _Delivered by (superseded): Phase 8 T-CUT-08._
+- [x] T018-I [US3] Rename `OllamaLoadModel`/`OllamaUnloadModel` → `LLMLoadModel`/`LLMUnloadModel` _Delivered by (superseded): Phase 8 T-CUT-05/T-CUT-06._
 
 **Checkpoint**: superseded — see `atomic-cutover-plan.md`.
 
@@ -118,9 +118,9 @@ registration + test rewrite). Original text kept for history:
 
 **Independent Test**: Follow the mapping to reconnect a pre-upgrade workflow; confirm equivalent output.
 
-- [-] T019 [US4] ~~Add a migration mapping constant~~ _Superseded, see Phase 8 T-CUT-11._
-- [-] T020 [US4] ~~Full suite green, SC-003 equivalence~~ _Superseded, see Phase 8 T-CUT-10._
-- [-] T021 [US4] ~~Update quickstart.md migration section~~ _Superseded, see Phase 8 T-CUT-12._
+- [x] T019 [US4] Add a migration mapping constant _Delivered by (superseded): Phase 8 T-CUT-11._
+- [x] T020 [US4] Full suite green, SC-003 equivalence _Delivered by (superseded): Phase 8 T-CUT-10._
+- [x] T021 [US4] Update quickstart.md migration section _Delivered by (superseded): Phase 8 T-CUT-12._
 
 **Checkpoint**: all four user stories independently functional; migration path documented.
 

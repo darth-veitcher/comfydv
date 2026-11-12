@@ -5,16 +5,8 @@ import { app } from "../../scripts/app.js";
 app.registerExtension({
   name: "org.darthveitcher.DynamicNodes",
   async beforeRegisterNodeDef(nodeType, nodeData, app) {
-    // console.log("Registering " + nodeData.name);
-    if (nodeData.name === "RandomChoice" || nodeData.name === "Random Choice" || nodeData.name === "ToJSON" || nodeData.name === "To JSON") {
-      console.log(nodeData.name);
-      var input_name = "input";
-      switch (nodeData.name) {
-        // allows us to update if ever need to grow list
-        case "RandomChoice":
-          input_name = "input";
-          break;
-      }
+    if (nodeData.name === "RandomChoice" || nodeData.name === "Random Choice") {
+      const input_name = "input";
       const onConnectionsChange = nodeType.prototype.onConnectionsChange;
       nodeType.prototype.onConnectionsChange = function (
         type,
@@ -27,12 +19,9 @@ app.registerExtension({
         const seedInput = this.inputs.find(input => input.name === "seed");
         if (type == 2) {
           // connect output
-          console.log("Connected output.");
           return;
         }
-        if (type == 1) {
-          console.log("Handling input connection.");
-        } else {
+        if (type != 1) {
           // connect input
           if (
             this.inputs[index].name == "select" ||
@@ -85,22 +74,12 @@ app.registerExtension({
         let slot_i = 1;
         let seed_adjust = (seedInput ? 1 : 0)
         let non_seed = this.inputs.length - seed_adjust
-        let seed_index = this.inputs.findIndex(item => item.name === 'seed')
         for (let i = 0; i < this.inputs.length; i++) {
           let input_i = this.inputs[i];
             if (input_i.name != "select" && input_i.name != "sel_mode" && input_i.name != "seed") {
-            // input_i.name = `${input_name}${slot_i - (slot_i == 1 ? 0 : (non_seed == 2 ? 0 : seed_adjust))}`;
             input_i.name = `${input_name}${Math.min(slot_i, non_seed)}`;
             slot_i++;
           }
-          if (input_i.name == "seed") {
-            // if (input_i.name != "seed" && connected) {
-          }
-        }
-        if (connected && (index != seed_index) && (this.inputs[index].link != undefined)) {
-          // this.addInput(`${input_name}${slot_i - seed_adjust}`, this.outputs[0].type);
-          // this.addInput(`${input_name}${slot_i}`, this.outputs[0].type);
-          // slot_i++;
         }
 
         let last_slot = this.inputs[this.inputs.length - 1];
