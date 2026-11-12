@@ -230,3 +230,30 @@ def test_w8_third_party_actions_are_pinned_to_a_commit():
             assert re.fullmatch(r"[0-9a-f]{40}", ref), (
                 f"{workflow}: {uses} is not pinned"
             )
+
+
+def test_w7_registry_publish_only_for_stable_releases():
+    """W7: main only, only when PSR released, with the Registry key secret."""
+    step = _step("Comfy Registry")
+    assert step["uses"].startswith("Comfy-Org/publish-node-action@")
+    condition = step["if"]
+    assert "github.ref_name == 'main'" in condition
+    assert "steps.psr.outputs.released == 'true'" in condition
+    assert (
+        step["with"]["personal_access_token"] == "${{ secrets.REGISTRY_ACCESS_TOKEN }}"
+    )
+
+
+def test_w10_registry_version_is_verified():
+    """W10: read the Registry API and fail if the new version is missing (SC-002)."""
+    step = _step("Verify the Comfy Registry")
+    assert "github.ref_name == 'main'" in step["if"]
+    assert "https://api.comfy.org/nodes/comfydv/versions" in step["run"]
+    assert "steps.psr.outputs.version" in step["run"]
+    steps = _release_job()["steps"]
+    assert steps.index(step) > steps.index(_step("Comfy Registry"))
+
+
+def test_p3_registry_publisher_id():
+    """P3: the Registry publisher that owns node `comfydv` (claimed 2026-11-12)."""
+    assert load_pyproject()["tool"]["comfy"]["PublisherId"] == "darth-veitcher"
