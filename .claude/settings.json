@@ -4,12 +4,12 @@
     "PostToolUse": [
       {
         "_name": "auto-lint",
-        "_purpose": "auto-lint after Claude edits \u2014 runs the project's lint+format on the touched file (only under src/ or tests/)",
+        "_purpose": "auto-lint after Claude edits \u2014 runs the project's lint+format on the touched file when its extension is one the project language owns (source_extensions in the language TOML)",
         "matcher": "Edit|Write",
         "hooks": [
           {
             "type": "command",
-            "command": "FILE=$(jq -r .tool_input.file_path); case \"$FILE\" in src/*|tests/*) uv run ruff check --fix && uv run ruff format ;; esac"
+            "command": "FILE=$(jq -r .tool_input.file_path); case \"$FILE\" in *.py) uv run ruff check --fix \"$FILE\" && uv run ruff format \"$FILE\" ;; esac"
           }
         ]
       },

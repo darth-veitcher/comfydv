@@ -174,19 +174,21 @@ async def _post_json(
     import aiohttp
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
+        async with (
+            aiohttp.ClientSession() as session,
+            session.post(
                 url,
                 json=payload,
                 headers=headers or None,
                 timeout=aiohttp.ClientTimeout(total=timeout),
-            ) as resp:
-                if resp.status >= 400:
-                    body = await resp.text()
-                    raise RuntimeError(
-                        f"Ollama returned HTTP {resp.status} for {url}: {body[:300]}"
-                    )
-                return await resp.json()
+            ) as resp,
+        ):
+            if resp.status >= 400:
+                body = await resp.text()
+                raise RuntimeError(
+                    f"Ollama returned HTTP {resp.status} for {url}: {body[:300]}"
+                )
+            return await resp.json()
     except aiohttp.ClientConnectionError as exc:
         raise RuntimeError(f"Cannot reach Ollama at {url}: {exc}") from exc
 
@@ -204,18 +206,20 @@ async def _get_json(
     """
     import aiohttp
 
-    async with aiohttp.ClientSession() as session:
-        async with session.get(
+    async with (
+        aiohttp.ClientSession() as session,
+        session.get(
             url,
             headers=headers or None,
             timeout=aiohttp.ClientTimeout(total=timeout),
-        ) as resp:
-            if resp.status >= 400:
-                body = await resp.text()
-                raise RuntimeError(
-                    f"Server returned HTTP {resp.status} for {url}: {body[:300]}"
-                )
-            return await resp.json()
+        ) as resp,
+    ):
+        if resp.status >= 400:
+            body = await resp.text()
+            raise RuntimeError(
+                f"Server returned HTTP {resp.status} for {url}: {body[:300]}"
+            )
+        return await resp.json()
 
 
 async def _fetch_models(host: str, headers: dict | None = None) -> list[str]:
@@ -234,7 +238,7 @@ async def _fetch_models(host: str, headers: dict | None = None) -> list[str]:
     try:
         data = await _get_json(f"{host}/api/tags", headers=headers)
         models = [m["name"] for m in data.get("models", [])]
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 -- combo population degrades to []
         logger.warning("Could not fetch Ollama models from %s: %s", host, exc)
         return []
 
@@ -270,7 +274,7 @@ async def _require_vision_capability(
             data = await _post_json(
                 f"{host}/api/show", {"model": model}, timeout=10.0, headers=headers
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 -- best-effort capability probe
             return
         capabilities = data.get("capabilities")
         if capabilities is None:
@@ -312,7 +316,7 @@ class OllamaProvider:
 
         try:
             tags = await _get_json(f"{self.host}/api/tags", headers=self.headers)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- list_models degrades to []
             logger.warning("Could not fetch Ollama models from %s: %s", self.host, exc)
             return []
 
@@ -320,7 +324,7 @@ class OllamaProvider:
         try:
             ps = await _get_json(f"{self.host}/api/ps", headers=self.headers)
             loaded_names = {m["name"] for m in ps.get("models", [])}
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- residency is best-effort
             logger.warning(
                 "Could not fetch Ollama running models from %s: %s", self.host, exc
             )
@@ -387,7 +391,7 @@ class OllamaProvider:
             custom_phrases = tuple(refusal_cfg.get("custom_phrases") or ())
             if refusal_cfg.get("embedding_model"):
                 embedding_model = refusal_cfg["embedding_model"]
-                embed_fn = lambda t: self.embed(embedding_model, t)  # noqa: E731
+                embed_fn = lambda t: self.embed(embedding_model, t)
         total_attempts = max(0, min(int(max_retries), 5)) + 1
         response_text = ""
         incomplete = False
@@ -567,7 +571,7 @@ class OllamaProvider:
             custom_phrases = tuple(refusal_cfg.get("custom_phrases") or ())
             if refusal_cfg.get("embedding_model"):
                 embedding_model = refusal_cfg["embedding_model"]
-                embed_fn = lambda t: self.embed(embedding_model, t)  # noqa: E731
+                embed_fn = lambda t: self.embed(embedding_model, t)
         cache_key = _cache_key(
             "chat_structured",
             self.host,
@@ -720,7 +724,7 @@ class OllamaProvider:
                 timeout=30.0,
                 headers=self.headers,
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 -- embed() contract: None, never raise
             return None
         embeddings = result.get("embeddings")
         if not isinstance(embeddings, list) or not embeddings:

@@ -23,6 +23,7 @@ import json
 import logging
 import os
 import sys
+from typing import Any, ClassVar
 
 from ._llm.ollama_provider import OllamaProvider, _fetch_models, _run_async
 from ._llm.provider import Message
@@ -84,27 +85,6 @@ MIGRATION_MAP: dict[str, str] = {
     "OllamaUnloadModel": "LLMUnloadModel",
     "OLLAMA_CLIENT": "LLM_CLIENT",
 }
-
-
-# ---------------------------------------------------------------------------
-# Custom socket types
-# ---------------------------------------------------------------------------
-
-
-class OllamaClientType(str):
-    """Typed string carrying the Ollama host URL through the node graph.
-
-    Superseded by ``OllamaProvider`` (comfydv._llm.ollama_provider) as of
-    ADR-007 — ``OllamaClient.create_client()`` no longer constructs this.
-    Left in place (unreferenced) rather than deleted; removing a class
-    nothing references is a separate, lower-risk cleanup outside this
-    cutover's scope.
-    """
-
-    def __new__(cls, host, headers=None):
-        obj = super().__new__(cls, host)
-        obj.headers = dict(headers) if headers else {}
-        return obj
 
 
 # ---------------------------------------------------------------------------
@@ -486,7 +466,7 @@ def _build_structured_model(schema: dict):
     from pydantic import Field, create_model
 
     required = set(schema.get("required", []))
-    fields = {}
+    fields: dict[str, Any] = {}
     for name, prop in schema["properties"].items():
         py_type = _JSON_SCHEMA_TO_PY_TYPE.get(prop.get("type"), str)
         if name not in required:
@@ -526,7 +506,7 @@ class ChatCompletion:
 
     # Per-node-instance structured-output config, keyed by unique_id — same
     # pattern as FormatString.node_configs.
-    node_configs: dict = {}
+    node_configs: ClassVar[dict] = {}
 
     @classmethod
     def INPUT_TYPES(s):

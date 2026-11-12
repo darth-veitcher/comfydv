@@ -132,8 +132,10 @@ def format_recovered_status(attempt: int, total_attempts: int, seed: int) -> str
 REFUSAL_LEXICAL_PATTERNS: tuple[re.Pattern, ...] = tuple(
     re.compile(p, re.IGNORECASE)
     for p in (
-        r"\b(?:I\s*(?:'m|\s+am)?\s*)?(?:cannot|can't|won't|will not)\b[^.]{0,60}?\b"
-        r"(?:generate|create|produce|write|provide|help|assist|describe|depict|continue)\b",
+        (
+            r"\b(?:I\s*(?:'m|\s+am)?\s*)?(?:cannot|can't|won't|will not)\b[^.]{0,60}?\b"
+            r"(?:generate|create|produce|write|provide|help|assist|describe|depict|continue)\b"
+        ),
         r"\bI(?:'m|\s+am) (?:(?:not able|unable) to|restricted from)\b",
         r"\bI don't feel comfortable\b",
         r"\bI'm sorry,?\s*(?:but\s+)?I\s*(?:can't|cannot)\b",
@@ -328,6 +330,6 @@ async def is_refusal(
         text_vec = await embed_fn(text)
         if not text_vec:
             return False
-    except Exception:
+    except Exception:  # noqa: BLE001 -- embedding check degrades to lexical-only
         return False
     return max(cosine_similarity(text_vec, vec) for vec in exemplar_vecs) >= threshold

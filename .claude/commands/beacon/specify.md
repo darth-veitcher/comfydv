@@ -35,6 +35,8 @@ Carry these into the spec you generate (Step 3). The spec's own Non-goals MUST i
 
 SpecKit's specify skill is inlined verbatim below. Apply it to the **feature description only** (not the epic slug), with the epic context from Step 2 already in mind.
 
+Write the spec to section 7 of `docs/WRITING.md` (ASD-STE100 Simplified Technical English). Write each requirement as one sentence with one MUST. Write each acceptance scenario as Given, When and Then, with one clause in each part. Give each success criterion a number that a test can measure. Keep each sentence to 25 words or fewer.
+
 @.claude/skills/speckit-specify/SKILL.md
 
 ## Step 4 — Backlink the new spec to the epic
@@ -58,3 +60,11 @@ beacon spec validate <NNN-slug>    # defaults to the current spec branch if omit
 ```
 
 It scans `specs/<NNN-slug>/spec.md` for leftover `[NEEDS CLARIFICATION: …]` and other anchored template placeholders (`[REPLACE WITH ...]`, `<TBD>` / `<TODO>`, `[FEATURE NAME]` / `[DATE]` / `[###-feature-name]`), and resolves any `ADR-NNN` references against `project-management/ADRs/`. It exits non-zero and prints each hit with `file:line` context. A `[NEEDS CLARIFICATION:` marker means the spec still has an open question the user must resolve before `/beacon.plan`. Surface the output; a clean run is the bar.
+
+Then check the spec against the writing standard:
+
+```bash
+beacon docs check --file specs/<NNN-slug>/spec.md
+```
+
+It lists each sentence of more than 25 words as `file:line`. Rewrite each one: split it into short sentences, one fact or one requirement in each. `beacon doctor` runs the same check (`writing-artefacts`) on every artefact that changes on the branch.

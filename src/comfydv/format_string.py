@@ -18,7 +18,7 @@ import os
 import random
 import re
 import sys
-from typing import Any, Dict, List
+from typing import Any, ClassVar
 
 from aiohttp import web
 from jinja2 import exceptions, meta, sandbox
@@ -65,13 +65,14 @@ class FormatString:
 
     CATEGORY = "dv/string_operations"
     FUNCTION = "format_string"
-    RETURN_TYPES = ("STRING", "STRING")
-    RETURN_NAMES = ("formatted_string", "saved_file_path")
-    OUTPUT_IS_LIST = (False, False)
+    # Variable-length: update_widget() appends one output per template variable.
+    RETURN_TYPES: tuple[str, ...] = ("STRING", "STRING")
+    RETURN_NAMES: tuple[str, ...] = ("formatted_string", "saved_file_path")
+    OUTPUT_IS_LIST: tuple[bool, ...] = (False, False)
     OUTPUT_NODE = True
 
     # Store configurations for each node instance
-    node_configs: Dict[str, Dict[str, Any]] = {}
+    node_configs: ClassVar[dict[str, dict[str, Any]]] = {}
 
     # Create a sandboxed Jinja2 environment for security
     jinja_env = sandbox.SandboxedEnvironment()
@@ -107,9 +108,9 @@ class FormatString:
         >>> assert timestamp.startswith(current)
         -->
         """
-        return datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        return datetime.datetime.now().astimezone().strftime("%Y%m%d-%H%M%S")
 
-    additional_context = {
+    additional_context: ClassVar[dict[str, Any]] = {
         "datetime": datetime,
         "now": time_now,  # we name our custom function `time_now` as `now` so inside jinja it's `{{ now() }}`
         "random": random,
@@ -118,7 +119,7 @@ class FormatString:
     }
 
     @classmethod
-    def INPUT_TYPES(cls) -> Dict[str, Any]:
+    def INPUT_TYPES(cls) -> dict[str, Any]:
         """
         Define the input types for the FormatString node.
 
@@ -157,7 +158,7 @@ class FormatString:
         }
 
     @classmethod
-    def IS_CHANGED(cls, **kwargs):
+    def IS_CHANGED(cls, **kwargs: Any) -> Any:
         """
         Determine if the node should be re-executed based on input changes.
 
@@ -221,7 +222,7 @@ class FormatString:
         return kwargs
 
     @staticmethod
-    def _extract_keys(template: str) -> List[str]:
+    def _extract_keys(template: str) -> list[str]:
         """
         Extract variable names from a template string.
 
@@ -308,8 +309,8 @@ class FormatString:
         template: str,
         save_path: str,
         unique_id: str = "",
-        **kwargs,
-    ) -> Dict[str, Any]:
+        **kwargs: Any,
+    ) -> dict[str, Any]:
         """
         Format a string using the specified template type and variables.
 
@@ -408,11 +409,11 @@ class FormatString:
                 formatted_string = template.format(**kwargs)
                 logger.debug("Simple format successful: %.50s", formatted_string)
             except KeyError as e:
-                error_msg = f"Missing variable in Simple template: {str(e)}"
+                error_msg = f"Missing variable in Simple template: {e!s}"
                 logger.error(error_msg)
                 raise  # Re-raise for proper error handling
-            except Exception as e:
-                error_msg = f"Error in Simple template: {str(e)}"
+            except Exception as e:  # noqa: BLE001 -- user template; surface any error as text
+                error_msg = f"Error in Simple template: {e!s}"
                 logger.error(error_msg)
                 formatted_string = f"Error: {error_msg}"
         else:  # Jinja2
@@ -425,11 +426,11 @@ class FormatString:
                     "Jinja2 format successful, result length: %d", len(formatted_string)
                 )
             except exceptions.TemplateSyntaxError as e:
-                error_msg = f"Error in Jinja2 template: {str(e)}"
+                error_msg = f"Error in Jinja2 template: {e!s}"
                 logger.error(error_msg)
                 formatted_string = error_msg
-            except Exception as e:
-                error_msg = f"Error rendering Jinja2 template: {str(e)}"
+            except Exception as e:  # noqa: BLE001 -- user template; surface any error as text
+                error_msg = f"Error rendering Jinja2 template: {e!s}"
                 logger.error(error_msg)
                 formatted_string = error_msg
 
@@ -450,8 +451,8 @@ class FormatString:
                 with open(actual_save_path, "w") as f:
                     json.dump(save_data, f, indent=2, sort_keys=True)
                 logger.info(f"Node state saved to: {actual_save_path}")
-            except Exception as e:
-                logger.error(f"Error saving node state: {str(e)}")
+            except (OSError, TypeError, ValueError) as e:
+                logger.error(f"Error saving node state: {e!s}")
                 actual_save_path = ""  # Reset save_path if saving failed
         else:
             logger.debug("No save_path provided, skipping state save")
@@ -481,7 +482,7 @@ class FormatString:
     @classmethod
     def update_widget(
         cls, node_id: str, template_type: str, template: str
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Update a node's widget configuration based on the template.
 
@@ -545,7 +546,7 @@ class FormatString:
         keys = cls._extract_keys(template)
         logger.debug("Extracted %d variables from template: %s", len(keys), keys)
 
-        config: Dict[str, Any] = {
+        config: dict[str, Any] = {
             "inputs": {
                 "template_type": (["Simple", "Jinja2"],),
                 "template": ("STRING", {"multiline": True}),
@@ -583,7 +584,7 @@ class FormatString:
         return config
 
     @classmethod
-    def get_node_config(cls, node_id: str) -> Dict[str, Any]:
+    def get_node_config(cls, node_id: str) -> dict[str, Any]:
         """
         Get the configuration for a specific node instance.
 
@@ -623,7 +624,7 @@ class FormatString:
         return cls.node_configs.get(node_id, {})
 
     @classmethod
-    def load_node_state(cls, file_path: str) -> Dict[str, Any]:
+    def load_node_state(cls, file_path: str) -> dict[str, Any]:
         """
         Load a previously saved node state from disk.
 
@@ -674,14 +675,13 @@ class FormatString:
             return load_data
         except FileNotFoundError:
             return {}
-        except Exception as e:
+        except (OSError, ValueError) as e:
             logger.error("Failed to load node state from %s: %s", file_path, e)
             return {}
 
 
 # Custom route for updating node configuration
-@PromptServer.instance.routes.post("/update_format_string_node")
-async def update_format_string_node(request):
+async def update_format_string_node(request: web.Request) -> web.Response:
     """
     AIOHTTP route handler for updating a FormatString node's configuration.
 
@@ -727,13 +727,12 @@ async def update_format_string_node(request):
         logger.debug("Successfully updated config for node %s", node_id)
         return web.json_response(updated_config)
     except Exception as e:
-        logger.error("Error updating node config: %s", str(e), exc_info=True)
+        logger.exception("Error updating node config")
         return web.json_response({"error": str(e)}, status=500)
 
 
 # Custom route for loading node state
-@PromptServer.instance.routes.post("/load_format_string_node")
-async def load_format_string_node(request):
+async def load_format_string_node(request: web.Request) -> web.Response:
     """
     AIOHTTP route handler for loading a FormatString node's state from disk.
 
@@ -768,8 +767,7 @@ async def load_format_string_node(request):
 
 
 # Custom route for getting node-specific configuration
-@PromptServer.instance.routes.get("/get_format_string_node_config/{node_id}")
-async def get_format_string_node_config(request):
+async def get_format_string_node_config(request: web.Request) -> web.Response:
     """
     AIOHTTP route handler for retrieving a FormatString node's configuration.
 
@@ -800,3 +798,15 @@ async def get_format_string_node_config(request):
 NODE_CLASS_MAPPINGS = {"FormatString": FormatString}
 
 NODE_DISPLAY_NAME_MAPPINGS = {"FormatString": "Format String"}
+
+
+# Register the routes only inside ComfyUI. Outside it (tests, docs builds, a
+# `pip install comfydv`), there is no PromptServer, and the module must still
+# import (constitution IV).
+if "comfy" in sys.modules:
+    _routes = PromptServer.instance.routes
+    _routes.post("/update_format_string_node")(update_format_string_node)
+    _routes.post("/load_format_string_node")(load_format_string_node)
+    _routes.get("/get_format_string_node_config/{node_id}")(
+        get_format_string_node_config
+    )

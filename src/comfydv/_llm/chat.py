@@ -72,11 +72,14 @@ def _build_agent(
     schema: type[BaseModel],
     headers: dict | None,
     timeout_secs: float,
-) -> Agent:
-    import httpx
+) -> Agent[None, BaseModel]:
+    # httpx2, not httpx: openai>=3 (pulled in by pydantic-ai-slim[openai])
+    # depends on httpx2 and no longer installs httpx, and pydantic-ai's
+    # OpenAIProvider accepts an httpx2.AsyncClient.
+    import httpx2
 
-    http_client = httpx.AsyncClient(
-        headers=headers or None, timeout=httpx.Timeout(timeout_secs)
+    http_client = httpx2.AsyncClient(
+        headers=headers or None, timeout=httpx2.Timeout(timeout_secs)
     )
     provider = OpenAIProvider(
         base_url=base_url, api_key="not-needed", http_client=http_client
@@ -227,7 +230,7 @@ async def chat_structured(
     for attempt in range(1, total_attempts + 1):
         attempt_timeout = next_timeout_secs(timeout_secs, attempt)
         # Rebuilt each attempt so the escalated timeout actually takes
-        # effect — httpx.AsyncClient's timeout is fixed at construction,
+        # effect — httpx2.AsyncClient's timeout is fixed at construction,
         # not mutable per-request.
         agent = _build_agent(
             base_url=base_url,
@@ -276,11 +279,9 @@ async def chat_structured(
                 if attempt_settings
                 else None,
             )
-            # agent's output_type is the caller's `schema` (a runtime value,
-            # not a static type parameter), so the checker can't narrow
-            # result.output past Agent's default `str` — cast to the
-            # function's declared return type, which schema is a subtype of.
-            output = cast(BaseModel, result.output)
+            # _build_agent() is typed Agent[None, BaseModel], so result.output
+            # is already the function's declared return type.
+            output = result.output
             if refusal_cfg and refusal_cfg.get("enabled"):
                 # Re-serialized, not the original wire text — pydantic-ai's
                 # NativeOutput doesn't expose that separately, and the

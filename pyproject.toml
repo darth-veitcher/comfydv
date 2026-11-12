@@ -1,6 +1,6 @@
 [project]
 name = "comfydv"
-dynamic = ["version"]
+version = "0.1.0"
 requires-python = ">=3.11"
 description = "Quality of life ComfyUI nodes: dynamic string formatting, seed-controlled random selection, and conditional queue interruption."
 readme = "README.md"
@@ -10,30 +10,38 @@ authors = [
 dependencies = [
     "aiohttp>=3.9.0",
     "jinja2>=3.1.6",
-    "pydantic>=2.0",
-    "pydantic-ai-slim[openai]>=2.9.0",
+    "pydantic>=2.12",
+    "pydantic-ai-harness[codemode]==0.68.0",
+    "pydantic-ai-slim[openai,mcp]==2.68.0",
 ]
 
 [project.urls]
 Repository = "https://github.com/darth-veitcher/comfydv"
 Documentation = "https://darth-veitcher.github.io/comfydv/stable/"
 
-[build-system]
-requires = ["hatchling", "hatch-vcs"]
-build-backend = "hatchling.build"
+[tool.comfy]
+# Comfy Registry metadata. The node ID is the project name, `comfydv`, and
+# the publisher `darth-veitcher` owns it. Neither can change (spec 010).
+PublisherId = "darth-veitcher"
+DisplayName = "Comfy DV"
 
-[tool.hatch.version]
-source = "vcs"
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
+    # numpy and pillow are what ComfyUI gives _encode_image_tensor at runtime.
+    # numpy came only through torchvision before; declare it.
+    "numpy>=1.26",
     "pillow>=10.0.0",
     "playwright>=1.60.0",
     "pytest>=8.4.2",
     "pytest-cov>=6.0.0",
     "pyyaml>=6.0.2",
+    "ruff==0.16.9",
     "torch>=2.9.0",
-    "torchvision>=0.24.0",
+    "ty==0.0.101",
 ]
 docs = [
     "mike>=2.1.3",
@@ -42,8 +50,42 @@ docs = [
     "mkdocs-literate-nav>=0.6.2",
     "mkdocs-material>=9.6.9",
     "mkdocs-section-index>=0.3.9",
-    "mkdocstrings[python]>=0.29.0",
+    # >=1.0: mkdocstrings-python 2.x uses griffelib, the same griffe that
+    # pydantic-ai needs. The legacy `griffe` 1.x package overwrites it.
+    "mkdocstrings[python]>=1.0.8",
     "shtab>=1.7.1",
+]
+
+[tool.uv]
+# tests/test_ollama.py uses torch only to build small CPU tensors. The default
+# PyPI wheel on Linux pulls ~6 GB of CUDA packages, so take the CPU build there
+# and on Windows (macOS wheels are CPU-only already). Research R11, spec 010.
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform != 'darwin'" }]
+
+[tool.ruff]
+# Pinned in the dev group (ruff==0.16.9), so this version's default rule set
+# is the project's rule set: everyone, and CI, lints with the same rules.
+target-version = "py311"
+# Design artefacts (ADRs are immutable; specs are historical records) carry
+# illustrative code blocks that are not meant to be runnable or formatted.
+extend-exclude = ["project-management", "specs"]
+
+[tool.ty.analysis]
+# Modules that only exist inside a running ComfyUI process, or only in the
+# docs build (the `docs` dependency group). Every import of them is guarded.
+allowed-unresolved-imports = [
+    "comfy",
+    "comfy.**",
+    "server",
+    "folder_paths",
+    "mkdocs_gen_files",
 ]
 
 [tool.pytest.ini_options]
@@ -68,3 +110,53 @@ markers = [
     "system: System tests requiring the full docker-compose harness",
     "slow: Slow tests",
 ]
+
+# ──── BEACON release integration: python-semantic-release config ────
+# Release automation (ADR-017). python-semantic-release reads Conventional
+# Commits: feat → minor, fix/perf → patch, BREAKING CHANGE → minor while 0.x.
+# Pushes to `main` make stable releases (PyPI and the Comfy Registry). Pushes
+# to `develop` make PyPI pre-releases (0.2.0-dev.1, which PEP 440 reads as
+# 0.2.0.dev1). Changed from BEACON's template: develop publishes to PyPI, not
+# TestPyPI (research R5), and the changelog is updated, not rewritten (R12).
+# See PUBLISHING.md for the one-time setup.
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+build_command = "python -m pip install --quiet uv && uv build"
+major_on_zero = false        # stay in 0.x until v1 is explicit
+allow_zero_version = true    # permit 0.x line
+commit_parser = "conventional"
+# PSR's default is "{version}" and a footer, which is not a Conventional Commit.
+commit_message = "chore(release): {version}"
+
+[tool.semantic_release.commit_parser_options]
+minor_tags = ["feat"]
+patch_tags = ["fix", "perf"]
+allowed_tags = [
+    "feat", "fix", "perf", "refactor", "docs",
+    "test", "chore", "ci", "build", "style", "revert",
+]
+
+[tool.semantic_release.branches.main]
+match = "^main$"
+prerelease = false
+
+[tool.semantic_release.branches.develop]
+match = "^develop$"
+prerelease = true
+prerelease_token = "dev"     # → 0.2.0-dev.1, 0.2.0-dev.2, …
+
+[tool.semantic_release.changelog]
+# "update" inserts each release at the flag and keeps the hand-written
+# history below it. PSR 9's default, "init", writes the whole file again.
+mode = "update"
+insertion_flag = "<!-- version list -->"
+# A copy of PSR 9.21.2's markdown templates that renders only the summary line
+# of each commit (spec 010, T029). PSR renders each file in this directory
+# except the dot-prefixed ones, so CHANGELOG.md.j2 becomes CHANGELOG.md.
+template_dir = ".github/semantic-release/templates"
+exclude_commit_patterns = ["^chore\\(release\\):"]
+
+[tool.semantic_release.changelog.default_templates]
+changelog_file = "CHANGELOG.md"
+# ──── end BEACON release integration ────

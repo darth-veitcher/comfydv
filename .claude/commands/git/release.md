@@ -1,48 +1,47 @@
 ---
-description: Tag main with the next version and push. CI publishes from the tag. Trunk-based projects don't need a promotion PR — main is always shippable.
-argument-hint: [version] — e.g. "v1.2.0". Omit to suggest from Conventional Commits since the last tag.
+description: Open a develop→main release PR. This is the human sign-off gate before PROD. Generates a changelog from Conventional Commits since the last release.
+argument-hint: [release-title or version] — e.g. "v1.2.0" or "Q2 sprint 3"
 allowed-tools: Bash, Read, Grep
 ---
 
-Tag the next release on `main`.
+Open a release PR: develop → main.
 
-# Release (trunk-based)
+# Release PR (develop → main)
 
-This project uses **trunk-based** git flow — `main` is always shippable, so a release is just a tag. CI takes it from there.
+This command is the **PROD promotion gate** for the gitflow branching model. It aggregates everything validated in DEV into a single reviewable PR. A human approves it; GitHub Actions then deploys to PROD.
 
 ## 1. Pre-flight checks
 
 ```bash
-# Ensure main is up to date
+# Ensure develop is up to date
 git fetch origin
-git checkout main
-git pull origin main
+git checkout develop
+git pull origin develop
 
-# Confirm CI is green on main
-gh run list --branch main --limit 5
+# Confirm CI is green on develop
+gh run list --branch develop --limit 5
 ```
 
-If the last CI run on main failed: **stop and report**. Do not tag a broken main.
+If the last CI run on develop failed: **stop and report**. Do not open a release PR against a broken develop.
 
-## 2. Determine version
+## 2. Determine version / release title
 
-If `$ARGUMENTS` is provided, treat it as the explicit version (e.g. `v1.2.0`).
-Otherwise, suggest a version by inspecting the most recent git tag and the Conventional Commits since:
+If `$ARGUMENTS` is provided, use it as the release title.
+Otherwise, suggest a version by inspecting the most recent git tag:
 
 ```bash
 LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
 echo "Last release: $LAST_TAG"
-git log "$LAST_TAG"..HEAD --oneline
+# Suggest next patch/minor based on commit types since last tag
+git log "$LAST_TAG"..develop --oneline
 ```
 
-Apply Conventional Commits semver:
+Suggest versioning based on Conventional Commits since last tag:
+- Any `feat:` commit → minor bump
+- Only `fix:` / `chore:` → patch bump
 - `BREAKING CHANGE` in footer → major bump
-- Any `feat:` → minor bump
-- Only `fix:` / `perf:` / etc. → patch bump
 
-If the project uses python-semantic-release (i.e. `beacon integration add release` was run), the PSR action on push already determines the version automatically — in that case you don't tag by hand; just push to `main`.
-
-## 3. Generate release notes (preview)
+## 3. Generate changelog
 
 ```bash
 LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
@@ -51,39 +50,49 @@ BASE="${LAST_TAG:-$(git rev-list --max-parents=0 HEAD)}"
 echo "## What's changed"
 echo ""
 echo "### Features"
-git log "$BASE"..HEAD --oneline --grep="^feat" | sed 's/^/- /'
+git log "$BASE"..develop --oneline --grep="^feat" | sed 's/^/- /'
 echo ""
 echo "### Fixes"
-git log "$BASE"..HEAD --oneline --grep="^fix" | sed 's/^/- /'
+git log "$BASE"..develop --oneline --grep="^fix" | sed 's/^/- /'
 echo ""
 echo "### Other"
-git log "$BASE"..HEAD --oneline --grep="^chore\|^docs\|^refactor\|^test\|^ci" | sed 's/^/- /'
+git log "$BASE"..develop --oneline --grep="^chore\|^docs\|^refactor\|^test\|^ci" | sed 's/^/- /'
 ```
-
-This preview gives you the changelog body; PSR (if installed) will generate the canonical version on push.
 
 ## 4. Check Work/ cleanup
 
 Look in `project-management/Work/sessions/` and `Work/planning/`:
-- If stale session files exist (older than current sprint): remind user to clean them before tagging
-- Output: "⚠ Stale Work/ files found — clean up before releasing (see project-management/Work/README.md)"
+- If stale session files exist (older than current sprint): remind user to clean them before release
+- Output: "⚠ Stale Work/ files found — clean up before merging (see project-management/Work/README.md)"
 
-## 5. Tag and push
+## 5. Open the PR
+
+Use `.github/PULL_REQUEST_TEMPLATE/release.md` as the structure.
 
 ```bash
-VERSION="${ARGUMENTS:-v$(date +%Y.%m.%d)}"   # fallback to date-based if no arg
+TITLE="${ARGUMENTS:-Release $(date +%Y-%m-%d)}"
 
-git tag -a "$VERSION" -m "Release $VERSION"
-git push origin "$VERSION"
+gh pr create \
+  --title "$TITLE" \
+  --base main \
+  --head develop \
+  --body-file /tmp/release-pr-body.md \
+  --label "release"
 ```
 
-## 6. After tagging
+## 6. After creating
 
 Report:
-- Tag created (version)
-- Tag commit SHA
-- Reminder: if `release` integration is installed, the GitHub Actions workflow now picks the tag up and publishes — `gh run list --branch main --limit 1` watches it.
-- Reminder: clean `project-management/Work/` after release:
+- PR URL
+- Commits included (count)
+- Any ADRs created in this release cycle
+- Reminder: after merge, tag `main` with the version:
+  ```bash
+  git checkout main && git pull
+  git tag -a v1.2.0 -m "Release v1.2.0"
+  git push origin v1.2.0
+  ```
+- Reminder: clean `project-management/Work/` after merge:
   ```bash
   cd project-management/Work
   rm -rf sessions/* planning/*  # keep only active WIP
@@ -92,9 +101,7 @@ Report:
 ## Branch model
 
 ```
-main    ← integration AND release branch (trunk-based)
+main    ← PROD  ← this PR (human approval + CI gate in GitHub Actions)
   ↑
-feature/x ← merges here directly; main is always shippable
+develop ← DEV   (auto-deploys; validated here first)
 ```
-
-No develop, no promotion PR. Tag what's shippable; let CI ship it.

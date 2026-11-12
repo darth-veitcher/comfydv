@@ -18,7 +18,7 @@
 #   publishing-mode, release-config-alignment, speckit-integration,
 #   sessions, adr-coverage, readme-completeness, changelog-maintenance,
 #   changelog-vs-commits, public-api-docs, project-urls, docs-freshness,
-#   diataxis-coverage, drift
+#   diataxis-coverage, writing, writing-artefacts, drift
 #
 # Run `beacon doctor --explain <name>` for what each check looks at.
 # ─────────────────────────────────────────────────────────────────────
@@ -62,6 +62,12 @@ docs_staleness_commits = 10
 # scenario covered. Token-overlap, not literal text — lower this if your
 # specs are very prose-heavy. Default: 0.5
 bdd_match_ratio = 0.5
+
+# Longest prose sentence, in words, that the `writing` and
+# `writing-artefacts` checks accept (docs/WRITING.md, rule 2). The standard
+# sets 25 for a descriptive sentence and 20 for a procedural one; a script
+# cannot tell them apart, so it checks 25. Default: 25
+max_sentence_words = 25
 
 # ─────────────────────────────────────────────────────────────────────
 # quick_fix — branch-name prefixes that mark a bullet as a quick-fix

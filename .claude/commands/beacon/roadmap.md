@@ -28,10 +28,11 @@ beacon roadmap render
 
 Read the just-written `ROADMAP.md` and report concisely:
 
+- **Horizon** — the strategy it lifted from `Roadmap/README.md` (Vision, Now/Next/Later). Flag if `Roadmap/README.md` has no filled horizon, so the artifact fell back to the bare vision excerpt.
+- **Sequence** — the dependency waves: what's ready now (Wave 1) and what waits on what. Flag any epic stranded in a late wave by a cycle.
 - **Epic counts** by status: Active / Planning / Paused / Done (including any archived epics shown)
 - **Fidelity** for each epic — show the badge (`S+/S?  A+/A?  T:N%`) and flag any that are `S?` (no specs) or `A?` (no ADRs)
 - **In-flight bullets** — how many worktrees have active bullets and which epics they're attached to
-- **Roadmap coverage** — fraction of Active epics that have both specs and ADRs filled in
 
 Keep the summary to a tight table or bullet list — this is a health snapshot, not a narrative.
 
@@ -44,6 +45,8 @@ Close with 2–4 concrete suggestions ranked by impact:
 | Epic in Planning for more than one sprint with no specs | Mark Active or archive: `beacon epic archive <slug>` |
 | Active epic with no specs | `/beacon.specify <slug> "<first feature>"` |
 | Active epic with 0% task completion | Investigate — may need `/beacon.plan` |
+| `Roadmap/README.md` has no Now/Next/Later horizon | Fill it in — the horizon is what the epics ladder up to |
+| All epics Done but the horizon still names initiatives | Shape the next one: `beacon epic new <slug> --title "…"` |
 | No epics at all | Start the first initiative: `beacon epic new <slug> --title "…"` |
 | ROADMAP.html not requested but HTML would be useful | Mention `beacon roadmap render` |
 

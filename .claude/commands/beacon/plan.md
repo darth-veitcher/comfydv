@@ -4,6 +4,10 @@ argument-hint: (no arguments — operates on the current spec branch)
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 ---
 
+Write plan.md to section 7 of `docs/WRITING.md` (ASD-STE100 Simplified
+Technical English): one fact or one instruction in each sentence, 25 words or
+fewer. Tables and code blocks are exempt from the sentence limit.
+
 ## SpecKit's plan skill (inlined verbatim)
 
 @.claude/skills/speckit-plan/SKILL.md
@@ -30,5 +34,15 @@ It performs two machine-truth checks over `specs/<NNN-slug>/plan.md`:
 The command exits non-zero and prints each hit with `file:line` context. Surface that
 output to the user. Non-blocking — the user decides whether to address before
 `/beacon.tasks`, but a clean run is the bar.
+
+Then check the plan against the writing standard, and fix each finding:
+
+```bash
+beacon docs check --file specs/<NNN-slug>/plan.md
+```
+
+The **Constitution Check** of the plan includes the article "Documentation for
+people and for agents". If the plan changes behaviour that a user can see, the
+plan names the `README.md` or `docs/` pages that change with it.
 
 If plan.md references a decision that should have been an epic-level ADR (i.e. a choice that constrains more than one spec) but isn't yet captured, note that too — the user may want to add the ADR to the parent epic's `## ADRs` section.

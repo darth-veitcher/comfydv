@@ -8,7 +8,7 @@ import sys
 logger = logging.getLogger(__name__)
 
 if "comfy" in sys.modules:
-    from comfy.model_management import InterruptProcessingException  # noqa
+    from comfy.model_management import InterruptProcessingException
 else:
     logger.warning(
         "ComfyUI not detected, CircuitBreaker node will not function properly outside of ComfyUI."

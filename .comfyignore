@@ -1,0 +1,20 @@
+# Files to keep out of the Comfy Registry archive (gitignore syntax).
+# The archive holds only what ComfyUI loads: __init__.py, src/, workflows/,
+# requirements.txt, pyproject.toml, README.md and LICENSE.
+tests/
+specs/
+project-management/
+docs/
+docker/
+scripts/
+site/
+.github/
+.claude/
+.specify/
+docker-compose*.yml
+Justfile
+mkdocs.yml
+uv.lock
+AGENTS.md
+CLAUDE.md
+PUBLISHING.md

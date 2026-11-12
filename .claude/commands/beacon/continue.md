@@ -44,8 +44,11 @@ In `--auto` you act without asking, but **only on reversible, non-interactive
 build-loop steps**:
 
 - ✅ Auto-dispatch: `/beacon.plan`, `/beacon.tasks`, `/beacon.implement`,
-  `/beacon.review`, `/beacon.audit` (read-only — it only reports coverage gaps
-  and suggests `beacon epic stub` lines; it creates nothing).
+  `/beacon.converge`, `/beacon.review`, `/beacon.audit` (read-only — it only
+  reports coverage gaps and suggests `beacon epic stub` lines; it creates
+  nothing). `/beacon.converge` is append-only to `tasks.md` and never edits
+  code, so it's reversible; if it appends tasks the loop naturally continues
+  into `/beacon.implement` on the next pass.
 - ⛔ **STOP and report** (these need a human or are outward-facing / hard to
   reverse — never fire them unattended): `/beacon.seed`, `/beacon.epics`,
   `beacon epic new`, `/beacon.specify` (someone must choose the feature),
@@ -54,6 +57,10 @@ build-loop steps**:
   an `epic-dependency-gate` WARN (the current epic's dependency hasn't shipped
   yet — advance the blocking epic first, not this one).
 - Also stop when the recommendation is **"You're clear — nothing pending."**
+  That verdict only stands when the horizon itself is exhausted — all epics
+  Done *and* `Roadmap/README.md`'s Now / Next / Later names no unstarted
+  initiative. A finished epic list with a live horizon is not clear; the next
+  step is DESIGN (`/beacon.epics` / `/beacon.specify`), not termination.
 
 When you stop, say plainly *why* and *what the human needs to do* — that message is
 the loop's output.
@@ -112,3 +119,9 @@ recommended step is one of those and the wrapper file is absent
 
 > SpecKit isn't installed. Install it, then `beacon upgrade`, to enable the
 > `/beacon.*` spec wrappers. (See `beacon help commands`.)
+
+`/beacon.converge` is a **narrower** gate: it installs only when SpecKit ships
+the `speckit-converge` skill (SpecKit ≥ 1.0). On older SpecKit the wrapper is
+absent and the ladder's converge row does not apply — skip from `/beacon.implement`
+straight to `/beacon.review`. `beacon doctor`'s `speckit-integration` check warns
+with the upgrade command when it detects an outdated SpecKit.

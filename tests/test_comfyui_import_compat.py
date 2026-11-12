@@ -108,6 +108,7 @@ def test_package_imports_under_comfyui_style_relative_nesting():
     result = subprocess.run(
         [sys.executable, "-c", _SUBPROCESS_SCRIPT, str(REPO_ROOT.parent)],
         cwd=REPO_ROOT,
+        check=False,  # the test asserts on returncode itself
         capture_output=True,
         text=True,
         timeout=30,
