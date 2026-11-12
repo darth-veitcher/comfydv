@@ -82,7 +82,7 @@ outside this branch. Each one says why.
 - [x] T029-T [US2] Write a FAILING test that PSR uses a template that renders only the summary line of each commit, in `tests/test_release_pipeline.py`.
 - [x] T029-I [US2] Copy PSR's markdown templates to `.github/semantic-release/templates/`, remove the commit-body block, and set `template_dir` in `pyproject.toml`, so that T029-T passes.
 - [ ] T024 [US2] Write the stable-release install steps in the Install section of `README.md`.
-- [ ] T025 [US2] Write `PUBLISHING.md` from the T001 template, with the one-time setup and the ruleset bypass of research R7.
+- [x] T025 [US2] Write `PUBLISHING.md` from the T001 template, with the one-time setup and the ruleset bypass of research R7.
 - [x] T026 [US2] Confirm that the tag `v0.1.0` exists for G1. It is on commit `4f69405` (2026-07-04), so no tag push is necessary.
 - [-] T027 [US2] Add GitHub Actions as a push-only bypass actor in the `main` and `develop` rulesets. _Deferred — maintainer action in the GitHub settings (research R7)._
 - [-] T028 [US2] Do quickstart scenarios 4 and 5. _Deferred — needs a release pull request to `main`._
