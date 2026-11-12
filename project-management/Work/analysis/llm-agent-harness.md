@@ -443,8 +443,9 @@ Resolved (2026-11-12):
 - ✅ **Code mode default:** `tool_calls` until a live eval on target local models says otherwise.
 - ✅ **Skills are first-class and distinct from tools** (§3.3, ADR-012): tools act, skills instruct. Skills are text-only `SKILL.md` folders, progressively disclosed, with their own socket and node category.
 
-Still open:
+- ✅ **MCP trust model: option B** (§4.1), recorded as ADR-015.
+- ✅ **Dev channel: PyPI pre-releases** (§8). `develop` is created from `main`, and PR #37 now targets it.
+- ✅ **ComfyUI-Manager channels:** "latest" means the Registry release from `main`. Proposal: set `develop` as the default branch, so that "nightly" means `develop`. Verify this first (see `Roadmap/epics/release-pipeline.md`).
+- ✅ **ADR-011 to ADR-013 accepted.**
 
-1. **MCP trust model:** adopt option B from §4.1 (layered config, free toggles, hash-pinned approve-on-first-use, headless fail-closed)?
-2. **Dev channel:** PyPI pre-releases (recommended, §8) or TestPyPI (BEACON's default)?
-3. **`develop` branch:** create it from `main` now and retarget PR #37 to it?
+No decisions are open. The next step is `/speckit-specify` for the release pipeline.

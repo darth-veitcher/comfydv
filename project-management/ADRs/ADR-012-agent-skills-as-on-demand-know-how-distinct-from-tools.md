@@ -1,8 +1,8 @@
-# ADR-012: Agent skills as on-demand, text-only know-how, distinct from tools
+# ADR-012: Agent skills as on-demand know-how, distinct from tools
 
 ## Status
 
-> Proposed
+> Accepted
 
 _Date:_ 2026-11-12
 _Deciders:_ darth-veitcher

@@ -2,7 +2,7 @@
 
 ## Status
 
-> Proposed
+> Accepted
 
 _Date:_ 2026-07-22
 _Deciders:_ darth-veitcher

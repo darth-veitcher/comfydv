@@ -21,7 +21,7 @@ links them. Otherwise, add each one by hand after you run `/speckit-specify`._
 - [ADR-012](../../ADRs/ADR-012-agent-skills-as-on-demand-know-how-distinct-from-tools.md) — skills are separate from tools.
 - [ADR-013](../../ADRs/ADR-013-monty-sandbox-code-mode-and-skill-scripts.md) — Monty sandbox for code mode and skill scripts.
 - [ADR-014](../../ADRs/ADR-014-telemetry-off-by-default.md) — telemetry off by default.
-- The MCP server trust model is option B in the analysis §4.1 (maintainer decision, 2026-11-12). The spec writes it as an ADR.
+- [ADR-015](../../ADRs/ADR-015-mcp-server-trust-model.md) — MCP server trust model.
 
 ## Success criteria
 - An Agent node answers a question with web search and web fetch on a local
