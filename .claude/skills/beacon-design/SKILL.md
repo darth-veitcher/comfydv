@@ -86,6 +86,8 @@ Update `project-management/Background/01-final-architecture-document.md` if the 
 
 For every decision that is hard to reverse or involves a real tradeoff, create an ADR in `project-management/ADRs/` using MADR format (see `ADR-000-template.md`).
 
+Write each ADR, epic, `spec.md` and `plan.md` to section 7 of `docs/WRITING.md` (ASD-STE100 Simplified Technical English). State the decision of an ADR in the first sentence of its Decision section. Check each file with `beacon docs check --file <path>`.
+
 ---
 
 ## Tracer bullet rules
@@ -120,6 +122,7 @@ Before leaving DESIGN:
   - [ ] State diagram (if entity lifecycle involved)
 - [ ] `tasks.md` complete — bullets sequenced, each ≤4h
 - [ ] ADRs written for all major decisions
+- [ ] The epic, `spec.md`, `plan.md` and the new ADRs follow section 7 of `docs/WRITING.md` (`beacon doctor` → `writing-artefacts` is clean)
 - [ ] `01-final-architecture-document.md` updated if architecture changed
 - [ ] `project-management/Roadmap/README.md` updated with new bullets
 

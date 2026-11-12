@@ -4,25 +4,21 @@ app.registerExtension({
     name: "org.darthveitcher.FormatString",
     async beforeRegisterNodeDef(nodeType, nodeData, app) {
         if (nodeData.name === "FormatString") {
-            console.log("FormatString extension is being registered");
 
             const onNodeCreated = nodeType.prototype.onNodeCreated;
             nodeType.prototype.onNodeCreated = function () {
-                console.log("FormatString instance created");
                 const result = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
                 
                 this.formatStringNodeId = `format_string_${this.id}`;
-                console.log(`Assigned ID: ${this.formatStringNodeId}`);
                 
                 const templateTypeWidget = this.widgets.find(w => w.name === "template_type");
                 const templateWidget = this.widgets.find(w => w.name === "template");
                 
                 if (templateTypeWidget && templateWidget) {
-                    console.log("Template widgets found, adding callbacks");
                     templateTypeWidget.callback = () => this.updateNodeConfig();
                     templateWidget.callback = () => this.updateNodeConfig();
                 } else {
-                    console.log("Template widgets not found");
+                    console.warn("FormatString: template widgets not found; live output updates are disabled for this node");
                 }
                 
                 // Add load button
@@ -36,7 +32,6 @@ app.registerExtension({
             nodeType.prototype.updateNodeConfig = async function () {
                 const templateType = this.widgets.find(w => w.name === "template_type").value;
                 const template = this.widgets.find(w => w.name === "template").value;
-                console.log(`Updating node config for ${this.formatStringNodeId}`);
                 try {
                     const response = await fetch('/update_format_string_node', {
                         method: 'POST',
@@ -50,7 +45,6 @@ app.registerExtension({
                     
                     if (response.status === 200) {
                         const data = await response.json();
-                        console.log("Received updated config:", data);
                         
                         this.updateInputsAndOutputs(data);
                     } else {
@@ -70,20 +64,17 @@ app.registerExtension({
                 // Remove obsolete inputs
                 this.inputs = this.inputs.filter(input => {
                     const keep = ["template_type", "template", "save_path"].includes(input.name) || dynamicInputs.includes(input.name);
-                    if (!keep) console.log(`Removing input: ${input.name}`);
                     return keep;
                 });
 
                 // Add new inputs in the correct order
                 dynamicInputs.forEach(key => {
                     if (!this.inputs.find(input => input.name === key)) {
-                        console.log(`Adding new input: ${key}`);
                         this.addInput(key, "STRING");
                     }
                 });
                 
                 // Update outputs
-                console.log(`Updating outputs: ${config.outputs.length}`);
                 this.outputs.length = 0;  // Clear existing outputs
                 config.outputs.forEach(output => {
                     this.addOutput(output.name, output.type);
@@ -141,11 +132,9 @@ app.registerExtension({
                 const savePathWidget = this.widgets.find(w => w.name === "save_path");
                 const savePathInput = this.inputs.find(w => w.name === "save_path");
                 if (savePathInput && savePathInput.link != null) {
-                    console.log(savePathInput);
                     // If savePath is empty, it might be because it's connected as an input
                     // We can't access the input value directly here, so we'll need to handle this case differently
                 }
-                console.log("savePathWidget: " + savePathWidget.value);
                 return savePathWidget ? savePathWidget.value : null;
             };
 
@@ -169,5 +158,3 @@ app.registerExtension({
         }
     }
 });
-
-console.log("FormatString extension script loaded");

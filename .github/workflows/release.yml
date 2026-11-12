@@ -1,0 +1,160 @@
+name: Release
+
+# Branch → distribution channel (ADR-017, specs/010-release-pipeline):
+#   main    → PyPI (stable releases)
+#   develop → PyPI pre-releases (0.2.0-dev.1, which PEP 440 reads as 0.2.0.dev1)
+#
+# python-semantic-release (PSR) reads the Conventional Commits since the last
+# tag:
+#   feat:           → minor bump
+#   fix:, perf:     → patch bump
+#   BREAKING CHANGE → major bump (minor while 0.x — see pyproject.toml)
+#
+# Publishing uses PyPI Trusted Publishing (OIDC), so the repository stores no
+# PyPI token. Started from BEACON's `gitflow` release integration; changed so
+# that develop publishes to PyPI, not TestPyPI (research R5). One-time setup:
+# PUBLISHING.md.
+
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      # Use this after a release whose Registry step failed: a plain re-run
+      # finds the tag, releases nothing and skips the Registry steps. GitHub
+      # shows the description as the label of the check box.
+      publish_registry:
+        description: Publish the version on main to the Comfy Registry again
+        type: boolean
+        default: false
+
+# Never run two releases at once on the same branch: they would race on tags
+# and dist files.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # PSR pushes the release commit and creates the tag and release
+  id-token: write   # OIDC token for PyPI Trusted Publishing
+
+jobs:
+  release:
+    name: Release ${{ github.ref_name == 'main' && 'to PyPI' || 'pre-release to PyPI' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/comfydv/
+
+    steps:
+      - name: Check out (full history for semantic-release commit analysis)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      # PSR runs directly here rather than through
+      # `python-semantic-release/python-semantic-release@v9`: that action builds
+      # its image with an unconstrained `pip install`, so it picks up whatever
+      # GitPython is newest at run time. GitPython 3.1.60 (2026-08-25) removed
+      # `Actor.name_email_regex`, which PSR still uses in `cli/config.py`, so
+      # every release since then dies with "type object 'Actor' has no
+      # attribute 'name_email_regex'" before doing any work. Running PSR
+      # ourselves is what makes the pin below possible. PSR writes the same
+      # `released`/`version`/`tag` step outputs the action did.
+      #
+      # Once a PSR release supports GitPython >= 3.1.60, drop the `--with` pin
+      # and bump the PSR version; nothing else here changes.
+      - name: Python Semantic Release
+        id: psr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # A *seeded* venv (pip included) mirrors the container the action
+          # used, so the `build_command` in pyproject.toml works unchanged.
+          uv venv --seed "$RUNNER_TEMP/psr"
+          uv pip install --python "$RUNNER_TEMP/psr/bin/python" \
+            "python-semantic-release==9.21.2" "gitpython<3.1.60"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Only main commits the version bump (FR-020). On develop, PSR still
+          # tags and pushes the tag, so the next pre-release counts from it,
+          # and builds from the working tree with the pre-release version.
+          # Then develop's PSR-managed files (pyproject version, CHANGELOG)
+          # never diverge from main's, and develop -> main PRs do not conflict.
+          commit_opt=""
+          if [ "${{ github.ref_name }}" != "main" ]; then
+            commit_opt="--no-commit"
+          fi
+          "$RUNNER_TEMP/psr/bin/semantic-release" -v version $commit_opt
+
+      - name: Publish to PyPI
+        if: steps.psr.outputs.released == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # A re-run after a later step failed must not fail here (FR-023).
+          skip-existing: true
+
+      - name: Attach distributions to GitHub Release
+        if: steps.psr.outputs.released == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/psr/bin/semantic-release" -v publish --tag "${{ steps.psr.outputs.tag }}"
+
+      # Stable releases only: the Registry docs describe no pre-releases, and
+      # ComfyUI Manager could offer one to every user (ADR-017).
+      - name: Publish to the Comfy Registry
+        if: github.ref_name == 'main' && (steps.psr.outputs.released == 'true' || inputs.publish_registry)
+        uses: Comfy-Org/publish-node-action@d2366e7abb6ab16f3bb03e3520ae25c8cf749bc9 # main, 2026-11-12
+        with:
+          personal_access_token: ${{ secrets.REGISTRY_ACCESS_TOKEN }}
+          # Publish this workspace, where PSR has written the new version.
+          # The action's own checkout would get the commit before the bump.
+          skip_checkout: "true"
+
+      - name: Verify the Comfy Registry version
+        if: github.ref_name == 'main' && (steps.psr.outputs.released == 'true' || inputs.publish_registry)
+        run: |
+          set -euo pipefail
+          # pyproject.toml holds the version that the previous step published:
+          # PSR wrote it there on a release, and on a manual retry it is the
+          # version on main.
+          VERSION=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
+          export VERSION
+          # The Registry can take a short time to list a new version.
+          for attempt in 1 2 3 4 5 6; do
+            if curl -fsS https://api.comfy.org/nodes/comfydv/versions \
+                | python3 -c 'import json, os, sys; sys.exit(0 if any(v.get("version") == os.environ["VERSION"] for v in json.load(sys.stdin)) else 1)'; then
+              echo "Comfy Registry lists comfydv $VERSION"
+              exit 0
+            fi
+            echo "Attempt $attempt: comfydv $VERSION is not listed yet"
+            sleep 20
+          done
+          echo "::error::The Comfy Registry does not list comfydv $VERSION"
+          exit 1
+
+      # Keep develop current with main after every stable release. Without
+      # this, the PSR-managed files (pyproject version, CHANGELOG) drift and
+      # the next develop -> main PR has avoidable merge conflicts. Pushes with
+      # GITHUB_TOKEN do not start other workflows, so this cannot loop. The
+      # develop ruleset must let GitHub Actions push (research R7).
+      - name: Sync develop with main after a stable release
+        if: github.ref_name == 'main' && steps.psr.outputs.released == 'true'
+        env:
+          TAG: ${{ steps.psr.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git fetch origin develop
+          git checkout -B develop origin/develop
+          # Prefer main's content on PSR-managed files: main is the source
+          # of truth for stable version numbers after a release.
+          git merge --no-ff -X theirs origin/main \
+            -m "chore(release): sync develop with main after $TAG"
+          git push origin develop

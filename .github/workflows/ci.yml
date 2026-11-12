@@ -1,0 +1,62 @@
+name: CI
+
+# The quality gate (specs/010-release-pipeline/contracts/ci-gate.md).
+# Rulesets on `develop` and `main` require the `quality-gate` check: keep
+# that job name stable, and change it only together with the rulesets.
+#
+# `pull_request` (never `pull_request_target`) gives a fork no secrets.
+
+on:
+  pull_request:
+    branches: [develop, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: checks (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+
+      - name: Install the locked dependencies
+        run: uv sync --frozen
+
+      - name: Lint
+        run: uv run ruff check
+
+      - name: Format
+        run: uv run ruff format --check
+
+      - name: Types
+        run: uv run ty check
+
+      - name: Unit tests
+        run: uv run pytest -m "not integration and not system"
+
+  quality-gate:
+    # The one required check. It fails when any matrix job did not succeed,
+    # including when a job was cancelled or skipped.
+    if: always()
+    needs: checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the matrix result
+        run: |
+          echo "checks: ${{ needs.checks.result }}"
+          test "${{ needs.checks.result }}" = "success"

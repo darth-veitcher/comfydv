@@ -20,7 +20,7 @@ SEED → DESIGN → BUILD → SHIP
 | **SEED** | "I have an idea for…" / new project | `project-management/Background/00-problem-statement.md` | One problem, one user, success criteria, non-goals |
 | **DESIGN** | "How should we architect…" / "Break this down" | `specs/[feature]/{spec,plan,tasks}.md` (Spec Kit); `project-management/ADRs/ADR-NNN-*.md`; updated `Background/01-final-architecture-document.md` | spec, plan, tasks complete and reviewed |
 | **BUILD** | "Starting bullet #N" | Working software per bullet; updated `beacon.md` + Roadmap | All tests pass; previous bullets unbroken; demoable |
-| **SHIP** | All bullets complete | PR via `/git:pr`; `Work/` cleaned; patterns promoted to ADRs | PR merged to `main`; clean `Work/` |
+| **SHIP** | All bullets complete | PR via `/git:pr`; `Work/` cleaned; patterns promoted to ADRs | PR merged to `develop`; clean `Work/` |
 
 Full phase guides ship as Claude Code skills at `.claude/skills/beacon-{seed,design,build,ship}/SKILL.md` — they auto-activate on the entry triggers above.
 
@@ -33,8 +33,9 @@ Full phase guides ship as Claude Code skills at `.claude/skills/beacon-{seed,des
         └── /speckit-plan             # DESIGN — produces plan.md
               └── /speckit-tasks      # DESIGN — produces tasks.md
                     └── /speckit-implement   # BUILD — executes tasks
-                          └── /git:pr        # SHIP — PR to develop
-                                └── /git:release   # SHIP — develop → main
+                          └── /speckit-converge  # BUILD — assess code vs spec; append unmet work (SpecKit ≥ 1.0)
+                                └── /git:pr        # SHIP — PR to develop
+                                      └── /git:release   # SHIP — PR develop → main
 ```
 
 Lost in the pipeline? `/beacon.status` reads the repo and tells you which phase
@@ -52,12 +53,12 @@ A tracer bullet is a complete minimal path through the system, end-to-end:
 
 One bullet per session. Scope creep goes to `project-management/Work/planning/future-features.md`.
 
-### Git workflow (two-branch environment model)
+### Git workflow (gitflow: two-branch environment model)
 
 ```
-main     ── PROD  (protected; PR from develop only; manual approval)
+main     ── PROD  (PR from develop only)
   ↑ /git:release
-develop  ── DEV   (protected; CI gates only)
+develop  ── DEV   (PRs only; automated gate)
   ↑ /git:pr
 NNN-slug                                                 ← spec work (from /speckit-specify)
 feature/[slug] · fix/[slug] · chore/[slug] · docs/[slug] ← non-spec (/git:feature)
@@ -84,7 +85,9 @@ project-management/
     ├── sessions/ planning/ analysis/
 
 .claude/skills/   ← phase guides (PERMANENT, framework-owned, auto-activating)
-├── beacon-seed/   beacon-design/   beacon-build/   beacon-ship/
+├── beacon-seed/   beacon-design/   beacon-build/   beacon-ship/   beacon-docs/
+
+docs/WRITING.md   ← the writing standard (PERMANENT, framework-owned)
 ```
 
 Anything important that lives only in `Work/` will be lost. Promote insights to ADRs before deleting.
@@ -105,6 +108,7 @@ These are the only places BEACON and Spec Kit touch — everywhere else they are
 | `pragmatic-principles.md` | Universal craftsperson agent OS | `beacon` package | `beacon upgrade` |
 | `.specify/memory/constitution.md` | This project's rules | `specify` | `/beacon.constitution` (seeds from BEACON principles) or `/speckit-constitution` |
 | `project-management/ADRs/` | Specific decisions, immutable | `beacon` package (template) + humans/agent | Manual / `/speckit-plan` discovery |
+| `docs/WRITING.md` | How every document and artefact is written (ASD-STE100) | `beacon` package | `beacon upgrade` |
 
 ### Pragmatic design principles (applied as constraints)
 
@@ -148,16 +152,29 @@ If `beacon doctor` reports `problem-statement: Placeholder text…` you have not
 - **O**wnership you want to create?
 - **M**otivation to engage?
 
+### Writing standard (ASD-STE100)
+
+`docs/WRITING.md` controls how you write `README.md`, `docs/`, `AGENTS.md`, the `--help` text of each command and the project artefacts: ADRs, epics, specs, plans, tasks and the constitution. Read it before you write any of them.
+
+- Write in ASD-STE100 Simplified Technical English. Use approved words, the active voice and the imperative for instructions.
+- Write one instruction in each sentence. Keep a procedural sentence to 20 words and a descriptive sentence to 25 words.
+- Start a `README.md` section with the task that the reader does. Say what each value means in practice.
+- Do not put planning labels (requirement ids, spec numbers, lesson ids, epic names) in `README.md` or `docs/`.
+- Keep the fixed `README.md` headings of section 4 in their order: What is this, What you can do, Install, Quickstart, the tasks, Limits, Technical notes, Develop, Glossary.
+- A change that a user can see also changes `README.md` or `docs/` in the same PR.
+
+Use `/beacon.docs` (the `beacon-docs` skill) to write or update documentation. It runs `beacon docs check` and ends with one full review and one fixes-only review by the `beacon-docs-reviewer` agent. `beacon docs check --text` checks `--help` text. `/beacon.docs review` runs only the review. `beacon doctor` runs the same check on the docs (`writing`) and on the artefacts that changed on the branch (`writing-artefacts`).
+
 ### Upgrading
 
 - Upgrade BEACON: `beacon upgrade` — refreshes `.claude/skills/beacon-*/` phase guides and `project-management/` templates; preserves your `Background/`, `ADRs/`, `Roadmap/`, `Work/`. Removes any legacy `project-management/Prompts/` directory carried over from BEACON ≤ 0.3.
-- Upgrade Spec Kit: `uvx specify integration upgrade` — refreshes `.specify/` and `.github/{agents,prompts}/`; does not touch BEACON files.
+- Upgrade Spec Kit: `uvx --from specify-cli specify integration upgrade` — refreshes `.specify/` and `.claude/skills/speckit-*/`; does not touch BEACON files. It compares manifest hashes and blocks locally modified files, so an upgrade may need `--force`; if you patched a SpecKit skill or template, diff that patch afterwards.
 
-Neither upgrade can modify the other framework's directory.
+Neither upgrade can modify the other framework's directory. The branch-gating conventions above are invariants, not a mechanism: this project may gate with hosted CI, hooks, or manual review — check the project's own docs for which.
 
 ### Extended reading
 
-- @AGENTS.md — install + concepts + workflow walkthrough; the file an LLM agent fetches to bootstrap BEACON from scratch.
-- @BEACON.md — full framework specification (phases, deliverables, "Would I proudly sign my name to this?").
+- `project-management/` — the artefact tree (problem statement, ADRs, epics, active bullets).
+- The installed BEACON docs (`docs/`, when scaffolded with `beacon init --user-facing-docs`) for concepts you need explained.
 
 <!-- BEACON END -->

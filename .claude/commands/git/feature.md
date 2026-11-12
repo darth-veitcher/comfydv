@@ -1,12 +1,12 @@
 ---
-description: Cut a branch from main for non-spec work (quick fixes, chores, docs). Spec work branches via /speckit-specify instead.
+description: Cut a branch from develop for non-spec work (quick fixes, chores, docs). Spec work branches via /speckit-specify instead.
 argument-hint: [branch-type/description] e.g. "fix/null-pointer" or "docs/update readme"
 allowed-tools: Bash, Read, TodoWrite
 ---
 
 Create a branch for: $ARGUMENTS
 
-# Branch from main (non-spec work)
+# Branch from develop (non-spec work)
 
 Use this for small changes that don't warrant a spec — bug fixes, chores, docs.
 
@@ -15,11 +15,11 @@ the spec branch (`NNN-slug`) as part of the DESIGN phase — run that instead.
 
 ## Steps
 
-1. **Sync main:**
+1. **Sync develop:**
 ```bash
 git fetch origin
-git checkout main
-git pull origin main
+git checkout develop
+git pull origin develop
 ```
 
 2. **Determine branch type and cut the branch:**
@@ -32,24 +32,23 @@ if [[ "$SLUG" != fix/* && "$SLUG" != chore/* && "$SLUG" != docs/* ]]; then
   SLUG="feature/$SLUG"
 fi
 git checkout -b "$SLUG"
-echo "✓ Created branch: $SLUG (from main)"
+echo "✓ Created branch: $SLUG (from develop)"
 ```
 
-3. **Report** the branch name and base (`main`). PRs from this branch
-   target `main` — use `/git:pr` when ready.
+3. **Report** the branch name and base (`develop`). PRs from this branch
+   target `develop` — use `/git:pr` when ready.
 
 ## Branch model reminder
 
-The project uses **main** as the integration branch and **main** as the
-stable / release branch. (If those names are the same, this project is on
-trunk-based git flow — feature branches merge straight to `main` and
-releases happen via tags on `main`.)
+The project uses **develop** as the integration branch and
+**main** as the stable / release branch. Feature branches merge to
+`develop`; releases promote `develop → main` via `/git:release`.
 
 ## Hotfix exception
 
 If this is a **production-critical fix** that cannot wait for the next release:
 - Cut from `main` instead: `git checkout main && git pull && git checkout -b fix/[slug]`
 - PR to `main` directly
-- If `main` and `main` differ (gitflow), immediately cherry-pick to `main` after merge:
-  `git checkout main && git cherry-pick <sha>`
+- Immediately cherry-pick to `develop` after merge:
+  `git checkout develop && git cherry-pick <sha>`
 - Tell the user if this appears to be a hotfix based on the description

@@ -15,7 +15,7 @@ description: BEACON SHIP phase — promote validated DEV work to PROD, extract w
 
 ## SHIP checklist
 
-### Before opening the release PR
+### Before releasing
 
 - [ ] All bullets in `tasks.md` are marked complete
 - [ ] All tests pass on `develop`
@@ -32,7 +32,8 @@ Internal rigor (specs, ADRs, tests) doesn't help a stranger pick the project
 up. Before shipping, check the user-facing surface — BEACON organises it with
 [Diátaxis](https://diataxis.fr/) (tutorials / how-to / reference / explanation):
 
-- [ ] **README** orients a newcomer: what-is-this, install, quickstart, a link out
+- [ ] **README** orients a newcomer: what-is-this, install, quickstart, a link out — in the shape that section 4 of `docs/WRITING.md` sets (What you can do, Install, one section for each task, Limits, Technical notes, Develop, Glossary)
+- [ ] **Writing standard**: `README.md`, `docs/` and `AGENTS.md` follow `docs/WRITING.md` — `beacon docs check` is clean, and the `beacon-docs-reviewer` agent reports `Status: clear` on the changed pages
 - [ ] **CHANGELOG** has an `Unreleased` section capturing this release's notable changes
 - [ ] **Public API** is real: the package root re-exports its surface (`__all__` / docstring), not empty
 - [ ] **`pyproject [project.urls]`** points to the repo + docs
@@ -41,7 +42,8 @@ up. Before shipping, check the user-facing surface — BEACON organises it with
 
 `beacon doctor` enforces the mechanical floor of the above
 (`readme-completeness`, `changelog-maintenance`, `changelog-vs-commits`,
-`public-api-docs`, `project-urls`, `docs-freshness`, opt-in `diataxis-coverage`).
+`public-api-docs`, `project-urls`, `docs-freshness`, opt-in `diataxis-coverage`,
+`writing`, `writing-artefacts`).
 
 ### Open the release PR
 
