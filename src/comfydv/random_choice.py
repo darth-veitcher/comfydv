@@ -23,10 +23,10 @@ def _preview_text(value) -> str:
         return str(value)
     try:
         return json.dumps(value, default=str, indent=2)
-    except Exception:
+    except Exception:  # noqa: BLE001 -- arbitrary user value; fall back to str()
         try:
             return str(value)
-        except Exception:
+        except Exception:  # noqa: BLE001 -- user __str__ may raise anything
             return "<value could not be serialized>"
 
 

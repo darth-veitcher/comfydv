@@ -33,8 +33,10 @@ dev = [
     "pytest>=8.4.2",
     "pytest-cov>=6.0.0",
     "pyyaml>=6.0.2",
+    "ruff==0.16.9",
     "torch>=2.9.0",
     "torchvision>=0.24.0",
+    "ty==0.0.101",
 ]
 docs = [
     "mike>=2.1.3",
@@ -45,6 +47,25 @@ docs = [
     "mkdocs-section-index>=0.3.9",
     "mkdocstrings[python]>=0.29.0",
     "shtab>=1.7.1",
+]
+
+[tool.ruff]
+# Pinned in the dev group (ruff==0.16.9), so this version's default rule set
+# is the project's rule set: everyone, and CI, lints with the same rules.
+target-version = "py311"
+# Design artefacts (ADRs are immutable; specs are historical records) carry
+# illustrative code blocks that are not meant to be runnable or formatted.
+extend-exclude = ["project-management", "specs"]
+
+[tool.ty.analysis]
+# Modules that only exist inside a running ComfyUI process, or only in the
+# docs build (the `docs` dependency group). Every import of them is guarded.
+allowed-unresolved-imports = [
+    "comfy",
+    "comfy.**",
+    "server",
+    "folder_paths",
+    "mkdocs_gen_files",
 ]
 
 [tool.pytest.ini_options]

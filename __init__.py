@@ -6,7 +6,11 @@
 """
 
 if "comfy" in __import__("sys").modules:
-    from .src.comfydv import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
+    # Resolvable only when ComfyUI loads this repo root as a package.
+    from .src.comfydv import (  # ty: ignore[import-not-found]
+        NODE_CLASS_MAPPINGS,
+        NODE_DISPLAY_NAME_MAPPINGS,
+    )
 else:
     NODE_CLASS_MAPPINGS = {}
     NODE_DISPLAY_NAME_MAPPINGS = {}

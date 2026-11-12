@@ -8,11 +8,13 @@ Verifies:
 - Consistency: zero print() in library code; correct log levels on all absent-ComfyUI paths
 """
 
+import contextlib
+import importlib.util
 import logging
 import logging.handlers
 import os
 import sys
-
+from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
@@ -20,6 +22,17 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _module_from(spec):
+    """``module_from_spec`` with the ``None`` checks the stdlib leaves to callers."""
+    assert spec is not None and spec.loader is not None, "module spec not found"
+    return importlib.util.module_from_spec(spec)
+
+
+def _exec(spec, module) -> None:
+    assert spec is not None and spec.loader is not None, "module spec not found"
+    spec.loader.exec_module(module)
 
 
 def _load_format_string():
@@ -32,8 +45,8 @@ def _load_format_string():
             os.path.dirname(__file__), "..", "src", "comfydv", "format_string.py"
         ),
     )
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module = _module_from(spec)
+    _exec(spec, module)
     cls = module.FormatString
     cls.node_configs = {}
     cls.RETURN_TYPES = ("STRING", "STRING")
@@ -62,17 +75,17 @@ def _load_random_choice():
             "comfydv.utils",
             os.path.join(src, "comfydv", "utils.py"),
         )
-        utils_mod = importlib.util.module_from_spec(utils_spec)
+        utils_mod = _module_from(utils_spec)
         sys.modules["comfydv.utils"] = utils_mod
-        utils_spec.loader.exec_module(utils_mod)
+        _exec(utils_spec, utils_mod)
 
     spec = importlib.util.spec_from_file_location(
         "comfydv.random_choice",
         os.path.join(src, "comfydv", "random_choice.py"),
     )
-    module = importlib.util.module_from_spec(spec)
+    module = _module_from(spec)
     sys.modules["comfydv.random_choice"] = module
-    spec.loader.exec_module(module)
+    _exec(spec, module)
     return module.RandomChoice
 
 
@@ -86,8 +99,8 @@ def _load_circuit_breaker():
             os.path.dirname(__file__), "..", "src", "comfydv", "circuit_breaker.py"
         ),
     )
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module = _module_from(spec)
+    _exec(spec, module)
     return module.CircuitBreaker
 
 
@@ -213,11 +226,13 @@ class TestUS2ErrorsStillSurface:
         """T021-T (red): CircuitBreaker.doit with status=False must emit a log record."""
         CircuitBreaker = _load_circuit_breaker()
         cb = CircuitBreaker()
-        with caplog.at_level(logging.DEBUG, logger="comfydv.circuit_breaker"):
-            try:
-                cb.doit(trigger="img", status=False)
-            except Exception:
-                pass
+        # doit() raises ComfyUI's interrupt exception (mocked or real); this
+        # test only cares that a log record was emitted before it.
+        with (
+            caplog.at_level(logging.DEBUG, logger="comfydv.circuit_breaker"),
+            contextlib.suppress(Exception),
+        ):
+            cb.doit(trigger="img", status=False)
         assert caplog.records, "Expected at least one log record from CircuitBreaker"
 
 
@@ -305,7 +320,7 @@ class TestLoggingConsistency:
             if not fname.endswith(".py"):
                 continue
             fpath = os.path.join(src_dir, fname)
-            tree = ast.parse(open(fpath).read())
+            tree = ast.parse(Path(fpath).read_text())
             for node in ast.walk(tree):
                 if (
                     isinstance(node, ast.Call)
@@ -320,7 +335,7 @@ class TestLoggingConsistency:
         src = os.path.join(
             os.path.dirname(__file__), "..", "src", "comfydv", "circuit_breaker.py"
         )
-        source = open(src).read()
+        source = Path(src).read_text()
         # Verify at source level that the warning call is present
         assert "logger.warning(" in source, (
             "circuit_breaker.py must use logger.warning() for the ComfyUI-absent branch"
@@ -337,7 +352,7 @@ class TestLoggingConsistency:
         src = os.path.join(
             os.path.dirname(__file__), "..", "src", "comfydv", "random_choice.py"
         )
-        source = open(src).read()
+        source = Path(src).read_text()
         assert "logger.error(" in source, (
             "random_choice.py must call logger.error() on the exception path"
         )
@@ -350,7 +365,7 @@ class TestLoggingConsistency:
         src = os.path.join(
             os.path.dirname(__file__), "..", "src", "comfydv", "ollama.py"
         )
-        source = open(src).read()
+        source = Path(src).read_text()
         # The two absent-ComfyUI paths must both be warnings, not debug
         warning_count = source.count("logger.warning(")
         assert warning_count >= 2, (

@@ -7,11 +7,20 @@ This file sets up mocks for ComfyUI dependencies before any test imports.
 import os
 import socket
 import sys
+from types import ModuleType
+from typing import ClassVar
 
 import pytest
 
 # Add src directory to Python path so we can import modules
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+
+
+def _mock_module(name: str, **attrs: object) -> ModuleType:
+    """A stand-in for a module that only exists inside a running ComfyUI."""
+    module = ModuleType(name)
+    module.__dict__.update(attrs)
+    return module
 
 
 def pytest_configure(config):
@@ -20,13 +29,12 @@ def pytest_configure(config):
     class MockInterruptProcessingException(Exception):
         pass
 
-    class MockModelManagement:
-        InterruptProcessingException = MockInterruptProcessingException
-
-    comfy_module = type(sys)("comfy")
-    comfy_module.model_management = MockModelManagement
-    sys.modules["comfy"] = comfy_module
-    sys.modules["comfy.model_management"] = MockModelManagement
+    model_management = _mock_module(
+        "comfy.model_management",
+        InterruptProcessingException=MockInterruptProcessingException,
+    )
+    sys.modules["comfy"] = _mock_module("comfy", model_management=model_management)
+    sys.modules["comfy.model_management"] = model_management
 
     class MockRoutes:
         @staticmethod
@@ -44,21 +52,17 @@ def pytest_configure(config):
             return decorator
 
     class MockPromptServer:
+        instance: ClassVar["MockPromptServer"]
+
         def __init__(self):
             self.routes = MockRoutes()
 
     MockPromptServer.instance = MockPromptServer()
+    sys.modules["server"] = _mock_module("server", PromptServer=MockPromptServer)
 
-    server_module = type(sys)("server")
-    server_module.PromptServer = MockPromptServer
-    sys.modules["server"] = server_module
-
-    class MockFolderPaths:
-        @staticmethod
-        def get_output_directory():
-            return "/tmp/comfydv_test"
-
-    sys.modules["folder_paths"] = MockFolderPaths
+    sys.modules["folder_paths"] = _mock_module(
+        "folder_paths", get_output_directory=lambda: "/tmp/comfydv_test"
+    )
 
     # Force "comfydv" to resolve to src/comfydv and get cached in sys.modules now,
     # while our sys.path.insert(0, ...) above is still the definitive answer. The
@@ -126,9 +130,9 @@ def ollama_available():
 @pytest.fixture
 def skip_if_no_ollama(ollama_available):
     if not ollama_available:
-        pytest.skip(
-            "Ollama not reachable at localhost:11434 — start Ollama to run integration tests"
-        )
+        msg = "Ollama not reachable at localhost:11434 — start Ollama to run integration tests"
+        # pytest's @_with_exception decorator hides skip()'s signature from ty.
+        pytest.skip(msg)  # ty: ignore[too-many-positional-arguments]
 
 
 @pytest.fixture(scope="session")
@@ -139,14 +143,14 @@ def first_generative_model(ollama_host, ollama_available):
     embeddinggemma reject that endpoint with HTTP 400.
     """
     if not ollama_available:
-        pytest.skip("Ollama not reachable at localhost:11434")
+        pytest.skip("Ollama not reachable at localhost:11434")  # ty: ignore[too-many-positional-arguments]
     import asyncio
 
     from comfydv.ollama import _fetch_models
 
     models = asyncio.run(_fetch_models(ollama_host))
     if not models:
-        pytest.skip("No models installed in Ollama")
+        pytest.skip("No models installed in Ollama")  # ty: ignore[too-many-positional-arguments]
     return models[0]
 
 
@@ -167,6 +171,7 @@ def format_string_class():
             os.path.dirname(__file__), "..", "src", "comfydv", "format_string.py"
         ),
     )
+    assert spec is not None and spec.loader is not None, "format_string.py not found"
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     FormatString = module.FormatString

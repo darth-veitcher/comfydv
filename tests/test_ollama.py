@@ -31,16 +31,17 @@ BDD coverage:
 """
 
 import json
+from typing import ClassVar
 
 import pytest
 
 from comfydv._llm.ollama_provider import OllamaProvider
 from comfydv.ollama import (
+    MIGRATION_MAP,
     ChatCompletion,
     LLMLoadModel,
     LLMModelSelector,
     LLMUnloadModel,
-    MIGRATION_MAP,
     OllamaClient,
     OllamaDebugHistory,
     OllamaHeaderBasicAuth,
@@ -57,7 +58,6 @@ from comfydv.ollama import (
     OllamaOptionTopK,
     OllamaOptionTopP,
 )
-
 
 # ---------------------------------------------------------------------------
 # Test double — stands in for `client` (an LLMProvider) throughout this file
@@ -862,13 +862,13 @@ class TestUS5ComposableOptions:
         (client,) = OllamaClient().create_client(ollama_host)
         (opts,) = OllamaOptionTemperature().set_temperature(temperature=0.0)
         (opts2,) = OllamaOptionSeed().set_seed(seed=42, options=opts)
-        kwargs = dict(
-            client=client,
-            model=_CHAT_MODEL,
-            prompt="Say exactly the word: pong",
-            history=[],
-            options=opts2,
-        )
+        kwargs = {
+            "client": client,
+            "model": _CHAT_MODEL,
+            "prompt": "Say exactly the word: pong",
+            "history": [],
+            "options": opts2,
+        }
         r1, _, _model, _seed = ChatCompletion().chat(**kwargs)["result"]
         r2, _, _model, _seed = ChatCompletion().chat(**kwargs)["result"]
         assert r1 == r2
@@ -1224,7 +1224,7 @@ class TestMigrationMap:
 class TestNodeContracts:
     """Every node must satisfy ComfyUI's node registration contract."""
 
-    NODE_CLASSES = [
+    NODE_CLASSES: ClassVar[list[type]] = [
         OllamaClient,
         LLMModelSelector,
         LLMLoadModel,

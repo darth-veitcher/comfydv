@@ -72,7 +72,7 @@ def _build_agent(
     schema: type[BaseModel],
     headers: dict | None,
     timeout_secs: float,
-) -> Agent:
+) -> Agent[None, BaseModel]:
     # httpx2, not httpx: openai>=3 (pulled in by pydantic-ai-slim[openai])
     # depends on httpx2 and no longer installs httpx, and pydantic-ai's
     # OpenAIProvider accepts an httpx2.AsyncClient.
@@ -279,11 +279,9 @@ async def chat_structured(
                 if attempt_settings
                 else None,
             )
-            # agent's output_type is the caller's `schema` (a runtime value,
-            # not a static type parameter), so the checker can't narrow
-            # result.output past Agent's default `str` — cast to the
-            # function's declared return type, which schema is a subtype of.
-            output = cast(BaseModel, result.output)
+            # _build_agent() is typed Agent[None, BaseModel], so result.output
+            # is already the function's declared return type.
+            output = result.output
             if refusal_cfg and refusal_cfg.get("enabled"):
                 # Re-serialized, not the original wire text — pydantic-ai's
                 # NativeOutput doesn't expose that separately, and the

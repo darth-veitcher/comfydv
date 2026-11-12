@@ -20,12 +20,12 @@ from collections.abc import Callable
 from pydantic import BaseModel
 
 from .ollama_provider import (
-    _TTLLRUCache,
     _cache_key,
     _get_json,
     _pop_refusal_retry,
     _pop_think,
     _post_json,
+    _TTLLRUCache,
 )
 from .provider import Message, ModelInfo, ModelStatus
 from .retry import (
@@ -63,7 +63,7 @@ async def _fetch_models(host: str, headers: dict | None = None) -> list[str]:
     """
     try:
         models = await LlamaCppProvider(host, headers).list_models()
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 -- combo population degrades to []
         logger.warning("Could not fetch llama.cpp models from %s: %s", host, exc)
         return []
     return [m.name for m in models]
@@ -211,7 +211,7 @@ class LlamaCppProvider:
             custom_phrases = tuple(refusal_cfg.get("custom_phrases") or ())
             if refusal_cfg.get("embedding_model"):
                 embedding_model = refusal_cfg["embedding_model"]
-                embed_fn = lambda t: self.embed(embedding_model, t)  # noqa: E731
+                embed_fn = lambda t: self.embed(embedding_model, t)
         total_attempts = max(0, min(int(max_retries), 5)) + 1
         response_text = ""
         refusal_count = 0
@@ -390,7 +390,7 @@ class LlamaCppProvider:
             and refusal_cfg.get("embedding_model")
         ):
             embedding_model = refusal_cfg["embedding_model"]
-            embed_fn = lambda t: self.embed(embedding_model, t)  # noqa: E731
+            embed_fn = lambda t: self.embed(embedding_model, t)
 
         result = await _chat_structured_impl(
             base_url=f"{self.host}/v1",
@@ -429,7 +429,7 @@ class LlamaCppProvider:
                 timeout=30.0,
                 headers=self.headers,
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 -- embed() contract: None, never raise
             return None
         data = result.get("data")
         if not isinstance(data, list) or not data:

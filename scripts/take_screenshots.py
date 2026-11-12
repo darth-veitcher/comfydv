@@ -13,15 +13,15 @@ import json
 import sys
 from pathlib import Path
 
-from playwright.async_api import Page, async_playwright
+from playwright.async_api import Page, StorageState, ViewportSize, async_playwright
 
 COMFYUI_URL = "http://localhost:8188"
 OUTPUT_DIR = Path(__file__).parent.parent / "docs" / "assets"
-VIEWPORT = {"width": 1400, "height": 860}
+VIEWPORT: ViewportSize = {"width": 1400, "height": 860}
 
 # Pre-seed localStorage so ComfyUI loads the canvas directly instead of showing
 # the template browser (which appears in fresh sessions without a saved workflow).
-_STORAGE_STATE = {
+_STORAGE_STATE: StorageState = {
     "cookies": [],
     "origins": [
         {
@@ -763,7 +763,7 @@ async def main() -> int:
         print(f"Opening {COMFYUI_URL} …")
         try:
             await page.goto(COMFYUI_URL, wait_until="networkidle", timeout=20_000)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- any navigation failure means harness down
             print(f"ERROR: Could not reach {COMFYUI_URL}: {exc}")
             print("Is the ComfyUI harness running?  Run: just up-d")
             return 1
