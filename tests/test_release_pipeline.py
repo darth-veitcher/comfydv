@@ -291,7 +291,10 @@ def test_changelog_has_the_insertion_flag_above_the_history():
     text = (ROOT / "CHANGELOG.md").read_text()
     assert text.count(flag) == 1
     assert text.index(flag) < text.index("## [0.1.0]")
-    assert "## [Unreleased]" not in text  # renamed in the bootstrap (research R12)
+    # Keep a Changelog order: [Unreleased] first, then each release, newest
+    # first. PSR inserts at the flag, so [Unreleased] sits above it.
+    assert text.count("## [Unreleased]") == 1
+    assert text.index("## [Unreleased]") < text.index(flag)
 
 
 def test_changelog_template_renders_only_commit_summaries():

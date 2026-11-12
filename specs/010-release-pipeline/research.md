@@ -131,6 +131,9 @@ and from the sources named in each item, on 2026-11-12.
     Push no new tag.
   - Use PSR `changelog.mode = "update"`, with the insertion flag above the hand-written entries.
   - Rename the hand-written `## [Unreleased]` heading to "Notes for 0.2.0 (written by hand)".
+  - Keep a new `## [Unreleased]` heading above the insertion flag. Its text points to the commits
+    since the last tag. `beacon doctor` (`changelog-maintenance`) needs it, and Keep a Changelog
+    puts it first. PSR inserts each release under it.
 - **Rationale**:
   - PSR counts the commits after `v0.1.0`, and most `[Unreleased]` entries describe those commits.
     The hand-written notes stay in the file, so the first release keeps all of them (FR-026).

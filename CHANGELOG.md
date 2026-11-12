@@ -4,9 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-From 0.2.0, python-semantic-release writes each release entry above the
-marker below, from the Conventional Commits. The entries under the marker
-were written by hand.
+From 0.2.0, python-semantic-release writes each release entry at the marker
+below, from the Conventional Commits. The entries under the marker were
+written by hand.
+
+## [Unreleased]
+
+Changes that are not in a release yet are the commits since the last tag:
+[compare](https://github.com/darth-veitcher/comfydv/compare/main...develop).
 
 <!-- version list -->
 
