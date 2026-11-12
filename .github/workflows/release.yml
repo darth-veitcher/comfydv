@@ -119,3 +119,22 @@ jobs:
           done
           echo "::error::The Comfy Registry does not list comfydv $VERSION"
           exit 1
+
+      # Keep develop current with main after every stable release. Without
+      # this, the PSR-managed files (pyproject version, CHANGELOG) drift and
+      # the next develop -> main PR has avoidable merge conflicts. Pushes with
+      # GITHUB_TOKEN do not start other workflows, so this cannot loop. The
+      # develop ruleset must let GitHub Actions push (research R7).
+      - name: Sync develop with main after a stable release
+        if: github.ref_name == 'main' && steps.psr.outputs.released == 'true'
+        env:
+          TAG: ${{ steps.psr.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git fetch origin develop
+          git checkout -B develop origin/develop
+          # Prefer main's content on PSR-managed files: main is the source
+          # of truth for stable version numbers after a release.
+          git merge --no-ff -X theirs origin/main \
+            -m "chore(release): sync develop with main after $TAG"
+          git push origin develop
