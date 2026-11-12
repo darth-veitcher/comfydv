@@ -19,7 +19,7 @@ ships through it.
 _SpecKit specs that contribute to this epic. `beacon specify --epic <slug>`
 links them. Otherwise, add each one by hand after you run `/speckit-specify`._
 
-<!-- - specs/010-release-pipeline/   — CI gate, PSR, PyPI and Comfy Registry publish -->
+- specs/010-release-pipeline/ — Release Pipeline and Distribution
 
 ## ADRs
 - A release ADR records the channel model below, when the spec starts.

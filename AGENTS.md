@@ -70,7 +70,7 @@ Other commands:
 ## Current work
 
 - Strategy and order of work: [project-management/Roadmap/README.md](project-management/Roadmap/README.md).
-- The next epic is the release pipeline: [project-management/Roadmap/epics/release-pipeline.md](project-management/Roadmap/epics/release-pipeline.md). It has no spec yet.
+- Active spec: [specs/010-release-pipeline/spec.md](specs/010-release-pipeline/spec.md), in the release pipeline epic ([project-management/Roadmap/epics/release-pipeline.md](project-management/Roadmap/epics/release-pipeline.md)). It has no plan yet. The next step is `/speckit-plan`.
 - Agent harness design: [project-management/Work/analysis/llm-agent-harness.md](project-management/Work/analysis/llm-agent-harness.md).
 
 ## Known problems
