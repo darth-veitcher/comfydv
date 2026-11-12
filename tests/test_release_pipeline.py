@@ -262,3 +262,22 @@ def test_w10_registry_version_is_verified():
 def test_p3_registry_publisher_id():
     """P3: the Registry publisher that owns node `comfydv` (claimed 2026-11-12)."""
     assert load_pyproject()["tool"]["comfy"]["PublisherId"] == "darth-veitcher"
+
+
+def test_w9_develop_is_synced_after_a_stable_release():
+    """W9: merge main into develop, so the next release PR has no version conflicts."""
+    step = _step("Sync develop")
+    assert "github.ref_name == 'main'" in step["if"]
+    assert "steps.psr.outputs.released == 'true'" in step["if"]
+    assert "git merge" in step["run"]
+    assert "git push origin develop" in step["run"]
+
+
+def test_g2_registry_archive_leaves_out_development_files():
+    """G2: the Registry archive holds only what ComfyUI loads."""
+    ignored = {
+        line.strip().rstrip("/")
+        for line in (ROOT / ".comfyignore").read_text().splitlines()
+        if line.strip() and not line.startswith("#")
+    }
+    assert {"tests", "specs", "project-management", "docs"} <= ignored
