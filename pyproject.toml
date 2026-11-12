@@ -89,3 +89,47 @@ markers = [
     "system: System tests requiring the full docker-compose harness",
     "slow: Slow tests",
 ]
+
+# ──── BEACON release integration: python-semantic-release config ────
+# Release automation (ADR-017). python-semantic-release reads Conventional
+# Commits: feat → minor, fix/perf → patch, BREAKING CHANGE → minor while 0.x.
+# Pushes to `main` make stable releases (PyPI and the Comfy Registry). Pushes
+# to `develop` make PyPI pre-releases (0.2.0-dev.1, which PEP 440 reads as
+# 0.2.0.dev1). Changed from BEACON's template: develop publishes to PyPI, not
+# TestPyPI (research R5), and the changelog is updated, not rewritten (R12).
+# See PUBLISHING.md for the one-time setup.
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+build_command = "python -m pip install --quiet uv && uv build"
+major_on_zero = false        # stay in 0.x until v1 is explicit
+allow_zero_version = true    # permit 0.x line
+commit_parser = "conventional"
+
+[tool.semantic_release.commit_parser_options]
+minor_tags = ["feat"]
+patch_tags = ["fix", "perf"]
+allowed_tags = [
+    "feat", "fix", "perf", "refactor", "docs",
+    "test", "chore", "ci", "build", "style", "revert",
+]
+
+[tool.semantic_release.branches.main]
+match = "^main$"
+prerelease = false
+
+[tool.semantic_release.branches.develop]
+match = "^develop$"
+prerelease = true
+prerelease_token = "dev"     # → 0.2.0-dev.1, 0.2.0-dev.2, …
+
+[tool.semantic_release.changelog]
+# "update" inserts each release at the flag and keeps the hand-written
+# history below it. PSR 9's default, "init", writes the whole file again.
+mode = "update"
+insertion_flag = "<!-- version list -->"
+exclude_commit_patterns = ["^chore\\(release\\):"]
+
+[tool.semantic_release.changelog.default_templates]
+changelog_file = "CHANGELOG.md"
+# ──── end BEACON release integration ────
