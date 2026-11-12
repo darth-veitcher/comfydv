@@ -5,6 +5,7 @@ contracts/release-workflow.md (W1-W10, P1-P8, G2) by reading the workflow
 files and pyproject.toml. They need no network and no GitHub.
 """
 
+import re
 import tomllib
 from pathlib import Path
 
@@ -129,7 +130,9 @@ def test_c3_permissions_are_read_only():
 
 
 def test_c4_no_step_uses_secrets():
-    assert "secrets." not in (WORKFLOWS / "ci.yml").read_text()
+    """C4: no ``${{ secrets.* }}`` expression (comments may mention secrets)."""
+    text = (WORKFLOWS / "ci.yml").read_text()
+    assert not re.search(r"\$\{\{[^}]*\bsecrets\.", text)
 
 
 def test_c5_matrix_covers_python_3_11_to_3_13():
