@@ -82,3 +82,23 @@ def test_p7_develop_makes_dev_prereleases():
 def test_p8_changelog_is_updated_not_rewritten():
     """P8: 'update' keeps the hand-written history; PSR 9's default 'init' rewrites the file."""
     assert _psr()["changelog"]["mode"] == "update"
+
+
+# --- test dependencies in CI (research R11) ----------------------------------
+
+
+def test_torch_comes_from_the_cpu_index():
+    """R11: the CUDA build of torch costs ~6 GB for three tests; CI uses the CPU build."""
+    uv = load_pyproject()["tool"]["uv"]
+    indexes = {i["name"]: i for i in uv["index"]}
+    assert indexes["pytorch-cpu"]["url"] == "https://download.pytorch.org/whl/cpu"
+    assert indexes["pytorch-cpu"]["explicit"] is True
+    sources = uv["sources"]["torch"]
+    sources = sources if isinstance(sources, list) else [sources]
+    assert any(s.get("index") == "pytorch-cpu" for s in sources)
+
+
+def test_torchvision_is_not_a_dependency():
+    """R11: no code or test imports torchvision."""
+    dev = load_pyproject()["dependency-groups"]["dev"]
+    assert not any(d.startswith("torchvision") for d in dev)
