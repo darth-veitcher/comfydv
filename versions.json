@@ -2,9 +2,7 @@
   {
     "version": "0.1.1.dev88+gf16da579b",
     "title": "0.1.1.dev88+gf16da579b",
-    "aliases": [
-      "stable"
-    ]
+    "aliases": []
   },
   {
     "version": "0.1.1.dev87+g7a40d2223",
@@ -139,7 +137,9 @@
   {
     "version": "0.1.0",
     "title": "0.1.0",
-    "aliases": []
+    "aliases": [
+      "stable"
+    ]
   },
   {
     "version": "v0.1.0",
