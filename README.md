@@ -179,6 +179,19 @@ Nodes were renamed once, to make them backend-generic (`OllamaChatCompletion` â†
 
 `OllamaClient` kept its name â€” delete and re-add any node showing as missing, then rewire it to the same `OllamaClient` node.
 
+### Privacy: no telemetry by default
+
+comfydv only talks to the servers you wire into your graph. Some of the libraries it uses can report, announce or call out on their own, so comfydv switches those off when it loads, unless you've already set them yourself:
+
+| Variable | comfydv default | Effect |
+|---|---|---|
+| `FASTMCP_TELEMETRY_MODE` | `off` | No OpenTelemetry spans or trace context sent to MCP servers |
+| `FASTMCP_CHECK_FOR_UPDATES` | `off` | No PyPI version check |
+| `FASTMCP_SHOW_SERVER_BANNER` | `false` | No startup banner on stdout |
+| `PYDANTIC_AI_NO_BANNER` | `1` | No first-run banner on stdout |
+
+To opt back in (for example, to trace runs with your own OpenTelemetry collector), set the variable before starting ComfyUI, e.g. `FASTMCP_TELEMETRY_MODE=native`. These are process-wide, so other node packs in the same ComfyUI process see the same defaults.
+
 ---
 
 ## License

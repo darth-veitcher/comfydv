@@ -31,7 +31,6 @@ import asyncio
 from collections.abc import Callable
 from typing import cast
 
-import pydantic_ai
 from pydantic import BaseModel, ValidationError
 from pydantic_ai import Agent, NativeOutput
 from pydantic_ai.exceptions import ModelRetry, UnexpectedModelBehavior
@@ -58,13 +57,6 @@ from .retry import (
     next_timeout_secs,
     record_attempt_info,
 )
-
-# pydantic-ai >=2.6x prints a first-run banner to stdout. comfydv is a
-# library inside ComfyUI and must stay silent by default (ADR-001), so opt
-# out before any Agent runs.
-# ty infers the unannotated upstream `BANNER_ENABLED = True` as Literal[True];
-# assigning False is the documented opt-out, not a type error.
-pydantic_ai.BANNER_ENABLED = False  # ty: ignore[invalid-assignment]
 
 _STRUCTURED_OUTPUT_FAILURE_EXCEPTIONS = (
     UnexpectedModelBehavior,

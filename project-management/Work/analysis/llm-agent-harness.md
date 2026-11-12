@@ -296,8 +296,8 @@ so the Agent and Tool nodes are created in their final home rather than renamed 
   (`[openai,mcp]` + harness `[codemode]` + `pydantic-monty` 1.6.0) measured **142 MB / 67 packages**.
   An exact pin risks clashing with another node pack that pins pydantic-ai. The escape hatch is to drive
   `pydantic-monty` (`>=1.5,<2`) directly and drop the harness.
-- pydantic-ai 2.68 prints a first-run banner to stdout. comfydv sets `pydantic_ai.BANNER_ENABLED = False`
-  at import (ADR-001).
+- Telemetry and phone-home behaviour (FastMCP tracing context and PyPI version check, stdout banners) is
+  off by default via `comfydv/_llm/_telemetry.py`, and users can opt in ([ADR-014](../../ADRs/ADR-014-telemetry-off-by-default.md)).
 - 2.68's `OllamaModel` is still OpenAI-compatible (`/v1`), so ADR-011's native model is still needed.
 - `OllamaNativeModel`, Web Fetch and SearXNG search all run on aiohttp. Beyond the MCP stack,
   they add nothing.

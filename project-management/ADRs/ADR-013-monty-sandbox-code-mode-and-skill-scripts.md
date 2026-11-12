@@ -47,8 +47,8 @@ A `FunctionModel` emitted one `run_code` call whose snippet called a host tool t
 lockstep with pydantic-ai. comfydv is on 2.9.0, and against that the resolver can only pick an
 obsolete harness (0.8.0). Adopting `CodeMode` therefore means **upgrading pydantic-ai 2.9 → 2.68**
 and pinning it exactly. pydantic-ai 2.68 also prints a first-run banner to stdout unless
-`pydantic_ai.BANNER_ENABLED = False`. comfydv must set that flag to keep ADR-001's silent-by-default
-contract. 2.68's `OllamaModel` is still OpenAI-compatible (`/v1`), so ADR-011's native Ollama model
+`pydantic_ai.BANNER_ENABLED = False` or `PYDANTIC_AI_NO_BANNER` is set. comfydv handles this, along with the
+other telemetry defaults, in [ADR-014](ADR-014-telemetry-off-by-default.md). 2.68's `OllamaModel` is still OpenAI-compatible (`/v1`), so ADR-011's native Ollama model
 is still required.
 
 ## Decision
