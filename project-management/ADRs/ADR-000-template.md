@@ -1,5 +1,13 @@
 # ADR-###: [Short noun-phrase title]
 
+<!--
+Write this ADR to section 7 of docs/WRITING.md (ASD-STE100 Simplified
+Technical English). Write one instruction or one fact in each sentence, with
+25 words or fewer. Use the active voice. Explain each label the first time it
+occurs. When the status is Accepted, do not change the text again: write a new
+ADR that supersedes this one.
+-->
+
 ## Status
 
 > Proposed | Accepted | Deprecated | Superseded by [ADR-###](ADR-###-name.md)
@@ -12,35 +20,34 @@ _Deciders:_ [names or roles]
 ## Context
 
 <!--
-What situation, constraint, or requirement forced this decision?
-What is the problem space? What are the competing concerns?
-Keep this factual — describe the situation, not the solution.
+What situation, constraint or requirement makes this decision necessary?
+Write facts: the problem, the limits and the concerns that compete.
+Do not describe the solution here.
 -->
 
 ## Decision
 
 <!--
-What did we decide to do, and what is the core rationale?
-Be specific. Name the tool, pattern, or approach chosen.
-Explain the "why" — what properties of the chosen option mattered most?
+Write the decision in the first sentence. Name the tool, the pattern or the
+method that you chose. Then give the reasons: which properties of this option
+were the most important?
 -->
 
 ## Consequences
 
 <!--
-What becomes easier as a result of this decision?
-What becomes harder or more constrained?
-What new problems does this decision introduce?
-What debt, if any, does this incur?
+What becomes easier because of this decision?
+What becomes more difficult or more limited?
+What new problems does this decision cause?
+What debt does it add, if any?
 -->
 
 ## Considered Alternatives
 
 <!--
-What else did we evaluate? For each alternative:
-- What is it?
-- Why didn't we choose it?
-Be honest about tradeoffs — a decision record that only shows the winner teaches nothing.
+Give each alternative that you examined. For each alternative, say what it is
+and why you did not choose it. Give the real trade-offs. A record that shows
+only the chosen option teaches nothing.
 -->
 
 ### Alternative A: [Name]

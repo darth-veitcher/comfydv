@@ -31,12 +31,29 @@ generic boilerplate. Pull from sources BEACON already ships and loads:
   material (e.g. "ships to PyPI via Trusted Publishing", "Python 3.11+",
   "offline-first"). If these still contain template placeholders, note that and
   prefer principles you can state confidently.
+- **The writing standard**, `docs/WRITING.md` (BEACON installs it). Every BEACON
+  constitution carries this article:
+  **"Documentation for people and for agents"**.
+  Draft it from section 6 of the standard, in this form:
+  - `README.md`, `docs/`, `AGENTS.md` and the project artefacts (ADRs, epics,
+    specs, plans, tasks and this constitution) MUST follow `docs/WRITING.md`
+    (ASD-STE100 Simplified Technical English plus the project rules).
+  - A change to behaviour that a user can see MUST change `README.md` or `docs/`
+    in the same pull request. Add this rule to the definition of done.
+  - `beacon docs check` and `beacon doctor --strict` MUST pass. Review checks
+    the words, because the check cannot read the STE dictionary.
+  With this article, the Constitution Check of each plan includes the
+  documentation.
 - Anything the user named in `$ARGUMENTS` above.
 
 **Mind the seam — Constitution ≠ ADR.** `.specify/memory/constitution.md` holds
 *enforceable principles* that the plan gate checks against; `project-management/ADRs/`
 holds *specific decisions* with rationale. They coexist — don't copy ADR decisions
 into the constitution; distil the principles those decisions express.
+
+**Write the constitution itself to section 7 of `docs/WRITING.md`.** Write each
+article as rules with MUST or MUST NOT. Give the reason for each rule in one
+sentence. Keep each sentence to 25 words or fewer.
 
 ## Step 2 — Run Spec Kit's constitution command
 
@@ -56,3 +73,12 @@ no template placeholders remain. Remind the user it now **gates `/beacon.plan`**
 
 `beacon doctor` will surface a `constitution` warning for as long as placeholder
 tokens remain, so a clean fill clears it.
+
+Then check the text against the writing standard, and fix each finding:
+
+```bash
+beacon docs check --file .specify/memory/constitution.md
+```
+
+If you amended an existing constitution, increase its version (a new article is
+a MINOR change) and record the amendment in its sync report.

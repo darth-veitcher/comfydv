@@ -63,11 +63,13 @@ note (issue #84):
 ++ [-] T020 Run the slow accuracy benchmark _Deferred — depends on T010's fixture, lands in a follow-up bullet._
 ```
 
-`beacon bullet finish` skips `[-]` tasks instead of flipping them to `[x]`, so
-`tasks.md` keeps meaning what you wrote; `beacon doctor` reports them as
-known-deferred follow-ups (held under `--strict`), distinct from a stray `[ ]`
-left behind as tech debt. Plain `[ ]` keeps its old behaviour — the marker is
-opt-in.
+`beacon bullet finish <task-id>` flips *that* task and skips `[-]` tasks instead
+of flipping them to `[x]`, so `tasks.md` keeps meaning what you wrote; `beacon
+doctor` reports deferred tasks as known-deferred follow-ups (held under
+`--strict`), distinct from a stray `[ ]` left behind as tech debt. Plain `[ ]`
+keeps its old behaviour — the marker is opt-in. Name the id explicitly whenever
+more than one task is open; without it the command refuses rather than guessing
+by line order.
 
 ### 3. Scaffold executable scenarios from the spec (default; `--no-bdd` to skip)
 
@@ -97,7 +99,14 @@ is present or the spec is test-exempt (see step 1):
    the assertion imperatively. This gives `spec.md → .feature → test`
    traceability that the `spec-bdd-coverage` doctor check can verify.
 
-### 4. Confirm
+### 4. Write each task to the standard
+
+Write each task in `tasks.md` as one imperative sentence that names the file it
+changes (`docs/WRITING.md`, section 7). If the spec changes behaviour that a user
+can see, add a task that updates `README.md` or the page in `docs/`. Pair that
+task with the implementation it describes.
+
+### 5. Confirm
 
 End by noting which user stories were paired, whether `.feature` scaffolding was
 written (or skipped via `--no-bdd`), and reminding the user that `beacon doctor`

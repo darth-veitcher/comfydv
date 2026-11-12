@@ -40,7 +40,7 @@ Apply Conventional Commits semver:
 - Any `feat:` → minor bump
 - Only `fix:` / `perf:` / etc. → patch bump
 
-If the project uses python-semantic-release (i.e. `beacon integration add release` was run), the PSR action on push already determines the version automatically — in that case you don't tag by hand; just push to `main`.
+If the project uses python-semantic-release (i.e. `beacon integration add release` was run), the release workflow on push already determines the version automatically — in that case you don't tag by hand; just push to `main`.
 
 ## 3. Generate release notes (preview)
 

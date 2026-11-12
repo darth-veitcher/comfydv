@@ -40,16 +40,7 @@ echo "✓ Created branch: $SLUG (from main)"
 
 ## Branch model reminder
 
-The project uses **main** as the integration branch and **main** as the
-stable / release branch. (If those names are the same, this project is on
-trunk-based git flow — feature branches merge straight to `main` and
-releases happen via tags on `main`.)
-
-## Hotfix exception
-
-If this is a **production-critical fix** that cannot wait for the next release:
-- Cut from `main` instead: `git checkout main && git pull && git checkout -b fix/[slug]`
-- PR to `main` directly
-- If `main` and `main` differ (gitflow), immediately cherry-pick to `main` after merge:
-  `git checkout main && git cherry-pick <sha>`
-- Tell the user if this appears to be a hotfix based on the description
+This project is on trunk-based git flow: there is no `develop` branch. Feature
+branches merge straight to `main`, and releases are tags on
+`main` (`/git:release`). A hotfix follows the same path — branch
+from `main`, PR to `main`, then tag.

@@ -18,7 +18,7 @@ description: BEACON BUILD phase — implement one tracer bullet per session with
 ### Start of session
 1. Fix any broken windows first (failing tests, lint warnings, TODOs) — max 15 min. If it takes longer, create a ticket and park it.
 2. Confirm today's epic + bullet: `beacon bullet status` (shows what this worktree is for).
-3. Pull latest from `develop`: `git fetch origin && git checkout develop && git pull`
+3. Pull latest from `main`: `git fetch origin && git checkout main && git pull`
 4. Create feature branch: `/git:feature <bullet-description>` (or `/speckit-specify` for a spec-driven feature).
 5. Run `beacon bullet start [<title>] [--epic <slug>]` to register the bullet (records an entry in the committed `project-management/.beacon/bullets.toml` for non-spec branches; for spec branches resolves the active task from `tasks.md`).
 6. Write the **acceptance test first** (from the acceptance criteria in `spec.md`).
@@ -37,11 +37,12 @@ description: BEACON BUILD phase — implement one tracer bullet per session with
 uv run ty check
 beacon doctor --strict   # semantic health — fails on placeholders, drift, stale notes
    ```
-2. Run `beacon bullet finish` (flips the task done in `tasks.md` for spec branches; drops the `bullets.toml` entry for non-spec).
+2. Run `beacon bullet finish <task-id>` (marks that task done in `tasks.md` for spec branches; drops the `bullets.toml` entry for non-spec). When more than one task is open the id is required — name the task you actually completed rather than letting line order pick one.
 3. `beacon bullet list` to regenerate the project dashboard.
 4. Write any cross-spec decisions as ADRs and link them in the relevant epic's `## ADRs` section (don't leave them in session notes).
-5. Open PR to `develop`: `/git:pr`
-6. Ask: **"Would I sign my name to this?"**
+5. Once every task is done, converge before review: `/beacon.converge` (SpecKit ≥ 1.0). It reads the spec, plan, and tasks against the code and appends any unbuilt work as new tasks — or reports clean. If it appended tasks, keep building; otherwise proceed.
+6. Open PR to `main`: `/git:pr`
+7. Ask: **"Would I sign my name to this?"**
 
 ---
 
@@ -54,6 +55,7 @@ beacon doctor --strict   # semantic health — fails on placeholders, drift, sta
 - [ ] `uv run ty check` clean
 - [ ] `beacon doctor --strict` exits 0
 - [ ] No new mocks without documented justification
+- [ ] A change that a user can see also changes `README.md` or `docs/`, to the writing standard in `docs/WRITING.md` (`beacon docs check` is clean; use the `beacon-docs` skill)
 - [ ] Commit messages follow Conventional Commits
 - [ ] Can demo the working feature to a non-technical person
 
@@ -83,7 +85,7 @@ The 2–4h timebox is a forcing function, not a physical law. When the unit of w
 | **Migrate by shadowing** | Data-shape change; write to both old and new, switch reads later, drop old |
 | **Hardcoded happy path first** | Big feature with deferrable error handling; ship happy path, add edges later |
 
-Whichever you pick, today's shipped unit must have a passing acceptance test, touch all layers (the stub counts), be visible to the user (even behind a flag), and be deployable as-is. Full guidance in `BEACON.md` under `<bullets_that_will_not_fit>`. **The wrong response is silent**: stretching the bullet to 8h and pretending the constraint didn't apply.
+Whichever you pick, today's shipped unit must have a passing acceptance test, touch all layers (the stub counts), be visible to the user (even behind a flag), and be deployable as-is. The framework spec's `<bullets_that_will_not_fit>` guidance is the canonical write-up — consult it rather than stretching the bullet. **The wrong response is silent**: stretching the bullet to 8h and pretending the constraint didn't apply.
 
 **New bullet breaks an old one:**
 1. Revert to last working state.

@@ -57,12 +57,22 @@ Run these read-only probes and read their output:
    - In `tasks.md`, are there active `[ ]` / in-progress `[~]` task lines, is
      everything `[x]`, or are the only leftovers deferred `[-]` / `[d]` follow-ups
      (out of this bullet's scope — shippable, not work in flight)?
+   - Has this spec been converged? Read `specs/<slug>/.beacon.toml` — a
+     `converged_at` key means `/beacon.converge` has run (either outcome). This is
+     the durable signal, because a clean converge writes nothing to `tasks.md`, so
+     a `## Convergence` header is present only when converge *found* gaps.
 
 7. **SpecKit presence.** Check whether `.claude/skills/speckit-specify/SKILL.md`
    (or `.claude/commands/beacon/specify.md`) exists. When absent, the
    `/beacon.{specify,plan,tasks,implement}` wrappers aren't installed and the next
    step must fall back to raw `/speckit-*` or a "install SpecKit + `beacon upgrade`"
    nudge.
+
+8. **Horizon.** Read `project-management/Roadmap/README.md` — the **Vision** and
+   the **Now** / **Next** / **Later** sections. This is the long-term goal-setting
+   the epics ladder up to. An epic list that's empty or fully Done is *not* the
+   same as "nothing pending": if the horizon still names unstarted initiatives,
+   the next step is to shape one into an epic, not to declare the project clear.
 
 ## Phase + next-step decision
 
@@ -74,20 +84,24 @@ row is the recommendation. (This mirrors the phase gates in `beacon help phases`
 | No BEACON manifest (`project-management/.beacon/init-options.json` absent) | — | `beacon init` — this isn't a BEACON project yet |
 | `beacon doctor` has a `FAIL` unrelated to phase progress (a broken window) | (current) | Fix that check first — name it. Don't advance over a red gate |
 | `beacon seed` not green (placeholders remain) | SEED | `/beacon.seed` |
-| SEED green, no epics declared | DESIGN | `/beacon.epics` — plan the initiative roadmap with a PM guide |
+| SEED green, no epics declared, horizon **Now**/Next has initiatives | DESIGN | `/beacon.epics` — shape the horizon's next initiative into an epic with a PM guide |
+| SEED green, no epics declared, horizon empty | DESIGN | `/beacon.epics` — the roadmap names no initiatives yet; set the horizon first |
 | On integration/default branch (`main` / `develop`), epic exists with owned stubs not yet broken out into real specs | DESIGN | `/beacon.audit <slug>` — confirm the epic's stubs/specs cover every Success criterion before building (default-on *design* moment; tune via doctor.toml `[audit] moments`) |
 | On integration/default branch (`main` / `develop`), epic(s) exist | DESIGN→BUILD | `/beacon.specify <epic> <feature>` (with SpecKit) **or** `/git:feature <name>` + `beacon bullet start` for non-spec work |
 | Branch already merged into `main` (PR landed), bullet still active | SHIP | `beacon bullet finish && git switch main && git pull` |
 | Spec branch, `spec.md` present but no `plan.md` | DESIGN | `/beacon.plan` |
 | Spec branch, `plan.md` present but no `tasks.md` | DESIGN | `/beacon.tasks` |
 | Spec branch, `tasks.md` has active `[ ]` / `[~]` tasks | BUILD | `/beacon.implement` |
-| Spec branch, every task `[x]` or deferred `[-]` / `[d]`, diff not yet reviewed | BUILD→SHIP | `/beacon.review` (deferred follow-ups ship as known debt) |
+| Spec branch, every task `[x]`/deferred and `specs/<slug>/.beacon.toml` has **no** `converged_at` | BUILD | `/beacon.converge` — assess the code against the spec before review; it appends any unbuilt work as new tasks (or reports clean) and records `converged_at`. Skip only if SpecKit < 1.0 (no converge skill) |
+| Spec branch, converged (`converged_at` recorded), diff not yet reviewed | BUILD→SHIP | `/beacon.review` (deferred follow-ups ship as known debt) |
 | Review clear, branch ahead of base, no PR open | SHIP | `/git:pr` |
 | Non-spec feature branch (`feature/` `fix/` `chore/` `docs/`), no bullet started | BUILD | `beacon bullet start "<title>" [--epic <slug>]` |
 | Non-spec branch, bullet active, the bullet's resolved spec (step 6) has open `[ ]` tasks | BUILD | `/beacon.implement <slug>` — continue the sharded spec; name the spec from step 6 |
+| Non-spec branch, bullet active, resolved spec all `[x]`/deferred, no `converged_at` | BUILD | `/beacon.converge <slug>` — converge the sharded spec before review |
 | Non-spec branch, bullet active, work done & reviewed, not yet merged | SHIP | `/git:pr` |
 | Epic's owned specs all complete and merged | SHIP | `/beacon.audit <slug>` then `beacon epic finish <slug>` — the audit (default-on *ship* moment) catches a Success criterion no spec ever covered, which the placeholder gate can't see |
-| Everything green, nothing in flight | — | "You're clear — nothing pending." |
+| All epics Done/archived | — | Read `project-management/Roadmap/README.md`: does the **Now / Next / Later** horizon still have unstarted initiatives? If yes, it's DESIGN → `/beacon.epics` or `/beacon.specify`. Only if the horizon itself is empty is the project actually clear |
+| No epics, horizon empty, nothing in flight | — | "You're clear — nothing pending. Consider setting the next horizon in `Roadmap/README.md`." |
 
 If two rows could both apply, prefer the earlier one — broken windows before
 progress, and the earliest unfinished phase artifact before later ones.
