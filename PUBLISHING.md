@@ -25,8 +25,8 @@ comfydv yet. After the first stable release, users get only stable releases.
    `git checkout develop` in `custom_nodes/comfydv`. Then run `pip install -r requirements.txt` again.
    ComfyUI does not load nodes from a package that pip installs.
 3. Run `/git:release` to open the pull request from `develop` to `main`.
-4. Merge it with a merge commit, not a squash. PSR reads each commit message, and a squash leaves
-   only the pull request title.
+4. Merge it with a merge commit, not a squash. PSR takes the type of each commit from its first line.
+   A squash makes one commit, and its first line is the pull request title.
 
 The workflow releases, then merges `main` back into `develop`. Do not edit the version or
 `CHANGELOG.md` by hand.
@@ -54,8 +54,7 @@ On `main`, the workflow does these steps:
 7. Publish to the Comfy Registry, then check that the Registry lists the new version.
 8. Merge `main` into `develop`.
 
-On `develop`, the workflow tags `vX.Y.Z-dev.N` and publishes to PyPI. It writes no commit. Thus the
-version in `pyproject.toml` and the release entries in `CHANGELOG.md` on `develop` stay the same as
+On `develop`, the workflow tags `vX.Y.Z-dev.N` and publishes to PyPI. It writes no commit. Because of this, the version in `pyproject.toml` and the release entries in `CHANGELOG.md` on `develop` stay the same as
 on `main`.
 
 ## Set up the pipeline one time
@@ -96,8 +95,10 @@ curl -s https://api.comfy.org/nodes/comfydv/versions         # the versions on t
 - **PyPI rejects the upload.** Look at the Trusted Publisher fields. They must match the fields in
   "Done on 2026-11-12" exactly.
 - **The Comfy Registry step fails.** Look at the `REGISTRY_ACCESS_TOKEN` secret. Then, in GitHub
-  Actions, run the **Release** workflow on `main`, and select **publish_registry**. A plain re-run
-  does not work, because PSR finds the tag and releases nothing.
+  Actions, open the **Release** workflow and select **Run workflow** on `main`. Select the check box
+  **Publish the version on main to the Comfy Registry again**. You can also run
+  `gh workflow run release.yml --ref main -f publish_registry=true`. A plain re-run does not work,
+  because PSR finds the tag and releases nothing.
 - **GitHub rejects the push to `main` or `develop`.** Add the bypass actor (step 1 above).
 
 [psr]: https://python-semantic-release.readthedocs.io/

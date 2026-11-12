@@ -320,8 +320,8 @@ def test_w5_prereleases_do_not_commit_to_develop():
 
 
 def test_p9_release_commit_is_a_conventional_commit():
-    """P9: PSR 9.21.2's default message is '{version}' and a footer. That is not
-    a Conventional Commit, and exclude_commit_patterns would not match it."""
+    """P9: PSR 9.21.2's default message is '{version}' and a footer, which is not
+    a Conventional Commit."""
     psr = _psr()
     assert psr["commit_message"] == "chore(release): {version}"
     assert "^chore\\(release\\):" in psr["changelog"]["exclude_commit_patterns"]

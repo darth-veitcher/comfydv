@@ -20,11 +20,11 @@ on:
     branches: [main, develop]
   workflow_dispatch:
     inputs:
+      # Use this after a release whose Registry step failed: a plain re-run
+      # finds the tag, releases nothing and skips the Registry steps. GitHub
+      # shows the description as the label of the check box.
       publish_registry:
-        description: >-
-          Publish the version on main to the Comfy Registry again. Use this
-          after a release whose Registry step failed: a plain re-run finds
-          the tag, releases nothing and skips the Registry steps.
+        description: Publish the version on main to the Comfy Registry again
         type: boolean
         default: false
 

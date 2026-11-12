@@ -58,8 +58,8 @@ ComfyUI Manager installs the Python packages from `requirements.txt` for you: `j
 **Choose a version:**
 
 - ComfyUI Manager installs the last release. The Manager calls it **latest**.
-- A `git clone` gets the `main` branch. `main` changes only when a release pull request merges, so it has the code of the last release.
-- To test the next release, use an install that you made with `git clone`. Run `git checkout develop` in `custom_nodes/comfydv`, then run `pip install -r requirements.txt` again. Restart ComfyUI. `develop` can contain work that is not finished.
+- A `git clone` gets the `main` branch. `main` changes only when a release pull request merges. Usually, it has the code of the last release.
+- To test the next release, use an install that you made with `git clone`. Run `git checkout develop` in `custom_nodes/comfydv`. Then run `pip install -r requirements.txt` again. Restart ComfyUI. `develop` can contain work that is not finished.
 
 **As a Python package:** comfydv is also on PyPI. ComfyUI does not load nodes from a package that pip installs. Use the package to use comfydv's Python code, for example the LLM providers, in your own program.
 
@@ -68,7 +68,7 @@ pip install comfydv        # the last release
 pip install --pre comfydv  # the last pre-release, from develop
 ```
 
-A pre-release has a version like `0.2.0.dev2`: the second pre-release before `0.2.0`. pip puts it before `0.2.0`. pip installs a pre-release only when you add `--pre`, give its exact version, or PyPI has no stable version of comfydv yet.
+A pre-release has a version like `0.2.0.dev2`: the second pre-release before `0.2.0`. For pip, `0.2.0.dev2` is a lower version than `0.2.0`. pip installs a pre-release only when you add `--pre`, give its exact version, or PyPI has no stable version of comfydv yet.
 
 The LLM nodes need a backend that you install yourself:
 

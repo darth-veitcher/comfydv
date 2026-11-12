@@ -128,8 +128,8 @@ outside this branch. Each one says why.
 
 - [x] T050 Write the release commands in the Commands section of `AGENTS.md`, and remove the text "Until then, no package publishes".
 - [x] T051 Add the release pipeline and its channels to the Technical notes of `README.md`.
-- [ ] T052 Run `beacon docs check`, then the two review passes of the `beacon-docs` skill, on `README.md`, `AGENTS.md` and `PUBLISHING.md`.
-- [ ] T053 Run the quality gates: `uv run ruff check`, `uv run ruff format --check`, `uv run ty check`, `uv run pytest` and `beacon doctor --strict`.
+- [x] T052 Run `beacon docs check`, then the two review passes of the `beacon-docs` skill, on `README.md`, `AGENTS.md` and `PUBLISHING.md`.
+- [x] T053 Run the quality gates: `uv run ruff check`, `uv run ruff format --check`, `uv run ty check`, `uv run pytest` and `beacon doctor --strict`.
 
 ---
 

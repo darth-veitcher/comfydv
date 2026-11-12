@@ -43,7 +43,7 @@ Other commands:
 
 - Build the docs site: `uv run mkdocs build --strict`.
 - Check the documentation: `beacon docs check`.
-- Release: `/git:release` opens the pull request from `develop` to `main`. Merge it with a merge commit, not a squash, to release when it has a `feat:`, `fix:` or `perf:` commit. `.github/workflows/release.yml` then publishes to PyPI and the Comfy Registry ([PUBLISHING.md](PUBLISHING.md)).
+- Release: `/git:release` opens the pull request from `develop` to `main`. Merge it with a merge commit, not a squash. The merge makes a release when the pull request has a `feat:`, `fix:` or `perf:` commit. `.github/workflows/release.yml` then publishes to PyPI and the Comfy Registry ([PUBLISHING.md](PUBLISHING.md)).
 - Pre-release: each merge to `develop` with a `feat:`, `fix:` or `perf:` commit publishes a PyPI pre-release. Do not edit the version or `CHANGELOG.md` by hand.
 - Docs site: `.github/workflows/docs.yml` deploys it on each push to `main`.
 
