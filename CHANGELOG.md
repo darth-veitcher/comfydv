@@ -4,7 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+From 0.2.0, python-semantic-release writes each release entry above the
+marker below, from the Conventional Commits. The entries under the marker
+were written by hand.
+
+<!-- version list -->
+
+## Notes for 0.2.0 (written by hand)
 
 ### Added
 - BEACON framework bootstrap: problem statement, constitution, roadmap, architecture document

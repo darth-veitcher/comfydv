@@ -78,7 +78,9 @@ outside this branch. Each one says why.
 - [x] T022-T [US2] Write FAILING tests for W9 (merge `main` into `develop`) and G2 (`.comfyignore`) in `tests/test_release_pipeline.py`.
 - [x] T022-I [US2] Keep the sync step in `.github/workflows/release.yml` and add `.comfyignore`, so that T022-T passes.
 - [x] T023-T [US2] Write a FAILING test that `CHANGELOG.md` has the PSR insertion flag above the hand-written entries, in `tests/test_release_pipeline.py`.
-- [ ] T023-I [US2] Add the insertion flag to `CHANGELOG.md`, and rename the `[Unreleased]` heading as research R12 says, so that T023-T passes.
+- [x] T023-I [US2] Add the insertion flag to `CHANGELOG.md`, and rename the `[Unreleased]` heading as research R12 says, so that T023-T passes.
+- [ ] T029-T [US2] Write a FAILING test that PSR uses a template that renders only the summary line of each commit, in `tests/test_release_pipeline.py`.
+- [ ] T029-I [US2] Copy PSR's markdown templates to `.github/semantic-release/templates/`, remove the commit-body block, and set `template_dir` in `pyproject.toml`, so that T029-T passes.
 - [ ] T024 [US2] Write the stable-release install steps in the Install section of `README.md`.
 - [ ] T025 [US2] Write `PUBLISHING.md` from the T001 template, with the one-time setup and the ruleset bypass of research R7.
 - [x] T026 [US2] Confirm that the tag `v0.1.0` exists for G1. It is on commit `4f69405` (2026-07-04), so no tag push is necessary.
