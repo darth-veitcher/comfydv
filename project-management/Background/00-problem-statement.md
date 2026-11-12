@@ -44,7 +44,7 @@ ComfyUI workflows are increasingly used for production pipelines — batch promp
 - Must load inside ComfyUI's existing import system — top-level `__init__.py` exposes `NODE_CLASS_MAPPINGS` and `NODE_DISPLAY_NAME_MAPPINGS`
 - Jinja2 rendering **must** use `SandboxedEnvironment` to prevent arbitrary code execution from user-supplied templates
 - Tests must not require a live ComfyUI process — `comfy.*` imports are guarded and mocked at test time
-- Python ≥ 3.10; managed via `uv` / `.python-version`
+- Python ≥ 3.11 (`requires-python` in `pyproject.toml`); managed with `uv`
 
 ---
 

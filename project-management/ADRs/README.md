@@ -46,3 +46,4 @@ Superseded ADRs keep their file; update their status to `Superseded by ADR-###`.
 | [ADR-013](ADR-013-monty-sandbox-code-mode-and-skill-scripts.md) | Monty sandbox for code mode and skill scripts, with no authority of its own | Accepted | 2026-11-12 |
 | [ADR-014](ADR-014-telemetry-off-by-default.md) | Telemetry and phone-home behaviour off by default | Accepted | 2026-11-12 |
 | [ADR-015](ADR-015-mcp-server-trust-model.md) | MCP server trust model: layered config, free toggles, approve on first use | Accepted | 2026-11-12 |
+| [ADR-016](ADR-016-constitution-1-1-documentation-article.md) | Constitution 1.1.0: add the documentation article | Accepted | 2026-11-12 |
