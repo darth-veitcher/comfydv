@@ -316,3 +316,11 @@ def test_w5_prereleases_do_not_commit_to_develop():
     assert "--no-commit" in run
     # The flag is set only off main: a stable release must commit its version.
     assert re.search(r'if \[ "\$\{\{ github\.ref_name \}\}" != "main" \]', run)
+
+
+def test_p9_release_commit_is_a_conventional_commit():
+    """P9: PSR 9.21.2's default message is '{version}' and a footer. That is not
+    a Conventional Commit, and exclude_commit_patterns would not match it."""
+    psr = _psr()
+    assert psr["commit_message"] == "chore(release): {version}"
+    assert "^chore\\(release\\):" in psr["changelog"]["exclude_commit_patterns"]
