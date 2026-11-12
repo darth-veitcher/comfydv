@@ -202,7 +202,7 @@ branch and the commit that it cloned.
 
 - The maintainer does the one-time setup: the PyPI Trusted Publisher, the Comfy Registry publisher and its key, the GitHub environment and branch protection.
 - The Comfy Registry publisher ID is `darth-veitcher` (created 2026-11-12). It cannot change.
-- The Comfy Registry already has a node `comfydv`, imported from the ComfyUI Manager list under the placeholder publisher "Unclaimed". It has no versions. The maintainer claims it for `darth-veitcher`.
+- The Comfy Registry already has a node `comfydv`, imported from the ComfyUI Manager list under the placeholder publisher "Unclaimed". It has no versions. The maintainer claimed it for `darth-veitcher` on 2026-11-12.
 - The `REGISTRY_ACCESS_TOKEN` repository secret holds the Comfy Registry key. The maintainer added it on 2026-11-12.
 - The quality gate runs the unit tier only. The integration and system tiers need Ollama or Docker, which hosted CI does not have.
 - `beacon doctor --strict` stays a local gate, because BEACON is not a project dependency.
