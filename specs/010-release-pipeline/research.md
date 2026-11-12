@@ -19,6 +19,13 @@ and from the sources named in each item, on 2026-11-12.
   Release. BEACON ships and maintains a tested workflow and config for it.
 - **Pin**: BEACON's template pins `python-semantic-release==9.21.2` and `gitpython<3.1.60`. GitPython
   3.1.60 removed an attribute that PSR uses. Keep that pin, and its comment.
+- **What the integration writes** (T001, 2026-11-12): `.github/workflows/release.yml`,
+  `PUBLISHING.md`, and a `[tool.semantic_release]` block in `pyproject.toml`. It also adds the three
+  files to `framework_files` in `project-management/.beacon/init-options.json`.
+- **Two gaps in the template**:
+  - It sets no `changelog.mode`. PSR 9 then uses `init`, which writes `CHANGELOG.md` again from the
+    commits and removes the hand-written history. Rule P8 sets `update`.
+  - Its `develop` path publishes to TestPyPI. Research R5 changes it to PyPI.
 - **Alternatives**:
   - release-please: it works through release PRs, which duplicates the `develop → main` release PR.
   - Manual tags: they fail SC-005 (no manual edits to the version or the changelog).

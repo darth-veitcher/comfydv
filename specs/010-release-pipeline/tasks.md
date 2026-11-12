@@ -29,8 +29,8 @@ outside this branch. Each one says why.
 
 **Purpose**: Get BEACON's release template and the test file skeleton.
 
-- [ ] T001 Run `beacon integration add release` and record the files that it writes, in `specs/010-release-pipeline/research.md` (R2).
-- [ ] T002 Create `tests/test_release_pipeline.py` with helpers that load `.github/workflows/*.yml` and `pyproject.toml`, and no tests yet.
+- [x] T001 Run `beacon integration add release` and record the files that it writes, in `specs/010-release-pipeline/research.md` (R2).
+- [x] T002 Create `tests/test_release_pipeline.py` with helpers that load `.github/workflows/*.yml` and `pyproject.toml`, and no tests yet.
 
 ---
 

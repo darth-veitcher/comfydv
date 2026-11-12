@@ -1,6 +1,7 @@
 {
   "ai": [
-    "claude"
+    "claude",
+    "release"
   ],
   "beacon_version": "1.18.4",
   "framework_files": [
@@ -41,6 +42,8 @@
     ".claude/skills/beacon-docs/SKILL.md",
     ".claude/skills/beacon-seed/SKILL.md",
     ".claude/skills/beacon-ship/SKILL.md",
+    ".github/workflows/release.yml",
+    "PUBLISHING.md",
     "docs/WRITING.md",
     "project-management/.beacon/doctor.toml.example",
     "project-management/ADRs/ADR-000-template.md",
@@ -52,7 +55,8 @@
     "project-management/Work/analysis/.gitkeep",
     "project-management/Work/branches/.gitkeep",
     "project-management/Work/planning/.gitkeep",
-    "project-management/Work/sessions/.gitkeep"
+    "project-management/Work/sessions/.gitkeep",
+    "pyproject.toml"
   ],
   "git_flow": "gitflow",
   "hooks_enabled": true,
