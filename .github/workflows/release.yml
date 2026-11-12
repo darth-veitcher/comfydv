@@ -89,3 +89,33 @@ jobs:
         run: |
           set -euo pipefail
           "$RUNNER_TEMP/psr/bin/semantic-release" -v publish --tag "${{ steps.psr.outputs.tag }}"
+
+      # Stable releases only: the Registry docs describe no pre-releases, and
+      # ComfyUI Manager could offer one to every user (ADR-017).
+      - name: Publish to the Comfy Registry
+        if: github.ref_name == 'main' && steps.psr.outputs.released == 'true'
+        uses: Comfy-Org/publish-node-action@d2366e7abb6ab16f3bb03e3520ae25c8cf749bc9 # main, 2026-11-12
+        with:
+          personal_access_token: ${{ secrets.REGISTRY_ACCESS_TOKEN }}
+          # Publish this workspace, where PSR has written the new version.
+          # The action's own checkout would get the commit before the bump.
+          skip_checkout: "true"
+
+      - name: Verify the Comfy Registry version
+        if: github.ref_name == 'main' && steps.psr.outputs.released == 'true'
+        env:
+          VERSION: ${{ steps.psr.outputs.version }}
+        run: |
+          set -euo pipefail
+          # The Registry can take a short time to list a new version.
+          for attempt in 1 2 3 4 5 6; do
+            if curl -fsS https://api.comfy.org/nodes/comfydv/versions \
+                | python3 -c 'import json, os, sys; sys.exit(0 if any(v.get("version") == os.environ["VERSION"] for v in json.load(sys.stdin)) else 1)'; then
+              echo "Comfy Registry lists comfydv $VERSION"
+              exit 0
+            fi
+            echo "Attempt $attempt: comfydv $VERSION is not listed yet"
+            sleep 20
+          done
+          echo "::error::The Comfy Registry does not list comfydv $VERSION"
+          exit 1

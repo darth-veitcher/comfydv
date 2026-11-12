@@ -19,6 +19,12 @@ dependencies = [
 Repository = "https://github.com/darth-veitcher/comfydv"
 Documentation = "https://darth-veitcher.github.io/comfydv/stable/"
 
+[tool.comfy]
+# Comfy Registry metadata. The node ID is the project name, `comfydv`, and
+# the publisher `darth-veitcher` owns it. Neither can change (spec 010).
+PublisherId = "darth-veitcher"
+DisplayName = "Comfy DV"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

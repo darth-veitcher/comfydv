@@ -234,8 +234,11 @@ def test_w8_third_party_actions_are_pinned_to_a_commit():
 
 def test_w7_registry_publish_only_for_stable_releases():
     """W7: main only, only when PSR released, with the Registry key secret."""
-    step = _step("Comfy Registry")
+    step = _step("Publish to the Comfy Registry")
     assert step["uses"].startswith("Comfy-Org/publish-node-action@")
+    # The action checks out the triggering commit by default, which is the
+    # commit before PSR's version bump: it would publish the old version.
+    assert step["with"]["skip_checkout"] == "true"
     condition = step["if"]
     assert "github.ref_name == 'main'" in condition
     assert "steps.psr.outputs.released == 'true'" in condition
@@ -249,9 +252,11 @@ def test_w10_registry_version_is_verified():
     step = _step("Verify the Comfy Registry")
     assert "github.ref_name == 'main'" in step["if"]
     assert "https://api.comfy.org/nodes/comfydv/versions" in step["run"]
-    assert "steps.psr.outputs.version" in step["run"]
+    # The version comes in through env, not inline in `run`: an expression in
+    # a shell script is an injection risk.
+    assert "steps.psr.outputs.version" in str(step.get("env", {})) + step["run"]
     steps = _release_job()["steps"]
-    assert steps.index(step) > steps.index(_step("Comfy Registry"))
+    assert steps.index(step) > steps.index(_step("Publish to the Comfy Registry"))
 
 
 def test_p3_registry_publisher_id():
