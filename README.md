@@ -19,6 +19,7 @@ Each node has unit tests. The tests of the LLM nodes also run against a real Oll
 |---|---|---|
 | Install comfydv | ComfyUI Manager: search for `comfydv` | [Install](#install) |
 | Test the next release | `git checkout develop` in `custom_nodes/comfydv` | [Install](#install) |
+| Use comfydv in your own Python program | `pip install comfydv` | [Install](#install) |
 | Build text from a template | **Format String** | [Build text from a template](#build-text-from-a-template) |
 | Select one input at random | **Random Choice** | [Select one input at random](#select-one-input-at-random) |
 | Stop a run when a check fails | **Circuit Breaker** | [Stop a run when a check fails](#stop-a-run-when-a-check-fails) |
@@ -57,8 +58,8 @@ ComfyUI Manager installs the Python packages from `requirements.txt` for you: `j
 **Choose a version:**
 
 - ComfyUI Manager installs the last release. The Manager calls it **latest**.
-- A `git clone` gets the `main` branch. `main` changes only at a release, so it is also the last release.
-- To test the next release before it ships, run `git checkout develop` in `custom_nodes/comfydv`, then restart ComfyUI. `develop` can contain work that is not finished.
+- A `git clone` gets the `main` branch. `main` changes only when a release pull request merges, so it has the code of the last release.
+- To test the next release, use an install that you made with `git clone`. Run `git checkout develop` in `custom_nodes/comfydv`, then run `pip install -r requirements.txt` again. Restart ComfyUI. `develop` can contain work that is not finished.
 
 **As a Python package:** comfydv is also on PyPI. ComfyUI does not load nodes from a package that pip installs. Use the package to use comfydv's Python code, for example the LLM providers, in your own program.
 
@@ -67,7 +68,7 @@ pip install comfydv        # the last release
 pip install --pre comfydv  # the last pre-release, from develop
 ```
 
-A pre-release has a version like `0.3.0.dev2`. pip installs a pre-release only when you add `--pre` or give its exact version.
+A pre-release has a version like `0.2.0.dev2`: the second pre-release before `0.2.0`. pip puts it before `0.2.0`. pip installs a pre-release only when you add `--pre`, give its exact version, or PyPI has no stable version of comfydv yet.
 
 The LLM nodes need a backend that you install yourself:
 
@@ -291,7 +292,7 @@ To turn one on again, set its variable before you start ComfyUI. For example, se
 ## Technical notes
 
 - **Python**: 3.11 or later.
-- **Releases**: python-semantic-release calculates each version from the Conventional Commits. A merge to `main` publishes to PyPI and to the Comfy Registry. A merge to `develop` publishes a PyPI pre-release ([ADR-017](project-management/ADRs/ADR-017-release-channels-and-pipeline.md)). The maintainer guide is [PUBLISHING.md](PUBLISHING.md).
+- **Releases**: python-semantic-release calculates each version from the Conventional Commits. A merge to `main` that has a `feat:`, `fix:` or `perf:` commit publishes to PyPI and to the Comfy Registry. A merge like that to `develop` publishes a PyPI pre-release ([ADR-017](project-management/ADRs/ADR-017-release-channels-and-pipeline.md)). The maintainer guide is [PUBLISHING.md](PUBLISHING.md).
 - **Dependencies**: `pydantic-ai-slim[openai,mcp]` and `pydantic-ai-harness[codemode]` have exact version pins, because the harness requires the exact pydantic-ai version. `requirements.txt` is written by hand for ComfyUI Manager ([ADR-003](project-management/ADRs/ADR-003-requirements-txt-authoring-policy.md)).
 - **HTTP**: the nodes use `aiohttp` to talk to Ollama ([ADR-004](project-management/ADRs/ADR-004-aiohttp-over-httpx-for-ollama.md)). The client node is the only place for the host and the headers ([ADR-005](project-management/ADRs/ADR-005-ollama-host-config-via-client-node.md)).
 - **Backends**: one `LLMProvider` interface for Ollama and llama.cpp ([ADR-007](project-management/ADRs/ADR-007-llm-provider-adapter-pattern.md)). Images go on the message ([ADR-008](project-management/ADRs/ADR-008-multimodal-image-input-across-llmprovider-boundary.md)).
@@ -313,13 +314,16 @@ uv run ty check
 uv run pytest -m "not integration and not system"
 ```
 
-Each pull request to `develop` or `main` runs these checks in CI, on Python 3.11, 3.12 and 3.13. A pull request cannot merge until the `quality-gate` check passes. Open pull requests against `develop`.
+Each pull request to `develop` or `main` runs these checks in CI, on Python 3.11, 3.12 and 3.13. The branch rulesets must require the `quality-gate` check (see [PUBLISHING.md](PUBLISHING.md)). Open pull requests against `develop`.
 
 Integration tests need Ollama at `localhost:11434` (`just test-integration`). System tests need the Docker Compose harness (`just test-system`). To start ComfyUI with this repository mounted, run `just up`. Read [AGENTS.md](AGENTS.md) for the rules of the repository.
 
 ## Glossary
 
 - **Backend**: the server that runs the model: Ollama or llama.cpp.
+- **CI**: the checks that GitHub runs on each pull request.
+- **Comfy Registry**: the index of ComfyUI node packs, where ComfyUI Manager gets them.
+- **Conventional Commits**: a commit message format that starts with a type, for example `feat:` or `fix:`.
 - **Embedding model**: a model that changes text into a list of numbers. Texts with a similar meaning get similar numbers.
 - **Jinja2**: a template language with variables, filters, conditions and loops.
 - **JSON Schema**: a standard description of the fields of a JSON value and of their types.

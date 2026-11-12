@@ -40,7 +40,7 @@ Expected result: each rule in `contracts/ci-gate.md` and `contracts/release-work
 1. Run `/git:release` to open the pull request from `develop` to `main`. Merge it.
 2. Wait for the `Release` workflow. Expected result: it finishes in less than 15 minutes.
 3. Expected result: all of these exist for the new version:
-   - the tag `vX.Y.Z` and a commit `chore(release): X.Y.Z` on `main`
+   - the tag `vX.Y.Z` and a commit `chore(release): X.Y.Z` on `main` (the `commit_message` in `pyproject.toml`)
    - a GitHub Release with the changelog entry and two files (wheel and sdist)
    - the version on https://pypi.org/project/comfydv/
    - the version in `curl -s https://api.comfy.org/nodes/comfydv/versions`

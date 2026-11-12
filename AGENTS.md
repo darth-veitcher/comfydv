@@ -35,15 +35,15 @@ The test tiers are pytest markers:
 
 CI (`.github/workflows/ci.yml`) runs on each pull request to `develop` and `main`. It runs
 `ruff check`, `ruff format --check`, `ty check` and the unit tier on Python 3.11, 3.12 and 3.13.
-The job `quality-gate` gives the one result that the branch rulesets require. Do not rename it,
-because the rulesets refer to that name. CI does not run the integration or system tiers, and
-it does not run `beacon doctor --strict`, so run both before you open a pull request.
+The job `quality-gate` gives the one result that the branch rulesets must require. Do not rename it,
+because the rulesets refer to that name. CI does not run the integration tier, the system tier or `beacon doctor --strict`. Run all three
+before you open a pull request.
 
 Other commands:
 
 - Build the docs site: `uv run mkdocs build --strict`.
 - Check the documentation: `beacon docs check`.
-- Release: `/git:release` opens the pull request from `develop` to `main`. Merge it to release. `.github/workflows/release.yml` then publishes to PyPI and the Comfy Registry ([PUBLISHING.md](PUBLISHING.md)).
+- Release: `/git:release` opens the pull request from `develop` to `main`. Merge it with a merge commit, not a squash, to release when it has a `feat:`, `fix:` or `perf:` commit. `.github/workflows/release.yml` then publishes to PyPI and the Comfy Registry ([PUBLISHING.md](PUBLISHING.md)).
 - Pre-release: each merge to `develop` with a `feat:`, `fix:` or `perf:` commit publishes a PyPI pre-release. Do not edit the version or `CHANGELOG.md` by hand.
 - Docs site: `.github/workflows/docs.yml` deploys it on each push to `main`.
 
