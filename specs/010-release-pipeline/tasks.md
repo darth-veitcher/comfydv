@@ -72,7 +72,7 @@ outside this branch. Each one says why.
 **Independent Test**: Scenarios in `features/us2_stable_release.feature`.
 
 - [x] T020-T [US2] Write FAILING tests for W1 to W4, W6 and W8 in `tests/test_release_pipeline.py`.
-- [ ] T020-I [US2] Change the T001 `release.yml` into `.github/workflows/release.yml` (the `pypi` environment for both branches, `skip-existing: true` and SHA-pinned actions), so that T020-T passes.
+- [x] T020-I [US2] Change the T001 `release.yml` into `.github/workflows/release.yml` (the `pypi` environment for both branches, `skip-existing: true` and SHA-pinned actions), so that T020-T passes.
 - [ ] T021-T [US2] Write FAILING tests for W7 (the Registry step), W10 (the Registry check) and P3 (`PublisherId`) in `tests/test_release_pipeline.py`.
 - [ ] T021-I [US2] Add the Comfy Registry publish step and its check to `.github/workflows/release.yml`, and add `[tool.comfy]` to `pyproject.toml`, so that T021-T passes.
 - [ ] T022-T [US2] Write FAILING tests for W9 (merge `main` into `develop`) and G2 (`.comfyignore`) in `tests/test_release_pipeline.py`.

@@ -1,0 +1,91 @@
+name: Release
+
+# Branch → distribution channel (ADR-017, specs/010-release-pipeline):
+#   main    → PyPI (stable releases)
+#   develop → PyPI pre-releases (0.2.0-dev.1, which PEP 440 reads as 0.2.0.dev1)
+#
+# python-semantic-release (PSR) reads the Conventional Commits since the last
+# tag:
+#   feat:           → minor bump
+#   fix:, perf:     → patch bump
+#   BREAKING CHANGE → major bump (minor while 0.x — see pyproject.toml)
+#
+# Publishing uses PyPI Trusted Publishing (OIDC), so the repository stores no
+# PyPI token. Started from BEACON's `gitflow` release integration; changed so
+# that develop publishes to PyPI, not TestPyPI (research R5). One-time setup:
+# PUBLISHING.md.
+
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+# Never run two releases at once on the same branch: they would race on tags
+# and dist files.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # PSR pushes the release commit and creates the tag and release
+  id-token: write   # OIDC token for PyPI Trusted Publishing
+
+jobs:
+  release:
+    name: Release ${{ github.ref_name == 'main' && 'to PyPI' || 'pre-release to PyPI' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/comfydv/
+
+    steps:
+      - name: Check out (full history for semantic-release commit analysis)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      # PSR runs directly here rather than through
+      # `python-semantic-release/python-semantic-release@v9`: that action builds
+      # its image with an unconstrained `pip install`, so it picks up whatever
+      # GitPython is newest at run time. GitPython 3.1.60 (2026-08-25) removed
+      # `Actor.name_email_regex`, which PSR still uses in `cli/config.py`, so
+      # every release since then dies with "type object 'Actor' has no
+      # attribute 'name_email_regex'" before doing any work. Running PSR
+      # ourselves is what makes the pin below possible. PSR writes the same
+      # `released`/`version`/`tag` step outputs the action did.
+      #
+      # Once a PSR release supports GitPython >= 3.1.60, drop the `--with` pin
+      # and bump the PSR version; nothing else here changes.
+      - name: Python Semantic Release
+        id: psr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # A *seeded* venv (pip included) mirrors the container the action
+          # used, so the `build_command` in pyproject.toml works unchanged.
+          uv venv --seed "$RUNNER_TEMP/psr"
+          uv pip install --python "$RUNNER_TEMP/psr/bin/python" \
+            "python-semantic-release==9.21.2" "gitpython<3.1.60"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          "$RUNNER_TEMP/psr/bin/semantic-release" -v version
+
+      - name: Publish to PyPI
+        if: steps.psr.outputs.released == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # A re-run after a later step failed must not fail here (FR-023).
+          skip-existing: true
+
+      - name: Attach distributions to GitHub Release
+        if: steps.psr.outputs.released == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/psr/bin/semantic-release" -v publish --tag "${{ steps.psr.outputs.tag }}"
