@@ -215,3 +215,28 @@ class TestDockerCompose:
         assert "FROM python:3.13" in text, (
             "Dockerfile must use python:3.13 base image (CPU-only, no CUDA)"
         )
+
+
+def test_package_imports_without_comfyui():
+    """T033 / constitution IV: comfydv is on PyPI, so `pip install comfydv`
+    then `import comfydv` must work in a Python that has no ComfyUI. Run in a
+    subprocess, because conftest.py installs ComfyUI mocks in this process."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    src = Path(__file__).resolve().parent.parent / "src"
+    script = (
+        "import sys; import comfydv; "
+        "assert 'comfy' not in sys.modules; "
+        "assert 'FormatString' in comfydv.NODE_CLASS_MAPPINGS"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        env={"PYTHONPATH": str(src), "PATH": ""},
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=120,
+    )
+    assert result.returncode == 0, result.stderr[-2000:]
