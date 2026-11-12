@@ -74,7 +74,8 @@ LlamaCppClient ┴─► LLM_CLIENT ─┐                            │
         │ OllamaProvider   → OllamaNativeModel(pydantic_ai Model)  │  aiohttp → /api/chat
         │ LlamaCppProvider → OpenAIChatModel(base_url=…/v1)        │  openai SDK (exists)
         │ tools.py → descriptor → MCPToolset (built-in | http | stdio) │
-        │ skills.py → Skills capability (catalog + load_skill)      │  SKILL.md, text only
+        │ skills.py → Skills capability (catalog + load_skill)      │  SKILL.md
+        │ sandbox.py → Monty: CodeMode + run_skill_script            │  exits = wired tools only
         │ agent.py → run_agent(model, tools, limits, on_status)     │  pydantic_ai.Agent
         └───────────────────────────────────────────────────────────┘
         ┌──────────── comfydv.mcp (first-party FastMCP servers) ────┐
@@ -140,8 +141,8 @@ Decision record: [ADR-012](../../ADRs/ADR-012-agent-skills-as-on-demand-know-how
 | | **Tool** | **Skill** |
 |---|---|---|
 | What it is | An action: a typed function the model calls | Know-how: instructions + reference files, written for the model |
-| Executes code? | Yes (on an MCP server) | **Never.** Pure text. Any `scripts/` in a skill folder are not run (no code-exec tool, by design). |
-| Side effects / I/O | Yes (network, files, APIs) | None |
+| Executes code? | Yes (on an MCP server), with real host authority | **Never acts by itself.** Text, plus optional `scripts/*.py` that run only in the **Monty sandbox** (§3.4), which can reach the world only through wired tools. |
+| Side effects / I/O | Yes (network, files, APIs) | None of its own; only via tools |
 | Enters the context as | A schema (name, description, parameters) every step; results when called | A one-line **catalog entry** (name + description) every step; the **body only when loaded** (progressive disclosure) |
 | Format | MCP tool | [Agent Skills](https://agentskills.io) `SKILL.md` folder (YAML frontmatter `name`, `description`) — the same format Claude, Cursor, Codex etc. use, so existing skills drop in |
 | Socket / category | `LLM_TOOLS` · `dv/llm/tools` | `LLM_SKILLS` · `dv/llm/skills` |
@@ -156,10 +157,12 @@ graph offer ten skills to a model with an 8k context.
 - `get_instructions()` → the skill catalog ("Available skills: `web-research` — how to research a
   question with search + fetch and cite sources; …"), plus one sentence telling the model to
   call `load_skill` before acting on a matching task.
-- `get_toolset()` → two **internal** tools: `load_skill(name)` (returns the `SKILL.md` body) and
+- `get_toolset()` → **internal** tools: `load_skill(name)` (returns the `SKILL.md` body) and
   `read_skill_file(name, path)` (supporting files, resolved strictly inside the skill folder).
   These are the skill system's plumbing, not user tools. They never appear on `LLM_TOOLS`, and the
   `trace` output shows them as `📘 loaded skill: web-research`, distinct from `🔧 tool calls`.
+- `run_skill_script(name, script, args)`: a third internal tool that runs a skill's `scripts/*.py`
+  in Monty (§3.4), with the skill folder mounted read-only.
 - `mode` per skill: `on_demand` (default, progressive disclosure) or `always` (body inlined into
   instructions). `always` is the escape hatch for small models whose tool calling is too weak to
   reliably call `load_skill`.
@@ -176,9 +179,46 @@ graph offer ten skills to a model with an 8k context.
 demonstrates the split on day one: the MCP server provides the abilities, and the skill provides
 the method (query reformulation, fetch the top N, cross-check, cite URLs).
 
-### 3.4 The Agent node
+### 3.4 The sandbox: Monty, for code mode and skill scripts
 
-Inputs: `client`, `model`, `prompt`, `system`/instructions, `tools` (optional), `skills` (optional), `options`,
+Decision record: [ADR-013](../../ADRs/ADR-013-monty-sandbox-code-mode-and-skill-scripts.md) (Proposed).
+This supersedes this doc's earlier "never execute" stance, which the maintainer challenged on 2026-11-12.
+
+The sandbox is a third concept, neither a tool nor a skill. **It is where code runs, and it has no
+authority of its own.** Its only exits are the agent's wired tools, exposed as external functions.
+
+| Concept | Is | Acts on the world? |
+|---|---|---|
+| **Tool** | an action (MCP) | **Yes**, the only thing that does |
+| **Skill** | know-how (+ optional scripts) | No; its scripts can only call tools |
+| **Sandbox** | an execution environment (Monty) | No; code inside it can only call tools |
+
+Two uses, one sandbox:
+
+1. **Code mode** (`execution: tool_calls | code_mode` on the Agent node, via
+   `pydantic_ai_harness.CodeMode`). The model gets one `run_code` tool and writes Python that calls
+   tools as async functions, for example `asyncio.gather(web_search(...), web_search(...))`. That turns
+   N model steps into one. For a local model at tens of seconds per step, it is the largest latency
+   lever we have. Default stays `tool_calls` until a live evaluation on target local models shows code
+   mode is reliable for them (writing correct subset-Python is a harder ask than emitting a tool call).
+2. **Skill scripts** (`run_skill_script`, §3.3). Skill folders are mounted read-only and scripts get
+   the same tool functions. Scripts that need third-party packages or unsupported syntax fail Monty's
+   pre-run type check with a clear error. `.sh` and other non-Python scripts never run.
+
+**Verified live (scratch venv, 2026-11-12):** one `run_code` snippet made two parallel tool calls
+(`[3, 2]`) in a single model step. `open("/etc/passwd")` → `PermissionError`; `os.environ` →
+`RuntimeError`; `import socket` → rejected by the pre-run type check. Monty 1.6.0 has wheels for
+Windows, macOS and Linux, needs no Docker, and runs each session in a worker subprocess, so a crash
+can't take ComfyUI down.
+
+**Limits:** language-level isolation, not OS-level (no seccomp/VM); a Monty bug is an escape, so pin
+it and track its advisories. There are no third-party packages, and no classes with inheritance,
+generators or `del`. Defaults: 30 s and 256 MiB per snippet, with a capped tool-call count, all
+exposed on the node.
+
+### 3.5 The Agent node
+
+Inputs: `client`, `model`, `prompt`, `system`/instructions, `tools` (optional), `skills` (optional), `execution` (`tool_calls` | `code_mode`), sandbox limits, `options`,
 `history`, `image`, `max_steps` (→ `UsageLimits.request_limit`), `max_tool_calls`,
 `timeout_secs`, and later `structured_output`/`output_schema` (reusing `ChatCompletion`'s
 dynamic-socket machinery).
@@ -215,7 +255,11 @@ only once the internals have converged (§3.1).
 5. **Skills are trusted instructions.** A skill is text, but it is text the model is told to *follow*.
    A malicious skill is a prompt injection with a head start. Library skills come only from local
    skill roots the user controls. Skills from a third-party MCP server carry that server's trust
-   level. Skill files are never executed, and `read_skill_file` cannot escape the skill folder.
+   level. Skill scripts run only in Monty (read-only mount, tools as the only exits), and
+   `read_skill_file` cannot escape the skill folder.
+6. **The sandbox is not a security boundary for tools.** Monty contains *code*; a tool still runs with
+   full host authority. Code mode means the model can call tools in loops, so per-snippet tool-call caps
+   and the run-level `UsageLimits` both apply.
 
 ## 5. Renaming and reorganisation
 
@@ -247,6 +291,14 @@ so the Agent and Tool nodes are created in their final home rather than renamed 
     smoke test into a real ComfyUI environment (the `docker/` harness).
   - `rich` arrives transitively. ADR-001 removed it as *our* dependency, and nothing in comfydv
     may import it. ADR-001's NullHandler/stdlib-logging stance is unaffected.
+- **pydantic-ai upgrade 2.9 → 2.68, pinned exactly** (ADR-013). `pydantic-ai-harness[codemode]==0.68.0`
+  pins `pydantic-ai-slim==2.68.0` exactly, and the two move in lockstep. The full stack
+  (`[openai,mcp]` + harness `[codemode]` + `pydantic-monty` 1.6.0) measured **142 MB / 67 packages**.
+  An exact pin risks clashing with another node pack that pins pydantic-ai. The escape hatch is to drive
+  `pydantic-monty` (`>=1.5,<2`) directly and drop the harness.
+- pydantic-ai 2.68 prints a first-run banner to stdout. comfydv sets `pydantic_ai.BANNER_ENABLED = False`
+  at import (ADR-001).
+- 2.68's `OllamaModel` is still OpenAI-compatible (`/v1`), so ADR-011's native model is still needed.
 - `OllamaNativeModel`, Web Fetch and SearXNG search all run on aiohttp. Beyond the MCP stack,
   they add nothing.
 
@@ -255,9 +307,10 @@ so the Agent and Tool nodes are created in their final home rather than renamed 
 | # | Spec | Bullet | Demo |
 |---|---|---|---|
 | 0 | `010-llm-node-naming` | Categories, display names, module split, deprecated aliases, socket-type spike | Old workflow loads; new names appear in search |
-| 1 | `011-llm-agent` | `[mcp]` dep + ComfyUI install smoke test; `LLMProvider.agent_model()`; `OllamaNativeModel` (non-streaming, tools, think, options); `OpenAIChatModel` for llama.cpp; `Agent` node; in-process `comfydv.mcp.web` with **web_fetch**; **Tool — Web Fetch**; limits; live progress; `trace` | "Summarise <url>" on a local qwen3 via Ollama, every step visible on the node. The MCP path is proven on day 1. |
+| 1 | `011-llm-agent` | pydantic-ai 2.68 upgrade (regression-test `_llm/chat.py`) + `[mcp]` and harness `[codemode]` deps + ComfyUI install smoke test; `LLMProvider.agent_model()`; `OllamaNativeModel` (non-streaming, tools, think, options); `OpenAIChatModel` for llama.cpp; `Agent` node; in-process `comfydv.mcp.web` with **web_fetch**; **Tool — Web Fetch**; limits; live progress; `trace` | "Summarise <url>" on a local qwen3 via Ollama, every step visible on the node. The MCP path is proven on day 1. |
 | 2 | 011 | **web_search** on `comfydv.mcp.web` (SearXNG) + **Tool — Web Search**; `searxng` service in `docker-compose.dev.yml` | "What changed in llama.cpp this week?" → search → fetch → answer |
 | 3 | 011 | **Skills**: `Skills` capability, `LLM_SKILLS` socket, **Skill — Library** + **Skill — Inline**, `requires-tools` check, built-in `web-research` skill | The same question answered better with `web-research` wired: the trace shows `📘 loaded skill` before the `🔧` calls |
+| 3b | 011 | **Sandbox**: `execution: code_mode` on Agent (`CodeMode`), `run_skill_script` for skill scripts, limits on the node; a live eval of code mode vs tool calls on target local models | Research question answered in fewer model steps; trace shows one `run_code` doing parallel searches |
 | 4 | 011 | **Tool — MCP Server**: external servers (HTTP by URL with headers; stdio by name from config), with a `skills` output (`skill://` resources) | Agent uses a third-party MCP server's tools and skills alongside the built-ins |
 | 5 | 011 | Structured output + image input on `Agent` (`format` on the native model; reuse dynamic sockets) | Vision agent returns typed fields into FormatString |
 | 6 | later | Converge `ChatCompletion` onto `agent_model()` (no tools), retiring ADR-009's duplication, only once parity is proven | Same workflow, one code path |
@@ -272,6 +325,7 @@ Resolved (2026-11-12):
 
 - ✅ **MCP is mandatory.** It is a core dependency, not an extra, and comfydv will grow its own servers. §3.2 follows from this: MCP is the single tool mechanism, and built-ins are in-process FastMCP servers.
 - ✅ **Search backend: SearXNG.** DuckDuckGo is dropped from v1.
+- ✅ **Sandbox: Monty** (§3.4, ADR-013): it runs code-mode snippets and skill scripts, with no authority beyond wired tools.
 - ✅ **Skills are first-class and distinct from tools** (§3.3, ADR-012): tools act, skills instruct. Skills are text-only `SKILL.md` folders, progressively disclosed, with their own socket and node category.
 
 Still open:
@@ -279,4 +333,4 @@ Still open:
 1. **Rename back-compat:** deprecated aliases for one release (recommended) or a clean break with `MIGRATION_MAP`?
 2. **MCP stdio:** accept the "named servers from local config only" rule (recommended), or allow stdio definitions in the workflow?
 3. **Spec layout:** rename as its own spec 010 first (recommended), or fold it into the agent epic?
-4. **Skill scripts:** never execute `scripts/` inside skill folders (recommended for v1, as there's no code-exec tool), or plan a sandboxed executor later?
+4. **Code mode default:** keep `tool_calls` as the default until a live eval says otherwise (recommended), or default to `code_mode`?

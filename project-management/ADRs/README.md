@@ -34,3 +34,4 @@ Superseded ADRs keep their file; update their status to `Superseded by ADR-###`.
 | [ADR-008](ADR-008-multimodal-image-input-across-llmprovider-boundary.md) | Multimodal image input across the LLMProvider boundary | Proposed | 2026-07-22 |
 | [ADR-011](ADR-011-pydantic-ai-agent-harness-with-native-ollama-model.md) | pydantic-ai Agent harness behind LLMProvider, with a native-/api/chat Ollama model | Proposed | 2026-11-12 |
 | [ADR-012](ADR-012-agent-skills-as-on-demand-know-how-distinct-from-tools.md) | Agent skills as on-demand, text-only know-how, distinct from tools | Proposed | 2026-11-12 |
+| [ADR-013](ADR-013-monty-sandbox-code-mode-and-skill-scripts.md) | Monty sandbox for code mode and skill scripts, with no authority of its own | Proposed | 2026-11-12 |

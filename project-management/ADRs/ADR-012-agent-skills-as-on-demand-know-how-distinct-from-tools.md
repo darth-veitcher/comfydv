@@ -32,8 +32,9 @@ toolset (`get_toolset`), and that is all a skills mechanism needs.
 1. **Definitions.**
    - A **tool** is an *action*: a typed function, executed on an MCP server, that may have side
      effects and returns data.
-   - A **skill** is *know-how*: instructions and reference material written for the model. A skill
-     is **never executed**.
+   - A **skill** is *know-how*: instructions and reference material written for the model, plus
+     optional Python scripts. A skill **never acts by itself**: its scripts run only in the Monty
+     sandbox (ADR-013), whose only route to the world is the agent's wired tools.
    - A skill may **declare** the tools it expects (`requires-tools` in frontmatter). It never
      **contains** a tool.
 
@@ -59,8 +60,11 @@ toolset (`get_toolset`), and that is all a skills mechanism needs.
      **Tool — MCP Server**.
 5. **Fail fast on missing prerequisites.** If a wired skill's `requires-tools` names a tool that no
    wired toolset provides, the Agent node raises before the first model call.
-6. **No script execution.** Files under a skill's `scripts/` are readable reference material at most.
-   comfydv has no code-execution tool, and that stays a non-goal.
+6. **Skill scripts run only in the Monty sandbox** (see [ADR-013](ADR-013-monty-sandbox-code-mode-and-skill-scripts.md),
+   which amends this ADR's first draft). `scripts/*.py` run through an internal `run_skill_script`
+   tool. The skill folder is mounted read-only, and the only way out of the sandbox is the agent's
+   wired tools. Code composes tools; it never acts by itself, so the tool/skill delineation holds.
+   Non-Python scripts are never run.
 
 ## Consequences
 
@@ -74,12 +78,13 @@ toolset (`get_toolset`), and that is all a skills mechanism needs.
 **Harder / constrained:**
 - Progressive disclosure depends on the model choosing to call `load_skill`. Weak models need `mode: always`.
 - Skills are trusted instructions. A malicious skill is a prompt injection. Mitigations: skill roots
-  are local and user-controlled; MCP-served skills carry their server's trust; files are never executed.
+  are local and user-controlled; MCP-served skills carry their server's trust; scripts run only inside
+  Monty and can act only through wired tools (ADR-013).
 - `requires-tools` is our own frontmatter key, not part of the shared format. Other ecosystems ignore it harmlessly.
 
 **Debt introduced:**
-- Skills that rely on bundled scripts (common in other ecosystems) are only partially usable: their
-  instructions load, but their scripts don't run.
+- Third-party skills whose scripts need full CPython (third-party packages, unsupported syntax) are
+  only partially usable: their instructions load, but their scripts fail Monty's checks with a clear error.
 
 ## Considered Alternatives
 
@@ -98,15 +103,16 @@ small local contexts. It is kept as the per-skill `mode: always` escape hatch, n
 **Why rejected:** It cuts us off from an existing, multi-vendor ecosystem for no gain.
 FastMCP already speaks `SKILL.md`.
 
-### Alternative D: Execute skill scripts in a sandbox
+### Alternative D: Never execute skill scripts
 
-**Why rejected (for now):** It needs a code-execution tool with real sandboxing inside ComfyUI's
-process space. That's a large security surface, and it is a separate decision if ever pursued.
+**Originally chosen, then superseded by ADR-013.** The original reason ("needs a code-execution tool
+with real sandboxing inside ComfyUI's process space") is answered by Monty: a language-level Python
+sandbox, run in a worker subprocess, with no host access by default.
 
 ---
 
 ## Links
 
 - Analysis: `project-management/Work/analysis/llm-agent-harness.md` §3.3
-- Related ADRs: [ADR-011](ADR-011-pydantic-ai-agent-harness-with-native-ollama-model.md)
+- Related ADRs: [ADR-013](ADR-013-monty-sandbox-code-mode-and-skill-scripts.md) (script execution), [ADR-011](ADR-011-pydantic-ai-agent-harness-with-native-ollama-model.md)
 - External reference: Agent Skills format (agentskills.io); FastMCP `fastmcp.server.providers.skills`
