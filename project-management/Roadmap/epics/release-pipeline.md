@@ -22,7 +22,7 @@ links them. Otherwise, add each one by hand after you run `/speckit-specify`._
 - specs/010-release-pipeline/ — Release Pipeline and Distribution
 
 ## ADRs
-- A release ADR records the channel model below, when the spec starts.
+- [ADR-017](../../ADRs/ADR-017-release-channels-and-pipeline.md) — release channels and pipeline.
 - [ADR-003](../../ADRs/ADR-003-requirements-txt-authoring-policy.md) — `requirements.txt` stays hand-written.
 
 ## Channel model (maintainer decisions, 2026-11-12)
@@ -86,6 +86,7 @@ One-time setup that only the maintainer can do:
 - ✅ Add its key as the `REGISTRY_ACCESS_TOKEN` repository secret (2026-11-12).
 - ✅ Claim the existing Registry node `comfydv` for `darth-veitcher` (2026-11-12). The publisher's node list shows it.
 - ✅ Add branch protection to `main` and `develop`, as GitHub rulesets (2026-11-12).
-- Add the CI check as a required status check in both rulesets, when the plan names the check.
+- Add `quality-gate` as a required status check in both rulesets.
+- Add GitHub Actions as a push-only bypass actor in both rulesets (ADR-017).
 
 Design detail: `project-management/Work/analysis/llm-agent-harness.md` §8.
