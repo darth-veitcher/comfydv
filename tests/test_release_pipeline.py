@@ -292,3 +292,15 @@ def test_changelog_has_the_insertion_flag_above_the_history():
     assert text.count(flag) == 1
     assert text.index(flag) < text.index("## [0.1.0]")
     assert "## [Unreleased]" not in text  # renamed in the bootstrap (research R12)
+
+
+def test_changelog_template_renders_only_commit_summaries():
+    """T029: PSR's default template appends each commit's full body. For this
+    project that gave about 1,500 lines for 0.2.0, in the changelog and in the
+    GitHub Release notes. The project template renders the summary line only."""
+    template_dir = ROOT / _psr()["changelog"]["template_dir"]
+    changes = (template_dir / ".components" / "changes.md.j2").read_text()
+    assert "format_commit_summary_line(commit)" in changes
+    assert "commit.descriptions[1:]" not in changes
+    for name in ("CHANGELOG.md.j2", ".release_notes.md.j2"):
+        assert (template_dir / name).is_file(), name
