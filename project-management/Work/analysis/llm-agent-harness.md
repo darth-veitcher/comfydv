@@ -73,8 +73,12 @@ LlamaCppClient ┴─► LLM_CLIENT ─┐                            │
         ┌──────────── comfydv._llm (no ComfyUI imports) ────────────┐
         │ OllamaProvider   → OllamaNativeModel(pydantic_ai Model)  │  aiohttp → /api/chat
         │ LlamaCppProvider → OpenAIChatModel(base_url=…/v1)        │  openai SDK (exists)
-        │ tools/  → descriptor → pydantic-ai Tool / Toolset builder │
+        │ tools.py → descriptor → MCPToolset (built-in | http | stdio) │
         │ agent.py → run_agent(model, tools, limits, on_status)     │  pydantic_ai.Agent
+        └───────────────────────────────────────────────────────────┘
+        ┌──────────── comfydv.mcp (first-party FastMCP servers) ────┐
+        │ web.py → web_fetch, web_search(SearXNG)                   │  in-process, or
+        │ …future comfydv MCP servers                               │  `python -m comfydv.mcp.web`
         └───────────────────────────────────────────────────────────┘
 ```
 
@@ -101,17 +105,30 @@ Tools chain the same way `OllamaHeader*` and the option nodes already do:
   "backend": "searxng", "url": …}`), not a live pydantic-ai object or MCP connection. Live objects
   are built inside `run_agent()` for the duration of one execution. That keeps node caching
   sane and means no subprocess or connection outlives a queue run.
-- Initial tool nodes:
+- **MCP is the single tool mechanism** (maintainer decision, 2026-11-12: MCP support is
+  mandatory, and comfydv is expected to grow its own MCP servers). Every tool an agent
+  sees reaches it through `pydantic_ai.mcp.MCPToolset`, including comfydv's built-in tools:
+  - **Built-in tools are authored as FastMCP servers** in `src/comfydv/mcp/` (for example
+    `comfydv.mcp.web` exposing `web_search` and `web_fetch`). `MCPToolset` accepts a `FastMCP`
+    instance directly, so built-ins are **mounted in-process**: no subprocess, no config file,
+    no port. The same module also runs standalone (`python -m comfydv.mcp.web`), so other MCP
+    clients (Claude Desktop, other agents) can use comfydv's tools outside ComfyUI.
+  - This keeps tool integration in one place (DRY): limits, timeouts, error handling, tracing and
+    tool-name prefixing are written once for "an MCP toolset", not once per tool kind. Adding a
+    first-party tool means adding a function to a FastMCP server, not a new code path.
+  - The cost is a small in-process MCP round-trip per tool call. That is negligible next to an
+    LLM step.
+- Initial tool nodes. Each emits a descriptor naming an MCP source:
 
-| Node | Backend | New deps |
+| Node | MCP source | Notes |
 |---|---|---|
-| **Tool — Web Fetch** | aiohttp + stdlib HTML→text. Private and loopback IPs blocked by default, with a toggle (local-first users may want their LAN). | none |
-| **Tool — Web Search** | **SearXNG** (self-hosted, JSON API, plain aiohttp) by default. DuckDuckGo via the optional `comfydv[search]` extra. | none (SearXNG) |
-| **Tool — MCP Server** | `MCPToolset`. HTTP by URL. **stdio only by name from a local config file** (see §4). | optional `comfydv[mcp]` |
+| **Tool — Web Fetch** | built-in `comfydv.mcp.web` (in-process) | aiohttp + stdlib HTML→text. Private and loopback IPs blocked by default, with a toggle (local-first users may want their LAN). |
+| **Tool — Web Search** | built-in `comfydv.mcp.web` (in-process) | **SearXNG** JSON API over aiohttp (maintainer decision). Instance URL is a node input. |
+| **Tool — MCP Server** | external | Streamable-HTTP/SSE by URL (+ optional headers, reusing `LLM_HEADERS`). **stdio only by name from a local config file** (see §4). Optional `allowed_tools` filter. |
 
 SearXNG fits the project's local-first stance: it sits next to Ollama in `docker-compose`, needs
-no API keys and is reached over aiohttp, which keeps ADR-004 intact. DuckDuckGo scraping is
-fragile and rate-limited, so it is opt-in rather than the default.
+no API keys and is reached over aiohttp, which keeps ADR-004 intact. DuckDuckGo is out of scope
+for v1. If a zero-setup fallback is wanted later, it is one more function on `comfydv.mcp.web`.
 
 ### 3.3 The Agent node
 
@@ -168,23 +185,29 @@ so the Agent and Tool nodes are created in their final home rather than renamed 
 
 ## 6. Dependencies (ADR-003 / ADR-004)
 
-- Core needs **no new runtime deps**. `pydantic-ai-slim[openai]` is already present.
-  `OllamaNativeModel`, Web Fetch and SearXNG search all run on aiohttp.
-- `mcp` (fastmcp + mcp SDK + server stack) and `duckduckgo` are heavy. A scratch install of
-  `pydantic-ai-slim[openai,mcp,duckduckgo]` came to ~116 MB across 136 packages. That is a real
-  conflict risk inside a ComfyUI venv, so these become **optional extras** (`comfydv[mcp]`,
-  `comfydv[search]`). Tool nodes lazy-import them and raise an actionable "install
-  `comfydv[mcp]`" error. ComfyUI-Manager installs `requirements.txt` only, so the README must
-  document the extras.
+- **MCP is a core runtime dependency** (maintainer decision). `pydantic-ai-slim[openai]` becomes
+  `pydantic-ai-slim[openai,mcp]` in both `pyproject.toml` and the hand-authored
+  `requirements.txt` (ADR-003). No optional extras, no lazy-import branches.
+- Measured cost (clean venvs, pydantic-ai-slim 2.9.0): `[openai]` = 28 packages / 44 MB;
+  `[openai,mcp]` = 62 packages / 90 MB, i.e. **+34 packages, +46 MB**. The additions are
+  `fastmcp-slim`, `mcp`, `mcp-types`, `starlette`, `uvicorn`, `sse-starlette`, `pydantic-settings`,
+  `jsonschema`, `cryptography`, `authlib`, `pyjwt`, `rich`, `python-dotenv` and related packages.
+  - **Conflict risk** inside a ComfyUI venv sits mainly in `starlette`/`uvicorn`/`cryptography`
+    pins shared with other custom-node packs. The first implementation bullet must do an install
+    smoke test into a real ComfyUI environment (the `docker/` harness).
+  - `rich` arrives transitively. ADR-001 removed it as *our* dependency, and nothing in comfydv
+    may import it. ADR-001's NullHandler/stdlib-logging stance is unaffected.
+- `OllamaNativeModel`, Web Fetch and SearXNG search all run on aiohttp. Beyond the MCP stack,
+  they add nothing.
 
 ## 7. Proposed sequencing (tracer bullets)
 
 | # | Spec | Bullet | Demo |
 |---|---|---|---|
 | 0 | `010-llm-node-naming` | Categories, display names, module split, deprecated aliases, socket-type spike | Old workflow loads; new names appear in search |
-| 1 | `011-llm-agent` | `LLMProvider.agent_model()`; `OllamaNativeModel` (non-streaming, tools, think, options); `OpenAIChatModel` for llama.cpp; `Agent` node; **Tool — Web Fetch**; limits; live progress; `trace` | "Summarise <url>" on a local qwen3 via Ollama, every step visible on the node |
-| 2 | 011 | **Tool — Web Search** (SearXNG; DuckDuckGo extra); `searxng` service in `docker-compose.dev.yml` | "What changed in llama.cpp this week?" → search → fetch → answer |
-| 3 | 011 | **Tool — MCP Server** (`comfydv[mcp]`; HTTP by URL; stdio by name from config) | Agent uses a local filesystem/time MCP server |
+| 1 | `011-llm-agent` | `[mcp]` dep + ComfyUI install smoke test; `LLMProvider.agent_model()`; `OllamaNativeModel` (non-streaming, tools, think, options); `OpenAIChatModel` for llama.cpp; `Agent` node; in-process `comfydv.mcp.web` with **web_fetch**; **Tool — Web Fetch**; limits; live progress; `trace` | "Summarise <url>" on a local qwen3 via Ollama, every step visible on the node. The MCP path is proven on day 1. |
+| 2 | 011 | **web_search** on `comfydv.mcp.web` (SearXNG) + **Tool — Web Search**; `searxng` service in `docker-compose.dev.yml` | "What changed in llama.cpp this week?" → search → fetch → answer |
+| 3 | 011 | **Tool — MCP Server**: external servers (HTTP by URL with headers; stdio by name from config) | Agent uses a third-party MCP server alongside the built-ins |
 | 4 | 011 | Structured output + image input on `Agent` (`format` on the native model; reuse dynamic sockets) | Vision agent returns typed fields into FormatString |
 | 5 | later | Converge `ChatCompletion` onto `agent_model()` (no tools), retiring ADR-009's duplication, only once parity is proven | Same workflow, one code path |
 
@@ -194,7 +217,13 @@ so the Agent and Tool nodes are created in their final home rather than renamed 
 
 ## 8. Open decisions for the maintainer
 
+Resolved (2026-11-12):
+
+- ✅ **MCP is mandatory.** It is a core dependency, not an extra, and comfydv will grow its own servers. §3.2 follows from this: MCP is the single tool mechanism, and built-ins are in-process FastMCP servers.
+- ✅ **Search backend: SearXNG.** DuckDuckGo is dropped from v1.
+
+Still open:
+
 1. **Rename back-compat:** deprecated aliases for one release (recommended) or a clean break with `MIGRATION_MAP`?
-2. **Default search backend:** SearXNG (recommended, self-hosted, no deps) or DuckDuckGo (zero setup, extra deps, fragile)?
-3. **MCP stdio:** accept the "named servers from local config only" rule, or allow HTTP-only MCP in v1?
-4. **Spec layout:** rename as its own spec 010 first (recommended), or fold it into the agent epic?
+2. **MCP stdio:** accept the "named servers from local config only" rule (recommended), or allow stdio definitions in the workflow?
+3. **Spec layout:** rename as its own spec 010 first (recommended), or fold it into the agent epic?

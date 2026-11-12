@@ -39,15 +39,18 @@ agent is supposed to help.
      aiohttp `_post_json`. It maps pydantic-ai messages to and from native `tools`/`tool_calls`,
      `thinking`, `images` and `options` (including `num_ctx`). ADR-004's aiohttp-only stance for
      Ollama is kept.
-3. **Tools travel as plain, hashable descriptors** on a new `LLM_TOOLS` socket. Live
-   toolsets and MCP connections are built per execution inside the agent runner and torn down
-   when it finishes.
-4. **stdio MCP servers are referenced by name only**, from a local config file outside the
+3. **MCP is the single tool mechanism, and a core dependency.** `pydantic-ai-slim[openai]` becomes
+   `[openai,mcp]` in `pyproject.toml` and `requirements.txt`. Every tool reaches the agent through
+   `MCPToolset`. comfydv's own tools (`web_fetch`, and `web_search` over SearXNG) are authored as
+   FastMCP servers under `src/comfydv/mcp/`, mounted **in-process** (no subprocess) and also
+   runnable standalone for other MCP clients.
+4. **Tools travel as plain, hashable descriptors** on a new `LLM_TOOLS` socket, each naming an
+   MCP source: built-in, HTTP URL, or named stdio server. Live toolsets and MCP connections are
+   built per execution inside the agent runner and torn down when it finishes.
+5. **stdio MCP servers are referenced by name only**, from a local config file outside the
    workflow. A shared workflow JSON must never be able to specify a command to execute.
-5. **The agent ships as a new `Agent` node.** It is not a `tools` input on `ChatCompletion`, whose
+6. **The agent ships as a new `Agent` node.** It is not a `tools` input on `ChatCompletion`, whose
    cache, refusal-retry and seed semantics assume one deterministic request.
-6. **Heavy tool backends (`mcp`, `duckduckgo`) are optional extras**, imported lazily. The core
-   agent, web fetch and SearXNG search add no new runtime dependencies.
 
 ## Consequences
 
@@ -61,6 +64,10 @@ agent is supposed to help.
 **Harder / constrained:**
 - We own a pydantic-ai `Model` adapter and must track pydantic-ai's message types across upgrades.
   Mitigations: pin the version and keep contract tests on the message mapping.
+- The `[mcp]` extra adds 34 packages / ~46 MB to every install (measured, pydantic-ai-slim 2.9.0),
+  including `starlette`, `uvicorn` and `cryptography`. Those carry pin-conflict risk with other
+  ComfyUI custom-node packs, so the first bullet must smoke-test an install into a real ComfyUI
+  environment. `rich` arrives transitively, but comfydv code must not import it (ADR-001).
 - Tool-calling quality depends on the local model. We fail fast on models whose Ollama
   `/api/show` capabilities lack `tools`.
 - Tool output is untrusted input to the model (prompt injection). v1 is limited to read-only
@@ -83,7 +90,20 @@ out of the graph and contradicts ADR-005 (the client node is the single source o
 **Why rejected:** It re-implements tool schema generation, argument validation/retry, usage limits
 and MCP client handling. That is a large maintenance surface for no gain over a library we already ship.
 
-### Alternative C: Add `tools` to the existing `ChatCompletion` node
+### Alternative C: Built-in tools as plain pydantic-ai function tools, MCP only for external servers
+
+**Why rejected:** It gives two tool code paths, with limits, tracing and error handling implemented
+twice. Since MCP is mandatory and first-party MCP servers are planned anyway, authoring built-ins as
+FastMCP servers costs one in-process round-trip per call. In return there is one integration path,
+and the tools are reusable outside ComfyUI.
+
+### Alternative D: MCP (and DuckDuckGo search) as optional extras
+
+**Why rejected:** The maintainer decided MCP is mandatory. Optional extras would also mean
+lazy-import branches and a degraded install path through ComfyUI-Manager, which installs
+`requirements.txt` only. DuckDuckGo is dropped in favour of SearXNG.
+
+### Alternative E: Add `tools` to the existing `ChatCompletion` node
 
 **Why rejected (for now):** It mixes deterministic, cached single requests with non-deterministic
 multi-step runs in one node. Convergence is still on the table once both run on `agent_model()`.
