@@ -10,8 +10,9 @@ authors = [
 dependencies = [
     "aiohttp>=3.9.0",
     "jinja2>=3.1.6",
-    "pydantic>=2.0",
-    "pydantic-ai-slim[openai]>=2.9.0",
+    "pydantic>=2.12",
+    "pydantic-ai-harness[codemode]==0.68.0",
+    "pydantic-ai-slim[openai,mcp]==2.68.0",
 ]
 
 [project.urls]

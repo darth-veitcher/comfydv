@@ -75,6 +75,8 @@ is still required.
 5. **Upgrade pydantic-ai to 2.68 and pin exactly** (`pydantic-ai-slim[openai,mcp]==2.68.0`,
    `pydantic-ai-harness[codemode]==0.68.0`) in `pyproject.toml` and `requirements.txt`. This is a
    prerequisite step with regression tests over the existing llama.cpp structured-output path (`_llm/chat.py`).
+   The maintainer approved upgrading as needed (2026-11-12); the upgrade landed with this ADR's PR,
+   along with the raised `pydantic>=2.12` floor that pydantic-ai 2.68 requires.
 
 ## Consequences
 

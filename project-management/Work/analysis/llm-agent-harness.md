@@ -325,6 +325,7 @@ Resolved (2026-11-12):
 
 - ✅ **MCP is mandatory.** It is a core dependency, not an extra, and comfydv will grow its own servers. §3.2 follows from this: MCP is the single tool mechanism, and built-ins are in-process FastMCP servers.
 - ✅ **Search backend: SearXNG.** DuckDuckGo is dropped from v1.
+- ✅ **Upgrade dependencies as needed** (maintainer, 2026-11-12). Done on this branch: `pydantic-ai-slim[openai,mcp]==2.68.0`, `pydantic-ai-harness[codemode]==0.68.0`, `pydantic>=2.12`. The exact-pin trade-off is accepted.
 - ✅ **Sandbox: Monty** (§3.4, ADR-013): it runs code-mode snippets and skill scripts, with no authority beyond wired tools.
 - ✅ **Skills are first-class and distinct from tools** (§3.3, ADR-012): tools act, skills instruct. Skills are text-only `SKILL.md` folders, progressively disclosed, with their own socket and node category.
 

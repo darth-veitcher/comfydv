@@ -31,6 +31,7 @@ import asyncio
 from collections.abc import Callable
 from typing import cast
 
+import pydantic_ai
 from pydantic import BaseModel, ValidationError
 from pydantic_ai import Agent, NativeOutput
 from pydantic_ai.exceptions import ModelRetry, UnexpectedModelBehavior
@@ -58,6 +59,13 @@ from .retry import (
     record_attempt_info,
 )
 
+# pydantic-ai >=2.6x prints a first-run banner to stdout. comfydv is a
+# library inside ComfyUI and must stay silent by default (ADR-001), so opt
+# out before any Agent runs.
+# ty infers the unannotated upstream `BANNER_ENABLED = True` as Literal[True];
+# assigning False is the documented opt-out, not a type error.
+pydantic_ai.BANNER_ENABLED = False  # ty: ignore[invalid-assignment]
+
 _STRUCTURED_OUTPUT_FAILURE_EXCEPTIONS = (
     UnexpectedModelBehavior,
     ModelRetry,
@@ -73,10 +81,13 @@ def _build_agent(
     headers: dict | None,
     timeout_secs: float,
 ) -> Agent:
-    import httpx
+    # httpx2, not httpx: openai>=3 (pulled in by pydantic-ai-slim[openai])
+    # depends on httpx2 and no longer installs httpx, and pydantic-ai's
+    # OpenAIProvider accepts an httpx2.AsyncClient.
+    import httpx2
 
-    http_client = httpx.AsyncClient(
-        headers=headers or None, timeout=httpx.Timeout(timeout_secs)
+    http_client = httpx2.AsyncClient(
+        headers=headers or None, timeout=httpx2.Timeout(timeout_secs)
     )
     provider = OpenAIProvider(
         base_url=base_url, api_key="not-needed", http_client=http_client
@@ -227,7 +238,7 @@ async def chat_structured(
     for attempt in range(1, total_attempts + 1):
         attempt_timeout = next_timeout_secs(timeout_secs, attempt)
         # Rebuilt each attempt so the escalated timeout actually takes
-        # effect — httpx.AsyncClient's timeout is fixed at construction,
+        # effect — httpx2.AsyncClient's timeout is fixed at construction,
         # not mutable per-request.
         agent = _build_agent(
             base_url=base_url,
