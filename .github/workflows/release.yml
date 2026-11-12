@@ -19,6 +19,14 @@ on:
   push:
     branches: [main, develop]
   workflow_dispatch:
+    inputs:
+      publish_registry:
+        description: >-
+          Publish the version on main to the Comfy Registry again. Use this
+          after a release whose Registry step failed: a plain re-run finds
+          the tag, releases nothing and skips the Registry steps.
+        type: boolean
+        default: false
 
 # Never run two releases at once on the same branch: they would race on tags
 # and dist files.
@@ -102,7 +110,7 @@ jobs:
       # Stable releases only: the Registry docs describe no pre-releases, and
       # ComfyUI Manager could offer one to every user (ADR-017).
       - name: Publish to the Comfy Registry
-        if: github.ref_name == 'main' && steps.psr.outputs.released == 'true'
+        if: github.ref_name == 'main' && (steps.psr.outputs.released == 'true' || inputs.publish_registry)
         uses: Comfy-Org/publish-node-action@d2366e7abb6ab16f3bb03e3520ae25c8cf749bc9 # main, 2026-11-12
         with:
           personal_access_token: ${{ secrets.REGISTRY_ACCESS_TOKEN }}
@@ -111,11 +119,14 @@ jobs:
           skip_checkout: "true"
 
       - name: Verify the Comfy Registry version
-        if: github.ref_name == 'main' && steps.psr.outputs.released == 'true'
-        env:
-          VERSION: ${{ steps.psr.outputs.version }}
+        if: github.ref_name == 'main' && (steps.psr.outputs.released == 'true' || inputs.publish_registry)
         run: |
           set -euo pipefail
+          # pyproject.toml holds the version that the previous step published:
+          # PSR wrote it there on a release, and on a manual retry it is the
+          # version on main.
+          VERSION=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
+          export VERSION
           # The Registry can take a short time to list a new version.
           for attempt in 1 2 3 4 5 6; do
             if curl -fsS https://api.comfy.org/nodes/comfydv/versions \

@@ -84,7 +84,7 @@ outside this branch. Each one says why.
 - [x] T034-T [US2] Write a FAILING test that the PSR release commit message is `chore(release): {version}`, in `tests/test_release_pipeline.py`.
 - [x] T034-I [US2] Set `commit_message` in `[tool.semantic_release]` in `pyproject.toml`, so that T034-T passes. PSR's default (`{version}` and a footer) is not a Conventional Commit.
 - [x] T035-T [US2] Write a FAILING test that a manual run on `main` with `publish_registry` publishes and verifies the current version, in `tests/test_release_pipeline.py`.
-- [ ] T035-I [US2] Add the `publish_registry` input to `workflow_dispatch` in `.github/workflows/release.yml`, and read the verified version from `pyproject.toml`, so that T035-T passes.
+- [x] T035-I [US2] Add the `publish_registry` input to `workflow_dispatch` in `.github/workflows/release.yml`, and read the verified version from `pyproject.toml`, so that T035-T passes.
 - [x] T024 [US2] Write the stable-release install steps in the Install section of `README.md`.
 - [x] T025 [US2] Write `PUBLISHING.md` from the T001 template, with the one-time setup and the ruleset bypass of research R7.
 - [x] T026 [US2] Confirm that the tag `v0.1.0` exists for G1. It is on commit `4f69405` (2026-07-04), so no tag push is necessary.
