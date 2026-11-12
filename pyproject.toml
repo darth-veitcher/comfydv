@@ -126,6 +126,9 @@ build_command = "python -m pip install --quiet uv && uv build"
 major_on_zero = false        # stay in 0.x until v1 is explicit
 allow_zero_version = true    # permit 0.x line
 commit_parser = "conventional"
+# PSR's default is "{version}" and a footer, which is not a Conventional Commit
+# and which exclude_commit_patterns (below) would not match.
+commit_message = "chore(release): {version}"
 
 [tool.semantic_release.commit_parser_options]
 minor_tags = ["feat"]
