@@ -149,6 +149,10 @@ prerelease_token = "dev"     # → 0.2.0-dev.1, 0.2.0-dev.2, …
 # history below it. PSR 9's default, "init", writes the whole file again.
 mode = "update"
 insertion_flag = "<!-- version list -->"
+# A copy of PSR 9.21.2's markdown templates that renders only the summary line
+# of each commit (spec 010, T029). PSR renders each file in this directory
+# except the dot-prefixed ones, so CHANGELOG.md.j2 becomes CHANGELOG.md.
+template_dir = ".github/semantic-release/templates"
 exclude_commit_patterns = ["^chore\\(release\\):"]
 
 [tool.semantic_release.changelog.default_templates]
