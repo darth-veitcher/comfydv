@@ -28,3 +28,18 @@ def load_pyproject() -> dict:
 
 def all_steps(workflow: dict) -> list[dict]:
     return [step for job in workflow["jobs"].values() for step in job.get("steps", [])]
+
+
+# --- pyproject.toml (contracts/release-workflow.md, P1-P8) ------------------
+
+
+def test_p1_project_name_is_comfydv():
+    """P1: the Comfy Registry node ID is `comfydv` and cannot change."""
+    assert load_pyproject()["project"]["name"] == "comfydv"
+
+
+def test_p2_version_is_static():
+    """P2: the Comfy Registry reads a literal `version`, so it is not dynamic."""
+    project = load_pyproject()["project"]
+    assert isinstance(project.get("version"), str)
+    assert "version" not in project.get("dynamic", [])
