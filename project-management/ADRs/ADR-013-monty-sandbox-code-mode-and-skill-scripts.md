@@ -27,7 +27,7 @@ code), which removes most of that objection. Verified on 2026-11-12:
   datetime, math, collections, asyncio.gather/run/sleep, …), and **no third-party packages**.
   Not supported: class inheritance, generators, `del`, method decorators, user-defined exceptions.
 - **pydantic-ai integration:** `pydantic-ai-harness[codemode]` provides a `CodeMode` capability. The
-  model gets one `run_code` tool and writes Python that calls the agent's other tools as async
+  model gets one `run_code` tool. It writes Python that calls the agent's other tools as async
   functions, so several tool calls (parallel via `asyncio.gather`) happen in **one model step**.
   The snippet is type-checked against generated tool stubs before it runs.
 
@@ -68,7 +68,7 @@ is still required.
    per snippet (harness default 100; comfydv default lower). They are exposed as Agent node inputs.
 4. **Honest about the subset.**
    - A skill script that uses unsupported features (third-party imports, classes with inheritance, …)
-     fails the type check or parse, and the model gets a clear error naming the script.
+     fails the type check or the parse. The model gets a clear error that names the script.
    - Non-Python scripts (`.sh`, …) are never run.
    - The README states that most third-party skill scripts written for full CPython will not run.
      Skills authored for comfydv should target Monty's subset.
@@ -125,9 +125,8 @@ exactly the risk this ADR avoids.
 
 ### Alternative D: `pydantic-monty` directly, without `pydantic-ai-harness`
 
-**Why not chosen (kept as escape hatch):** It avoids the exact pydantic-ai pin, but we'd have to
-re-implement the tool stubs, type-checking, error formatting and REPL state that `CodeMode` already
-provides. Revisit if the lockstep pin causes real conflicts.
+**Why not chosen (kept as escape hatch):** It avoids the exact pydantic-ai pin. But we would have to
+re-implement the tool stubs, type-checking, error formatting and REPL state that `CodeMode` provides. Revisit if the lockstep pin causes real conflicts.
 
 ---
 

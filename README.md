@@ -1,199 +1,307 @@
 # comfydv
 
-**Quality-of-life nodes for ComfyUI, built to disappear into your workflow.**
-
-`comfydv` fills the gaps ComfyUI's built-in library leaves on the table: string templates that build their own sockets as you type, seed-controlled randomisation, graceful mid-queue interruption, and a local-LLM integration that doesn't care whether you're running Ollama or llama.cpp. No Python required — install it, drop the nodes on your canvas, wire them up.
+**Quality-of-life nodes for ComfyUI.**
 
 ![Chat Completion in action](docs/assets/ollama_chat.png)
 
-## What is comfydv?
+## What is this
 
-A small, focused ComfyUI utility pack. It exists because:
+comfydv is a node pack for [ComfyUI](https://github.com/comfyanonymous/ComfyUI). It is for ComfyUI users, and you do not need to know Python to use it. It has two parts:
 
-- **It reads your intent, not just your syntax.** Format String detects `{variables}` in a template and adds/removes input sockets live, as you type — no manual socket wrangling.
-- **One LLM integration, any local backend.** Wire a Chat Completion node once; swap between Ollama and llama.cpp by changing a single upstream client node. Structured output, multi-turn history, and model load/unload work identically on both.
-- **It fails politely.** Circuit Breaker halts a queue run cleanly instead of throwing a stack trace at you; a disconnected LLM server gets a specific, actionable error instead of a silent empty dropdown.
-- **Small, tested, boring in the best way.** Every node is unit-tested and the local-LLM nodes are verified against real running servers, not just mocks.
+- **Utility nodes.** Format String builds text from a template and adds an input socket for each variable as you type. Random Choice selects one input with a seed. Circuit Breaker stops a queue run cleanly.
+- **Local LLM nodes.** They chat with a model on your own computer, through [Ollama](https://ollama.com) or [llama.cpp](https://github.com/ggml-org/llama.cpp). One client node selects the backend, and all the other nodes operate with both.
 
-## What's inside
+Each node has unit tests. The tests of the LLM nodes also run against real Ollama and llama.cpp servers.
 
-| Node | What it does |
-|------|---------------|
-| **Format String** | Renders a Python f-string or Jinja2 template. Sockets appear and disappear automatically as you type variables. |
-| **Random Choice** | Accepts any number of typed inputs and returns one at random, with a seed for reproducibility. |
-| **Circuit Breaker** | Halts the current queue run gracefully — no crash, just a clean stop — when a condition isn't met. |
-| **Ollama Client** / **LlamaCpp Client** | Configure a connection to a local Ollama or llama.cpp server. Both emit the same `LLM_CLIENT` socket — every node below works with either. |
-| **LLM Model Selector** | Live dropdown of models available on the connected server. |
-| **LLM Load Model** / **LLM Unload Model** | Explicit VRAM management — pin a model in memory before inference, evict it after. |
-| **Chat Completion** | Send a prompt (optionally with history) to the connected server; response shown inline and as an output socket. |
-| **Ollama Option — \*** | Seven composable parameter nodes (Temperature, Seed, Max Tokens, Top P, Top K, Repeat Penalty, Extra Body) that merge into Chat Completion's `options` input. |
-| **Ollama Debug History** / **Ollama History Length** | Inspect an `OLLAMA_HISTORY` conversation list — pretty-print it or count its messages. |
+## What you can do
+
+| Task | Node or command | Section |
+|---|---|---|
+| Install comfydv | ComfyUI Manager: search for `comfydv` | [Install](#install) |
+| Build text from a template | **Format String** | [Build text from a template](#build-text-from-a-template) |
+| Select one input at random | **Random Choice** | [Select one input at random](#select-one-input-at-random) |
+| Stop a run when a check fails | **Circuit Breaker** | [Stop a run when a check fails](#stop-a-run-when-a-check-fails) |
+| Chat with a local model | **Ollama Client** → **Chat Completion** | [Chat with a local model](#chat-with-a-local-model) |
+| Get typed fields from a model | **Chat Completion** with `structured_output` | [Get typed fields from a model](#get-typed-fields-from-a-model) |
+| Ask a model about an image | **Chat Completion** with `image` | [Ask a model about an image](#ask-a-model-about-an-image) |
+| Load and unload a model | **LLM Load Model** → **LLM Unload Model** | [Control model memory](#control-model-memory) |
+| Change how the model generates text | **Ollama Option** nodes | [Change how the model generates text](#change-how-the-model-generates-text) |
+| Continue a conversation | `updated_history` → `history` | [Continue a conversation](#continue-a-conversation) |
+| Use llama.cpp | **LlamaCpp Client** | [Use llama.cpp instead of Ollama](#use-llamacpp-instead-of-ollama) |
+| Connect to a server that needs a password | **Ollama Header** nodes | [Connect to a server that needs a password](#connect-to-a-server-that-needs-a-password) |
+| Open an old workflow | Rename the nodes from the table | [Open a workflow from an older version](#open-a-workflow-from-an-older-version) |
+| Control telemetry | Set an environment variable | [Control telemetry](#control-telemetry) |
 
 ## Install
 
-**Via ComfyUI Manager** (recommended): search for `comfydv`, click Install.
+**With ComfyUI Manager** (recommended): search for `comfydv`, then click **Install**.
 
-**Manual:**
+**By hand:**
 
 ```bash
 cd /path/to/ComfyUI/custom_nodes
 git clone https://github.com/darth-veitcher/comfydv.git
 ```
 
-Restart ComfyUI. Nodes appear under **dv/**, **dv/ollama**, and **dv/llamacpp** in the node menu. Runtime dependencies (`jinja2`, `aiohttp`, `pydantic-ai`) install automatically via `requirements.txt`.
+Restart ComfyUI. The nodes are in the node menu under **dv/**, **dv/ollama** and **dv/llamacpp**. ComfyUI installs the Python packages from `requirements.txt`: `jinja2`, `aiohttp`, `pydantic` and `pydantic-ai`.
 
-For local-LLM nodes, bring your own backend:
+The LLM nodes need a backend that you install yourself:
 
-- **Ollama** — [install Ollama](https://ollama.com/download), pull a model (`ollama pull qwen2.5:latest`).
-- **llama.cpp** — [build/install `llama-server`](https://github.com/ggml-org/llama.cpp), launch it in [router mode](#llamacpp).
+- **Ollama**: [install Ollama](https://ollama.com/download), then download a model with `ollama pull qwen2.5:latest`.
+- **llama.cpp**: [build or install `llama-server`](https://github.com/ggml-org/llama.cpp). Start it in router mode, as [Use llama.cpp instead of Ollama](#use-llamacpp-instead-of-ollama) shows.
 
 ## Quickstart
 
-1. Right-click the canvas → Add Node → **dv/** for Format String, Random Choice, and Circuit Breaker.
-2. For local LLM nodes: start Ollama (`ollama serve`) or `llama-server` (router mode), then add nodes from **dv/ollama/** or **dv/llamacpp/** — the chat/model-management nodes are shared between both backends.
+This example builds a prompt from a template. It needs no LLM backend.
 
-Full documentation, including every node's inputs/outputs: **[darth-veitcher.github.io/comfydv](https://darth-veitcher.github.io/comfydv/stable/)**
+1. Right-click the canvas, then select **Add Node** → **dv/** → **Format String**.
+2. Set `template_type` to **Simple**.
+3. Type `A photo of {subject} in the style of {style}` in `template`.
+4. Find the two new inputs, `subject` and `style`, on the node.
+5. Type `a red fox` in `subject` and `watercolour` in `style`.
+6. Click **Queue**.
 
----
+The node shows `A photo of a red fox in the style of watercolour`. The `formatted_string` output gives the same text to the next node. To send it to a model, connect it to the `prompt` input of **Chat Completion** (see [Chat with a local model](#chat-with-a-local-model)).
 
-## Format String
+The full documentation, with the inputs and outputs of each node, is at **[darth-veitcher.github.io/comfydv](https://darth-veitcher.github.io/comfydv/stable/)**.
 
-Type a template, get sockets. `{variable_name}` in f-string mode, `{{ variable_name }}` in Jinja2 mode — either way, comfydv watches what you type and keeps the node's inputs in sync automatically.
+## Build text from a template
 
-![Format String — f-string mode](docs/assets/fstring.png)
+Type a template in **Format String**. Write each variable as `{variable_name}` in **Simple** mode, or as `{{ variable_name }}` in **Jinja2** mode. The node adds an input socket for each variable as you type.
+
+![Format String in Simple mode](docs/assets/fstring.png)
 
 | Output | Content |
-|--------|---------|
-| `formatted_string` | The rendered result |
-| `saved_file_path` | Where it was written, if `save_path` is set |
-| `<var>` … | Each input passed through unchanged, for easy chaining |
+|---|---|
+| `formatted_string` | The text that the template makes |
+| `saved_file_path` | The file that the node wrote, if you set `save_path`. It is empty if you did not set `save_path`. |
+| One output for each variable | The value of that input, unchanged, so that you can connect it to more nodes |
 
-Switch `template_type` to **Jinja2** to unlock filters (`| upper`, `| int`), conditionals, and loops:
+Set `template_type` to **Jinja2** to use filters (`| upper`, `| int`), conditions and loops. Jinja2 templates run in a sandbox, so a template cannot run code on your computer.
 
-![Format String — Jinja2 mode](docs/assets/jinja2.png)
+![Format String in Jinja2 mode](docs/assets/jinja2.png)
 
----
+## Select one input at random
 
-## Random Choice
-
-Wire in any number of same-typed inputs — images, strings, conditioning, anything ComfyUI can carry over a socket — and get one back at random.
+Connect two or more inputs of the same type to **Random Choice**. The type can be images, text, conditioning or any other ComfyUI type. The node gives one of them.
 
 ![Random Choice](docs/assets/random.png)
 
-`seed = 0` randomises every run; any other value locks the selection. Unused input slots vanish automatically when you disconnect them.
+The `seed` input controls the selection:
 
----
+- `seed = 0` gives a new random selection on each run.
+- Any other value gives the same selection on each run, so you can repeat a result.
 
-## Circuit Breaker
+When you disconnect an input, the node removes the empty input slot.
 
-Stop a queue run cleanly when a condition isn't met, instead of letting a downstream node crash on bad input.
+## Stop a run when a check fails
+
+**Circuit Breaker** stops the current queue run cleanly when a condition is false. Use it to stop before a node that would fail on bad input.
 
 ![Circuit Breaker](docs/assets/circuit_breaker.png)
 
-Wire a trigger (an image, or anything) into `trigger` and a boolean into `status`. `status = false` raises `InterruptProcessingException` — ComfyUI stops the run without an error dialog. `status = true` passes the trigger straight through.
+1. Connect an image to `trigger`.
+2. Connect a boolean to `status`.
 
-Typical use: skip an expensive upscale pass when an upstream quality-check node says the draft's already good enough.
+If `status` is `false`, the node raises `InterruptProcessingException`, and ComfyUI stops the run with no error dialog. If `status` is `true`, the node gives the image to the next node, unchanged.
 
----
+For example, a quality-check node can set `status` to `false` when the draft is already good. Then the run skips a slow upscale.
 
-## Local LLMs
-
-One set of nodes, two interchangeable backends. Configure a connection once with **Ollama Client** or **LlamaCpp Client** — both output the same `LLM_CLIENT` socket — and every downstream node (model selection, load/unload, chat, structured output, multi-turn history) works exactly the same way regardless of which one you picked. Swapping backends means rewiring one node, not rebuilding your graph.
-
-### Connect and chat
+## Chat with a local model
 
 ![Ollama Client](docs/assets/ollama_client.png)
 
-1. **Ollama Client** (default `http://localhost:11434`) or **LlamaCpp Client** (default `http://localhost:8080`) — set the host.
-2. **LLM Model Selector** — pick a model from the live dropdown, or wire a model name straight into Chat Completion.
-3. **Chat Completion** — wire in client, model, and prompt. The response renders inline in the node and is also available as an output socket.
+1. Add **Ollama Client** and set `host`. The default is `http://localhost:11434`.
+2. Add **LLM Model Selector** and select a model. Or type a model name in the `model` input of **Chat Completion**.
+3. Add **Chat Completion**. Connect `client`, `model` and `prompt`.
+4. Click **Queue**.
 
 ![Chat Completion](docs/assets/ollama_chat.png)
+
+The node shows the response, and the `response` output gives it to the next node. The other outputs are:
+
+| Output | Content |
+|---|---|
+| `updated_history` | The conversation so far, for the next **Chat Completion** |
+| `model_name` | The model that answered |
+| `seed_used` | The seed of the attempt that succeeded. Use it to repeat a result. |
 
 A complete graph looks like this:
 
 ![Full LLM workflow](docs/assets/ollama_workflow.png)
 
-### Describing images (vision)
+Two inputs control how long the node waits:
 
-**Chat Completion** has an optional **image** input. Wire any `IMAGE` into it and, with a vision-capable model loaded, the model can describe or reason about the picture — captioning, visual Q&A, reading text in an image, whatever the model supports.
+- `timeout_secs` (30 to 3600, default 300) is the time limit of one request. Each retry gets a longer limit.
+- `max_retries` (0 to 5, default 2) is the number of retries after an empty or a not valid response. Each retry uses a new seed.
 
-- **Ollama** — use a multimodal model (e.g. a llava-class model).
-- **llama.cpp** — launch `llama-server` with a multimodal projector: `--mmproj <projector.gguf>` alongside the model.
+If the server is not available, the node shows an error that names the host.
 
-Image input works the same on both backends — same node, same wiring — and composes with everything else: structured output (schema-validated fields pulled straight from the image), multi-turn history, and the option nodes. A batch of images is sent as multiple images on the turn. Leave the input unwired and Chat Completion behaves exactly as before, text only.
+## Get typed fields from a model
 
-### Manual memory management
+Set `structured_output` to `true` on **Chat Completion**. Then write a JSON Schema in `output_schema`. A JSON Schema is a description of the fields that you want and of their types.
 
-Single-GPU and memory-constrained setups need explicit control over what's resident in VRAM. **LLM Load Model** pins a model into memory; **LLM Unload Model** evicts it immediately, freeing room for the next model or the rest of your image pipeline.
+```json
+{"type": "object", "properties": {"subject": {"type": "string"}, "count": {"type": "integer"}}, "required": ["subject"]}
+```
 
-![Load / Unload lifecycle](docs/assets/ollama_lifecycle.png)
+The node adds one output for each field, with a ComfyUI type: `STRING`, `INT`, `FLOAT` or `BOOLEAN`. The `response` output gives all the fields as one JSON text. If the model does not give a valid value for each required field, the node retries. After the last retry, it stops with an error.
 
-The **Load → Chat → Unload** chain is enforced by data dependencies, not by convention:
+![Structured output](docs/assets/structured_output.png)
 
-1. `LLMLoadModel.model_name` → `ChatCompletion.model` — guarantees Load runs before Chat, and feeds the model name straight in.
-2. `ChatCompletion.model_name` → `LLMUnloadModel.model` — guarantees Unload runs after Chat completes.
-3. *(Optional)* `ChatCompletion.response` → `LLMUnloadModel.passthrough` — Unload returns the response unchanged, so the rest of your workflow can still consume it.
+## Ask a model about an image
 
-### Tuning generation
+Connect an `IMAGE` to the `image` input of **Chat Completion**. A vision model can then describe the image, answer questions about it or read its text. A vision model is a model that accepts images.
 
-Chain any combination of **Ollama Option —** nodes ahead of Chat Completion to override inference parameters:
+- **Ollama**: use a vision model, for example a llava model.
+- **llama.cpp**: start `llama-server` with the projector file of the model: `--mmproj <projector.gguf>`.
+
+The image input operates the same on both backends. You can use it with structured output, with history and with the option nodes. A batch of images goes to the model as more than one image in the same message. If you do not connect `image`, the node sends only text.
+
+## Control model memory
+
+On a computer with one GPU, a model can use the VRAM that your image pipeline needs. Use these two nodes to control when a model is in memory:
+
+- **LLM Load Model** loads a model into memory.
+- **LLM Unload Model** removes the model from memory immediately.
+
+![Load and unload](docs/assets/ollama_lifecycle.png)
+
+Connect the nodes in this sequence. The connections make ComfyUI run them in this order:
+
+1. Connect `LLMLoadModel.model_name` to `ChatCompletion.model`. Then the model loads before the chat starts.
+2. Connect `ChatCompletion.model_name` to `LLMUnloadModel.model`. Then the model unloads after the chat ends.
+3. Optional: connect `ChatCompletion.response` to `LLMUnloadModel.passthrough`. Then the unload node gives the response to the next node, unchanged.
+
+## Change how the model generates text
+
+Connect one or more **Ollama Option** nodes in a chain, then connect the chain to the `options` input of **Chat Completion**. The column "Backends" shows where each option has an effect.
 
 ![Ollama Option nodes](docs/assets/ollama_options.png)
 
-| Option node | Parameter |
-|-------------|-----------|
-| Temperature | `temperature` |
-| Seed | `seed` |
-| Max Tokens | `num_predict` |
-| Top P | `top_p` |
-| Top K | `top_k` |
-| Repeat Penalty | `repeat_penalty` |
-| Extra Body | arbitrary JSON, merged into `options` |
+| Option node | Default (range) | What a value means | Backends |
+|---|---|---|---|
+| Temperature | 0.8 (0 to 2) | Lower gives more predictable text. Higher gives more varied text. | Ollama |
+| Seed | 0 | A fixed seed with the same input gives the same output. | Both |
+| Max Tokens | 512 (1 to 131072) | The maximum length of the response, in tokens. | Ollama |
+| Top P | 0.9 (0 to 1) | Lower makes the model select only from its most probable words. | Ollama |
+| Top K | 40 (0 to 100) | The number of most probable words that the model selects from. | Ollama |
+| Repeat Penalty | 1.1 (0 to 2) | Higher makes the model repeat itself less. | Ollama |
+| Disable Thinking | on | On: a thinking model answers without its reasoning step. This is faster. | Both |
+| Refusal Retry | on | Retries with a new seed when the response looks like a refusal. | Both |
+| Extra Body | `{}` | Your own JSON values, added to the options. | Ollama |
 
-### Multi-turn conversations
+**Refusal Retry** finds refusals with a list of known phrases. You can add your own phrases in `custom_phrases`, separated by commas. To also find refusals that do not use those phrases, set `embedding_model` to an embedding model, for example `nomic-embed-text`. Use a different model from the chat model. The node then compares the response with known refusals. A response with a similarity higher than `threshold` (default 0.82, range 0 to 1) is a refusal. A lower `threshold` finds more refusals and also more false refusals.
 
-`OLLAMA_HISTORY` flows out of Chat Completion as a `{"role", "content"}` list. Feed it back into the next Chat Completion call for multi-turn context, or inspect it with **Ollama Debug History** / **Ollama History Length**.
+## Continue a conversation
 
-### llama.cpp
+**Chat Completion** gives the conversation in `updated_history`. It is a list of messages, each with a `role` and a `content`. Connect `updated_history` to the `history` input of the next **Chat Completion** to continue the conversation.
 
-Everything above works unchanged against llama.cpp — swap in a **LlamaCpp Client** and the rest of the graph doesn't know the difference. The one thing llama.cpp needs that Ollama doesn't: **router mode**, a directory of models rather than a single `-m model.gguf`:
+To examine a conversation, use **Ollama Debug History**, which shows the messages as text, or **Ollama History Length**, which counts them.
+
+## Use llama.cpp instead of Ollama
+
+Replace **Ollama Client** with **LlamaCpp Client**. Its default `host` is `http://localhost:8080`. You do not change any other node.
+
+llama.cpp must run in router mode. In router mode, `llama-server` loads models from a directory, not one model from `-m model.gguf`:
 
 ```bash
 llama-server --models-dir ./models -c 8192
 ```
 
-In exchange, router mode gives comfydv a richer live status than Ollama can report — `loading` and `downloading`, not just loaded/unloaded — plus the same explicit load/unload primitives Ollama's nodes already use.
+In router mode, llama.cpp also reports when a model is `loading` or `downloading`. Ollama reports only `loaded` or `unloaded`.
 
-### Upgrading a workflow saved before this rename
+## Connect to a server that needs a password
 
-Nodes were renamed once, to make them backend-generic (`OllamaChatCompletion` → `ChatCompletion`, etc.). If ComfyUI reports old node types as missing when you reopen a saved workflow, reconnect using this table — behavior is unchanged, only the names are:
+Connect an **Ollama Header** node to the `headers` input of **Ollama Client** or **LlamaCpp Client**:
 
-| Old | New |
-|-----|-----|
+- **Ollama Header — Basic Auth**: a user name and a password.
+- **Ollama Header — Bearer Token**: a token, for example an API key.
+- **Ollama Header — Custom**: any header name and value.
+
+You can connect more than one header node in a chain. All the nodes that use the client send the headers.
+
+## Open a workflow from an older version
+
+Some nodes have new names, so that their names do not depend on the backend. If ComfyUI reports a missing node type in an old workflow, add the new node and connect it again. The nodes operate as before.
+
+| Old name | New name |
+|---|---|
 | `OllamaChatCompletion` | `ChatCompletion` |
 | `OllamaModelSelector` | `LLMModelSelector` |
 | `OllamaLoadModel` | `LLMLoadModel` |
 | `OllamaUnloadModel` | `LLMUnloadModel` |
 | `OLLAMA_CLIENT` socket | `LLM_CLIENT` socket |
 
-`OllamaClient` kept its name — delete and re-add any node showing as missing, then rewire it to the same `OllamaClient` node.
+`OllamaClient` has the same name. Connect its output to the new nodes again.
 
-### Privacy: no telemetry by default
+## Control telemetry
 
-comfydv only talks to the servers you wire into your graph. Some of the libraries it uses can report, announce or call out on their own, so comfydv switches those off when it loads, unless you've already set them yourself:
+comfydv connects only to the servers in your graph. Some of the libraries that it uses can send data or check for updates. comfydv turns these off when it loads, unless you set them yourself:
 
 | Variable | comfydv default | Effect |
 |---|---|---|
-| `FASTMCP_TELEMETRY_MODE` | `off` | No OpenTelemetry spans or trace context sent to MCP servers |
-| `FASTMCP_CHECK_FOR_UPDATES` | `off` | No PyPI version check |
-| `FASTMCP_SHOW_SERVER_BANNER` | `false` | No startup banner on stdout |
-| `PYDANTIC_AI_NO_BANNER` | `1` | No first-run banner on stdout |
+| `FASTMCP_TELEMETRY_MODE` | `off` | No OpenTelemetry trace data to MCP servers |
+| `FASTMCP_CHECK_FOR_UPDATES` | `off` | No version check on PyPI |
+| `FASTMCP_SHOW_SERVER_BANNER` | `false` | No start-up message on the console |
+| `PYDANTIC_AI_NO_BANNER` | `1` | No first-run message on the console |
 
-To opt back in (for example, to trace runs with your own OpenTelemetry collector), set the variable before starting ComfyUI, e.g. `FASTMCP_TELEMETRY_MODE=native`. These are process-wide, so other node packs in the same ComfyUI process see the same defaults.
+To turn one on again, set its variable before you start ComfyUI. For example, set `FASTMCP_TELEMETRY_MODE=native` to send traces to your own OpenTelemetry collector. These settings apply to all of the ComfyUI process, so other node packs also get them.
 
----
+## Limits
 
-## License
+- **Circuit Breaker** accepts only an `IMAGE` in `trigger`.
+- **Random Choice** gives a random selection for `seed = 0`. You cannot use 0 as a fixed seed.
+- The LLM nodes need a local Ollama or llama.cpp server. They do not connect to cloud model services.
+- Structured output gives a typed output only for the top-level fields of the schema. A nested object or list comes out as JSON text.
+- Valid structured output can still contain wrong content, especially from a small or a low-quality model.
+- llama.cpp must run in router mode. A `llama-server` that loads one model with `-m` does not operate with these nodes.
+- Image input needs a vision model, and llama.cpp also needs `--mmproj`.
+- On llama.cpp, the sampling options (Temperature, Max Tokens, Top P, Top K, Repeat Penalty and Extra Body) have no effect. Set them when you start `llama-server`.
 
-[AGPL-3.0](LICENSE)
+## Technical notes
+
+- **Python**: 3.11 or later.
+- **Dependencies**: `pydantic-ai-slim[openai,mcp]` and `pydantic-ai-harness[codemode]` have exact version pins, because the harness requires the exact pydantic-ai version. `requirements.txt` is written by hand for ComfyUI Manager ([ADR-003](project-management/ADRs/ADR-003-requirements-txt-authoring-policy.md)).
+- **HTTP**: the nodes use `aiohttp` to talk to Ollama ([ADR-004](project-management/ADRs/ADR-004-aiohttp-over-httpx-for-ollama.md)). The client node is the only place for the host and the headers ([ADR-005](project-management/ADRs/ADR-005-ollama-host-config-via-client-node.md)).
+- **Backends**: one `LLMProvider` interface for Ollama and llama.cpp ([ADR-007](project-management/ADRs/ADR-007-llm-provider-adapter-pattern.md)). Images go on the message ([ADR-008](project-management/ADRs/ADR-008-multimodal-image-input-across-llmprovider-boundary.md)).
+- **Structured output**: Ollama uses its native `/api/chat` endpoint, because its OpenAI-compatible endpoint resets the context size on each request ([ADR-009](project-management/ADRs/ADR-009-native-structured-output-mode.md)).
+- **Disable Thinking**: each backend gets the setting in its own request format ([ADR-010](project-management/ADRs/ADR-010-disable-thinking-toggle.md)).
+- **Telemetry**: [ADR-014](project-management/ADRs/ADR-014-telemetry-off-by-default.md).
+- **Logging**: comfydv uses the standard `logging` module and is silent by default ([ADR-001](project-management/ADRs/ADR-001-stdlib-logging-over-console-libraries.md), [ADR-002](project-management/ADRs/ADR-002-nullhandler-pattern-for-library-loggers.md)).
+- **All decisions**: [project-management/ADRs/](project-management/ADRs/README.md).
+- **License**: [AGPL-3.0](LICENSE).
+
+## Develop
+
+Set up and run the checks:
+
+```bash
+uv sync
+uv run ruff check && uv run ruff format --check
+uv run ty check
+uv run pytest -m "not integration and not system"
+```
+
+Integration tests need Ollama at `localhost:11434` (`just test-integration`). System tests need the Docker Compose harness (`just test-system`). To start ComfyUI with this repository mounted, run `just up`. Read [AGENTS.md](AGENTS.md) for the rules of the repository.
+
+## Glossary
+
+- **Backend**: the server that runs the model: Ollama or llama.cpp.
+- **Embedding model**: a model that changes text into a list of numbers. Texts with a similar meaning get similar numbers.
+- **Jinja2**: a template language with variables, filters, conditions and loops.
+- **llama.cpp**: a program that runs models on your own computer. Its server is `llama-server`.
+- **MCP (Model Context Protocol)**: a standard way for a model to use tools on a server.
+- **Node**: one box on the ComfyUI canvas.
+- **Ollama**: a program that downloads models and runs them on your own computer.
+- **OpenTelemetry**: a standard for trace data about what a program does.
+- **Projector**: the file that lets a llama.cpp model accept images. `--mmproj` loads it.
+- **Queue run**: one run of a workflow, after you click **Queue**.
+- **Router mode**: a llama.cpp mode that loads and unloads models from a directory.
+- **Seed**: a number that sets the random choices. The same seed gives the same result.
+- **Socket**: an input or an output point on a node.
+- **Structured output**: a response that obeys a JSON Schema.
+- **Thinking model**: a model that writes its reasoning before its answer.
+- **Token**: a part of a word. A model counts its input and output in tokens.
+- **VRAM**: the memory on the GPU.
+- **Workflow**: a graph of connected nodes. You can save it as a file.

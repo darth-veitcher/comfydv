@@ -8,7 +8,7 @@ bugs are still present. Spec 005 is mostly complete. This epic resumes after
 `release-pipeline`, so that its fixes reach users as a release.
 
 ## Why now
-A codebase audit (2026-06-28) surfaced three categories of defects that collectively prevent comfydv from being correctly installed via ComfyUI Manager and degrade the user experience in every ComfyUI session:
+A codebase audit (2026-06-28) found three categories of defects. Together, they stop a correct install through ComfyUI Manager, and they degrade the user experience in every ComfyUI session:
 
 1. **Installation is broken**: `requirements.txt` contains a bare `.` and lists removed packages (`colorama`, `termcolor`) rather than the actual runtime dep (`jinja2`). ComfyUI Manager runs `pip install -r requirements.txt` after cloning — this silently misinstalls the node. The package is also not registered in Manager's `custom-node-list.json` so it cannot be found via the Manager UI at all.
 
@@ -41,12 +41,12 @@ _None — this epic is self-contained and can start immediately._
 - [ ] FormatString output slots are updated via `removeOutput`/`addOutput` with connection migration rather than wiping `this.outputs.length = 0`
 - [ ] FormatString node ID is consistent between JS and Python (no `format_string_` prefix mismatch)
 - [ ] User feedback (load state, errors) uses ComfyUI toast API, not `alert()`
-- [ ] `FormatString.update_widget` stores per-node return-type metadata on instances or a node-keyed dict, not on the class itself — two FormatString nodes in the same workflow produce independent output schemas
+- [ ] `FormatString.update_widget` stores per-node return-type metadata on instances or in a node-keyed dict, not on the class. Two FormatString nodes in the same workflow produce independent output schemas.
 - [ ] `RandomChoice.IS_CHANGED` does not call the actual `random_choice` method; uses a hash of the seed + input count instead
 - [ ] `RandomChoice` seed=0 produces a deterministic, reproducible output (sentinel for "random" is -1 or an explicit widget toggle)
 - [ ] `CircuitBreaker.trigger` accepts `any_type` so it can be placed anywhere in a graph, not only after IMAGE nodes
 - [x] `pyproject.toml` `description` is a real sentence; the broken `[project.scripts]` entry is removed
-- [x] Dead code and stale references are removed: `ToJSON`/`To JSON` from `dynamic.js`, "Model Unloader" from `src/comfydv/README.md` (2026-11-12: the README is deleted, and the debug logging in both JS files is removed)
+- [x] Dead code and stale references are removed: `ToJSON`/`To JSON` from `dynamic.js`, "Model Unloader" from `src/comfydv/README.md`. On 2026-11-12 the README was deleted, and the debug logging in both JS files was removed.
 - [x] `aiohttp` is moved from dev dependencies to production dependencies (it is imported unconditionally at module level)
 - [ ] All three nodes have `"tooltip"` metadata on each input
 - [ ] CATEGORY is consistent across all three nodes (single submenu)

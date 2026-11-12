@@ -33,8 +33,8 @@ toolset (`get_toolset`), and that is all a skills mechanism needs.
    - A **tool** is an *action*: a typed function, executed on an MCP server, that may have side
      effects and returns data.
    - A **skill** is *know-how*: instructions and reference material written for the model, plus
-     optional Python scripts. A skill **never acts by itself**: its scripts run only in the Monty
-     sandbox (ADR-013), whose only route to the world is the agent's wired tools.
+     optional Python scripts. A skill **never acts by itself**. Its scripts run only in the Monty
+     sandbox (ADR-013), and the sandbox can reach the world only through the agent's wired tools.
    - A skill may **declare** the tools it expects (`requires-tools` in frontmatter). It never
      **contains** a tool.
 
@@ -77,14 +77,14 @@ toolset (`get_toolset`), and that is all a skills mechanism needs.
 
 **Harder / constrained:**
 - Progressive disclosure depends on the model choosing to call `load_skill`. Weak models need `mode: always`.
-- Skills are trusted instructions. A malicious skill is a prompt injection. Mitigations: skill roots
-  are local and user-controlled; MCP-served skills carry their server's trust; scripts run only inside
-  Monty and can act only through wired tools (ADR-013).
+- Skills are trusted instructions. A malicious skill is a prompt injection. Mitigations: skill roots are local and user-controlled.
+  MCP-served skills carry their server's trust. Scripts run only inside Monty and can act only
+  through wired tools (ADR-013).
 - `requires-tools` is our own frontmatter key, not part of the shared format. Other ecosystems ignore it harmlessly.
 
 **Debt introduced:**
-- Third-party skills whose scripts need full CPython (third-party packages, unsupported syntax) are
-  only partially usable: their instructions load, but their scripts fail Monty's checks with a clear error.
+- Some third-party skills have scripts that need full CPython (third-party packages, unsupported
+  syntax). Their instructions load, but their scripts fail Monty's checks with a clear error.
 
 ## Considered Alternatives
 
@@ -105,9 +105,9 @@ FastMCP already speaks `SKILL.md`.
 
 ### Alternative D: Never execute skill scripts
 
-**Originally chosen, then superseded by ADR-013.** The original reason ("needs a code-execution tool
-with real sandboxing inside ComfyUI's process space") is answered by Monty: a language-level Python
-sandbox, run in a worker subprocess, with no host access by default.
+**Originally chosen, then superseded by ADR-013.** The original reason was "needs a code-execution tool with
+real sandboxing inside ComfyUI's process space". Monty answers it: a language-level Python sandbox
+in a worker subprocess, with no host access by default.
 
 ---
 

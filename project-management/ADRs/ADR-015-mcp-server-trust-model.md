@@ -14,7 +14,7 @@ _Deciders:_ darth-veitcher
 The Agent node connects to MCP servers (ADR-011). A stdio MCP server starts a
 program on the user's computer. An HTTP MCP server receives data that the agent
 sends. People share ComfyUI workflows as files. Thus a workflow file that defines
-an MCP server can start a program, or send data to a server, on the computer of
+an MCP server can start a program, or send data to a server. It can do this on the computer of
 each user who opens it.
 
 The maintainer wants the pattern that Claude Code uses: safe built-in servers

@@ -158,7 +158,7 @@ class FormatString:
         }
 
     @classmethod
-    def IS_CHANGED(cls, **kwargs):
+    def IS_CHANGED(cls, **kwargs: Any) -> Any:
         """
         Determine if the node should be re-executed based on input changes.
 
@@ -309,7 +309,7 @@ class FormatString:
         template: str,
         save_path: str,
         unique_id: str = "",
-        **kwargs,
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """
         Format a string using the specified template type and variables.
@@ -682,7 +682,7 @@ class FormatString:
 
 # Custom route for updating node configuration
 @PromptServer.instance.routes.post("/update_format_string_node")
-async def update_format_string_node(request):
+async def update_format_string_node(request: web.Request) -> web.Response:
     """
     AIOHTTP route handler for updating a FormatString node's configuration.
 
@@ -734,7 +734,7 @@ async def update_format_string_node(request):
 
 # Custom route for loading node state
 @PromptServer.instance.routes.post("/load_format_string_node")
-async def load_format_string_node(request):
+async def load_format_string_node(request: web.Request) -> web.Response:
     """
     AIOHTTP route handler for loading a FormatString node's state from disk.
 
@@ -770,7 +770,7 @@ async def load_format_string_node(request):
 
 # Custom route for getting node-specific configuration
 @PromptServer.instance.routes.get("/get_format_string_node_config/{node_id}")
-async def get_format_string_node_config(request):
+async def get_format_string_node_config(request: web.Request) -> web.Response:
     """
     AIOHTTP route handler for retrieving a FormatString node's configuration.
 

@@ -24,9 +24,8 @@
 - **Local LLM nodes**: chat, vision and (next) agents with tools, skills and a
   sandbox, on Ollama or llama.cpp.
 
-Success means: each node has tests, installs in one step, causes no surprises in
-production workflows and has documentation that a ComfyUI user without
-programming knowledge can follow. Users get changes only as versioned releases.
+Success means: each node has tests, installs in one step and causes no surprises in
+production workflows. Its documentation is clear to a ComfyUI user without programming knowledge. Users get changes only as versioned releases.
 
 ---
 

@@ -1,4 +1,8 @@
-site_name: ComfyPPT
+site_name: comfydv
+
+# Contributor-only standard (BEACON-owned); not part of the user docs site.
+exclude_docs: |
+  WRITING.md
 
 theme:
   name: material

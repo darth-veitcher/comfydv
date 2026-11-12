@@ -11,22 +11,24 @@ _Deciders:_ darth-veitcher
 
 ## Context
 
-comfydv's LLM nodes are one-shot chat functions. We want an *agent*: a node whose model can call
-tools (web search, web fetch, MCP servers) and loop for several steps before answering, against
-the same local backends we already support (Ollama and llama.cpp router mode, via the
+comfydv's LLM nodes are one-shot chat functions. We want an *agent*: a node whose model calls tools (web search, web fetch, MCP servers) and loops
+for several steps before it answers. It must use the same local backends that we already support (Ollama and llama.cpp router mode, via the
 `LLMProvider` Protocol of ADR-007).
 
-Writing our own tool-call loop would re-implement what `pydantic-ai`, already a runtime
-dependency since ADR-007, provides: the `Agent` loop, `UsageLimits`, `MCPToolset` (FastMCP-based,
-stdio and HTTP transports), local web search/fetch tools, and `TestModel`/`FunctionModel` for
-tests. ADR-006's rejection of pydantic-ai was about dependency weight, and ADR-007 already
+`pydantic-ai` is a runtime dependency since ADR-007. A tool-call loop of our own would re-implement
+what it provides:
+
+- the `Agent` loop and `UsageLimits`
+- `MCPToolset` (FastMCP-based, stdio and HTTP transports)
+- local web search and web fetch tools
+- `TestModel` and `FunctionModel` for tests
+ ADR-006's rejection of pydantic-ai was about dependency weight, and ADR-007 already
 accepted that weight.
 
 The catch: pydantic-ai's `OllamaModel` is an `OpenAIChatModel` over Ollama's
 `/v1/chat/completions`. ADR-009 proved that this endpoint reloads the model at the default context
-size on **every** call, discarding `num_ctx`. An agent's context grows with every tool result, so
-a silent 4096-token ceiling makes multi-step runs unreliable in exactly the situations where an
-agent is supposed to help.
+size on **every** call, discarding `num_ctx`. An agent's context grows with every tool result. Thus a silent 4096-token ceiling makes multi-step
+runs unreliable, in exactly the situations where an agent must help.
 
 ## Decision
 
@@ -41,9 +43,9 @@ agent is supposed to help.
      Ollama is kept.
 3. **MCP is the single tool mechanism, and a core dependency.** `pydantic-ai-slim[openai]` becomes
    `[openai,mcp]` in `pyproject.toml` and `requirements.txt`. Every tool reaches the agent through
-   `MCPToolset`. comfydv's own tools (`web_fetch`, and `web_search` over SearXNG) are authored as
-   FastMCP servers under `src/comfydv/mcp/`, mounted **in-process** (no subprocess) and also
-   runnable standalone for other MCP clients.
+   `MCPToolset`. comfydv's own tools (`web_fetch`, and `web_search` over SearXNG) are FastMCP servers under
+   `src/comfydv/mcp/`. They are mounted **in-process** (no subprocess). Other MCP clients can also run
+   them standalone.
 4. **Tools travel as plain, hashable descriptors** on a new `LLM_TOOLS` socket, each naming an
    MCP source: built-in, HTTP URL, or named stdio server. Live toolsets and MCP connections are
    built per execution inside the agent runner and torn down when it finishes.
@@ -82,8 +84,8 @@ agent is supposed to help.
 ### Alternative A: pydantic-ai's built-in `OllamaModel` (OpenAI-compatible)
 
 **Why rejected:** It is subject to ADR-009's per-call context reset, which is fatal for growing agent
-contexts. The only workaround is a server-side `OLLAMA_CONTEXT_LENGTH`, which pushes configuration
-out of the graph and contradicts ADR-005 (the client node is the single source of connection config).
+contexts. The only workaround is a server-side `OLLAMA_CONTEXT_LENGTH`. That moves configuration out of the graph,
+and it contradicts ADR-005 (the client node is the single source of connection config).
 
 ### Alternative B: Hand-rolled tool loop on top of `LLMProvider.chat()`
 

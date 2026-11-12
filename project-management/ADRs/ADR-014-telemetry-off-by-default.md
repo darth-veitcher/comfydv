@@ -44,9 +44,8 @@ PYDANTIC_AI_NO_BANNER=1
 ```
 
 The defaults are set with `os.environ.setdefault`, so **an explicit user setting always wins**;
-that is the opt-in path, documented in the README. Environment variables rather than library
-attributes because FastMCP reads its settings once at import time, and because this way nothing is
-imported eagerly (verified by test). comfydv never calls `Agent.instrument_all()` or
+that is the opt-in path, documented in the README. We use environment variables, not library attributes, for two reasons. FastMCP reads its settings
+once at import time, and this way nothing is imported eagerly (verified by test). comfydv never calls `Agent.instrument_all()` or
 `pydantic_monty.instrument_telemetry()`.
 
 Any new dependency that reports, announces or calls out on its own gets its off-switch added to
@@ -73,8 +72,8 @@ Any new dependency that reports, announces or calls out on its own gets its off-
 
 ### Alternative A: Set library attributes (`fastmcp.settings.telemetry_mode = "off"` and so on)
 
-**Why rejected:** It forces eager imports of FastMCP and pydantic-ai on every comfydv load, and it
-can't tell a user's explicit choice from the upstream default, so it would override opt-ins.
+**Why rejected:** It forces eager imports of FastMCP and pydantic-ai on every comfydv load. It also
+cannot tell a user's explicit choice from the upstream default, so it would override opt-ins.
 
 ### Alternative B: Rely on upstream defaults
 
