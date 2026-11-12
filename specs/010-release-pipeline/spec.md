@@ -200,7 +200,8 @@ branch and the commit that it cloned.
 
 ## Assumptions
 
-- The maintainer does the one-time setup: the PyPI Trusted Publisher, the Comfy Registry publisher and its key, the GitHub environment and branch protection.
+- The maintainer did the one-time setup on 2026-11-12. It includes the PyPI Trusted Publisher, the Comfy Registry publisher and key, the `pypi` environment and the branch rulesets.
+- The rulesets get the CI check as a required status check when the plan names it.
 - The Comfy Registry publisher ID is `darth-veitcher` (created 2026-11-12). It cannot change.
 - The Comfy Registry already has a node `comfydv`, imported from the ComfyUI Manager list under the placeholder publisher "Unclaimed". It has no versions. The maintainer claimed it for `darth-veitcher` on 2026-11-12.
 - The `REGISTRY_ACCESS_TOKEN` repository secret holds the Comfy Registry key. The maintainer added it on 2026-11-12.

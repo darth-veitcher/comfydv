@@ -80,10 +80,12 @@ the Registry entry before the switch.
 
 ## Notes
 One-time setup that only the maintainer can do:
-- Add a PyPI Trusted Publisher for `release.yml` with the environment `pypi`.
+- ✅ Add a PyPI Trusted Publisher for `release.yml` with the environment `pypi` (2026-11-12).
+- ✅ Create the GitHub environment `pypi` (2026-11-12).
 - ✅ Create a Comfy Registry publisher: `darth-veitcher` (2026-11-12).
 - ✅ Add its key as the `REGISTRY_ACCESS_TOKEN` repository secret (2026-11-12).
 - ✅ Claim the existing Registry node `comfydv` for `darth-veitcher` (2026-11-12). The publisher's node list shows it.
-- Add branch protection to `main` and `develop`.
+- ✅ Add branch protection to `main` and `develop`, as GitHub rulesets (2026-11-12).
+- Add the CI check as a required status check in both rulesets, when the plan names the check.
 
 Design detail: `project-management/Work/analysis/llm-agent-harness.md` §8.
