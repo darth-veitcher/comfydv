@@ -1,6 +1,6 @@
 [project]
 name = "comfydv"
-version = "0.1.0"
+version = "0.2.0"
 requires-python = ">=3.11"
 description = "Quality of life ComfyUI nodes: dynamic string formatting, seed-controlled random selection, and conditional queue interruption."
 readme = "README.md"
@@ -122,7 +122,10 @@ markers = [
 
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
-build_command = "python -m pip install --quiet uv && uv build"
+# `uv lock` records the new version in uv.lock, and `assets` puts the lock in
+# the release commit. Without it, the next `uv run` changes uv.lock.
+build_command = "python -m pip install --quiet uv && uv lock && uv build"
+assets = ["uv.lock"]
 major_on_zero = false        # stay in 0.x until v1 is explicit
 allow_zero_version = true    # permit 0.x line
 commit_parser = "conventional"

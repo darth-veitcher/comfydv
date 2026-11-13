@@ -55,6 +55,19 @@ def test_p4_psr_writes_the_project_version():
     assert _psr()["version_toml"] == ["pyproject.toml:project.version"]
 
 
+def test_p4_release_commit_keeps_uv_lock_in_step():
+    """P4: uv.lock records the project version too.
+
+    The 0.2.0 release changed pyproject.toml but not uv.lock, so the next
+    `uv run` changed the lock. PSR runs the build command after it writes the
+    version, and commits the files in `assets` with the release.
+    """
+    build = _psr()["build_command"]
+    assert "uv lock" in build
+    assert build.index("uv lock") < build.index("uv build")
+    assert "uv.lock" in _psr()["assets"]
+
+
 def test_p5_breaking_change_is_minor_while_zero():
     """P5: while the major version is 0, a breaking change is a minor bump."""
     psr = _psr()
@@ -258,6 +271,19 @@ def test_w10_registry_version_is_verified():
     assert "pyproject.toml" in step["run"]
     steps = _release_job()["steps"]
     assert steps.index(step) > steps.index(_step("Publish to the Comfy Registry"))
+
+
+def test_w10_registry_verify_does_not_use_the_runner_python_for_tomllib():
+    """W10: the Registry action installs Python 3.10 and puts it first on PATH.
+
+    Python 3.10 has no ``tomllib``, so the 0.2.0 release failed here. A line
+    that reads pyproject.toml must choose its own interpreter with uv.
+    """
+    run = _step("Verify the Comfy Registry")["run"]
+    toml_lines = [line for line in run.splitlines() if "tomllib" in line]
+    assert toml_lines
+    for line in toml_lines:
+        assert "uv run --no-project --python 3.12" in line, line
 
 
 def test_p3_registry_publisher_id():

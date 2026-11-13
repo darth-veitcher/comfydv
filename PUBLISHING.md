@@ -46,7 +46,7 @@ the version change:
 On `main`, the workflow does these steps:
 
 1. Calculate the next version.
-2. Write it to `[project] version` in `pyproject.toml`.
+2. Write it to `[project] version` in `pyproject.toml`, and run `uv lock` to write it to `uv.lock`.
 3. Add an entry to `CHANGELOG.md`, directly under the `<!-- version list -->` marker.
 4. Commit `chore(release): X.Y.Z`, and tag `vX.Y.Z`.
 5. Build the wheel and the sdist with `uv build`.
