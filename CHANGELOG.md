@@ -15,6 +15,14 @@ Changes that are not in a release yet are the commits since the last tag:
 
 <!-- version list -->
 
+## v0.2.0 (2026-11-13)
+
+### Continuous Integration
+
+- **release**: Push the release with the owner's PAT, and skip the runs it starts
+  ([`7e41894`](https://github.com/darth-veitcher/comfydv/commit/7e41894ffdaf6a9133f1ba3b3c8c6ee28a7ff55d))
+
+
 ## Notes for 0.2.0 (written by hand)
 
 ### Added
