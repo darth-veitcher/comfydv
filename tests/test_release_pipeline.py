@@ -260,6 +260,19 @@ def test_w10_registry_version_is_verified():
     assert steps.index(step) > steps.index(_step("Publish to the Comfy Registry"))
 
 
+def test_w10_registry_verify_does_not_use_the_runner_python_for_tomllib():
+    """W10: the Registry action installs Python 3.10 and puts it first on PATH.
+
+    Python 3.10 has no ``tomllib``, so the 0.2.0 release failed here. A line
+    that reads pyproject.toml must choose its own interpreter with uv.
+    """
+    run = _step("Verify the Comfy Registry")["run"]
+    toml_lines = [line for line in run.splitlines() if "tomllib" in line]
+    assert toml_lines
+    for line in toml_lines:
+        assert "uv run --no-project --python 3.12" in line, line
+
+
 def test_p3_registry_publisher_id():
     """P3: the Registry publisher that owns node `comfydv` (claimed 2026-11-12)."""
     assert load_pyproject()["tool"]["comfy"]["PublisherId"] == "darth-veitcher"
