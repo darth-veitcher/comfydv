@@ -8,22 +8,28 @@ new node code was needed; this is a wiring exercise, not a feature.
 
 ## Loading it
 
-This is a ComfyUI **API-format** workflow (`{node_id: {class_type, inputs}}`),
-not the canvas/UI export format. Recent ComfyUI frontends accept this format
-directly via drag-and-drop onto the graph (it auto-lays-out the nodes), or you
-can `POST` it straight to `/prompt`. This format was chosen deliberately over
-hand-authoring the litegraph UI-export format: the latter requires exact
-per-node-type widget-value ordering and link/slot bookkeping that's easy to
-get subtly wrong by hand and impossible for me to verify without a live
-ComfyUI+Ollama instance. Every template, schema, and link index in this file
-*was* verified against the actual node source (see "How this was verified"
-below) — only the outer graph-serialization format is unverified against a
-real ComfyUI load.
+Two files, two purposes:
 
-If you'd rather have the literal draggable canvas file, load this one once,
-arrange the nodes, and use ComfyUI's own "Save (API Format)" vs. regular
-"Save" to produce one — that guarantees a format your ComfyUI build actually
-round-trips.
+- **`ltx-i2v-pipeline-canvas.json`** — the canvas/UI format. Load this one
+  via drag-and-drop or File > Open in ComfyUI. It's fully wired (20 nodes,
+  52 links) and ready to run — no manual reconnecting required. It also
+  includes two small conveniences not in the API-format file below: a
+  shared **"Model Name"** `PrimitiveString` node feeding all 6
+  `ChatCompletion` agents (edit the model in one place), and a **"User
+  Intent"** `PrimitiveString` node holding the literal starting request
+  text.
+- **`ltx-i2v-pipeline.json`** — the ComfyUI **API-format** workflow
+  (`{node_id: {class_type, inputs}}`). Use this to `POST` straight to
+  `/prompt` for headless/scripted runs. **Do not drag-and-drop this one
+  onto the canvas** — confirmed live: ComfyUI's generic API→graph importer
+  doesn't trigger the dynamic-socket callbacks `ChatCompletion` (structured
+  outputs) and `FormatString` (per-template-variable inputs) rely on, so
+  nodes load with only their static fields and every dynamic link is
+  silently dropped. `ltx-i2v-pipeline-canvas.json` was produced by loading
+  this file, live-repairing exactly that gap against a real ComfyUI+Ollama
+  instance (calling each node's own dynamic-socket routes directly, then
+  replaying every link from this file by name), and saving the result —
+  see "How this was verified" below.
 
 ## Prerequisites
 
@@ -187,9 +193,23 @@ FormatString→ChatCompletion (Agent 1: Intent Compiler)     [no image]   │
 
 ## How this was verified
 
-Everything except the outer graph-serialization format was checked against
-this repo's actual node code (not just read — executed), with mocked
-`comfy`/`server`/`folder_paths` modules the way `tests/conftest.py` does:
+`ltx-i2v-pipeline-canvas.json` was produced against a live ComfyUI+Ollama
+instance: loaded `ltx-i2v-pipeline.json` via the frontend's own
+`app.loadApiJson`, then for every `ChatCompletion` node called its real
+`/dv/ollama/update_structured_outputs` route (and for every `FormatString`
+node its real `updateNodeConfig()`) with that node's own schema/template to
+get its actual dynamic sockets, then replayed all 39 links from
+`ltx-i2v-pipeline.json` by input name — zero errors — before saving. Every
+expected connection was re-checked programmatically (not just visually)
+against the saved file: 52 links total, and the only unconnected input
+sockets are the intentionally-blank optional ones (`headers`, `history`,
+the two non-vision agents' unused `image` input, and the Director's unset
+shot-constraint overrides).
+
+Everything in `ltx-i2v-pipeline.json` itself (the API-format source) was
+separately checked against this repo's actual node code (not just read —
+executed), with mocked `comfy`/`server`/`folder_paths` modules the way
+`tests/conftest.py` does:
 
 - Every `[node_id, index]` link target resolves to a real node.
 - Every `FormatString` template's variables (via the same
