@@ -68,17 +68,25 @@ on `main`.
   each merge to `develop` waits for your approval.
 - **Comfy Registry publisher** `darth-veitcher`, with the node `comfydv` claimed. The publisher ID and
   the node ID cannot change.
-- **Repository secret** `REGISTRY_ACCESS_TOKEN`: the Comfy Registry key. It is the only publishing
-  secret. PyPI needs no token.
+- **Repository secret** `REGISTRY_ACCESS_TOKEN`: the Comfy Registry key. PyPI needs no token.
 - **Branch rulesets** on `main` and `develop`.
+
+### Done on 2026-11-13
+
+- **The workflow can push.** The release pushes its commit and tag to `main`, and it merges `main`
+  into `develop`. The rulesets require pull requests. A personal repository cannot add GitHub
+  Actions as a bypass actor, so the release pushes with a token of the owner:
+  - Each ruleset has the bypass actor **Repository admin**.
+  - The repository secret `GH_TOKEN` holds a fine-grained personal access token of the owner. It
+    has access to `comfydv` only, with **Contents: Read and write**.
+  - `release.yml` uses `GH_TOKEN` for the checkout, for PSR and for the push to `develop`.
+- **A release push does not start a new release.** A push with a personal access token starts the
+  workflows again. `release.yml` does not run for a push whose commit message starts with
+  `chore(release):`. Both release pushes start with it.
 
 ### Still to do
 
-1. **Let the workflow push.** The release pushes its commit and tag to `main`, and it merges `main`
-   into `develop`. Your rulesets require pull requests, so they block these pushes. In each ruleset,
-   add **GitHub Actions** as a bypass actor. `release.yml` and `docs.yml` have `contents: write`.
-   `ci.yml` can only read.
-2. **Require the quality gate.** In each ruleset, add the status check `quality-gate`. The list
+1. **Require the quality gate.** In each ruleset, add the status check `quality-gate`. The list
    shows it after `ci.yml` runs one time on a pull request.
 
 ## Check a release
@@ -99,6 +107,8 @@ curl -s https://api.comfy.org/nodes/comfydv/versions         # the versions on t
   **Publish the version on main to the Comfy Registry again**. You can also run
   `gh workflow run release.yml --ref main -f publish_registry=true`. A plain re-run does not work,
   because PSR finds the tag and releases nothing.
-- **GitHub rejects the push to `main` or `develop`.** Add the bypass actor (step 1 above).
+- **GitHub rejects the push to `main` or `develop`.** Look at the `GH_TOKEN` secret. The token
+  can expire. Make a new token with the same access, then run
+  `gh secret set GH_TOKEN -R darth-veitcher/comfydv` and paste it at the prompt.
 
 [psr]: https://python-semantic-release.readthedocs.io/
