@@ -35,12 +35,19 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write   # PSR pushes the release commit and creates the tag and release
+  # The pushes and the GitHub Release use the GH_TOKEN PAT. This token keeps
+  # write access as before.
+  contents: write
   id-token: write   # OIDC token for PyPI Trusted Publishing
 
 jobs:
   release:
     name: Release ${{ github.ref_name == 'main' && 'to PyPI' || 'pre-release to PyPI' }}
+    # The release pushes with a PAT (GH_TOKEN), and a PAT push starts this
+    # workflow again. Both release pushes, the version commit on main and the
+    # sync merge into develop, start with "chore(release):". Skip them, or the
+    # sync would publish a pre-release from develop. A manual run always runs.
+    if: github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'chore(release):')
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -51,7 +58,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GH_TOKEN }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
@@ -71,7 +78,7 @@ jobs:
       - name: Python Semantic Release
         id: psr
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           set -euo pipefail
           # A *seeded* venv (pip included) mirrors the container the action
@@ -102,7 +109,7 @@ jobs:
       - name: Attach distributions to GitHub Release
         if: steps.psr.outputs.released == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           set -euo pipefail
           "$RUNNER_TEMP/psr/bin/semantic-release" -v publish --tag "${{ steps.psr.outputs.tag }}"
@@ -142,9 +149,10 @@ jobs:
 
       # Keep develop current with main after every stable release. Without
       # this, the PSR-managed files (pyproject version, CHANGELOG) drift and
-      # the next develop -> main PR has avoidable merge conflicts. Pushes with
-      # GITHUB_TOKEN do not start other workflows, so this cannot loop. The
-      # develop ruleset must let GitHub Actions push (research R7).
+      # the next develop -> main PR has avoidable merge conflicts. The push uses
+      # the GH_TOKEN PAT from the checkout, because the develop ruleset lets only
+      # a repository admin push. The job condition above skips the run that this
+      # push starts.
       - name: Sync develop with main after a stable release
         if: github.ref_name == 'main' && steps.psr.outputs.released == 'true'
         env:
