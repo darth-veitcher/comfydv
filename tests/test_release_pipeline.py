@@ -55,6 +55,19 @@ def test_p4_psr_writes_the_project_version():
     assert _psr()["version_toml"] == ["pyproject.toml:project.version"]
 
 
+def test_p4_release_commit_keeps_uv_lock_in_step():
+    """P4: uv.lock records the project version too.
+
+    The 0.2.0 release changed pyproject.toml but not uv.lock, so the next
+    `uv run` changed the lock. PSR runs the build command after it writes the
+    version, and commits the files in `assets` with the release.
+    """
+    build = _psr()["build_command"]
+    assert "uv lock" in build
+    assert build.index("uv lock") < build.index("uv build")
+    assert "uv.lock" in _psr()["assets"]
+
+
 def test_p5_breaking_change_is_minor_while_zero():
     """P5: while the major version is 0, a breaking change is a minor bump."""
     psr = _psr()
